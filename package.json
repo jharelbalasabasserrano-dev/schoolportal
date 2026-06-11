@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "dev": "cargo run",
+    "check": "cargo check",
+    "test": "cargo test"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.107.0"
+  }
+}

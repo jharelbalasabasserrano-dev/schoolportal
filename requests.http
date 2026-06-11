@@ -1,0 +1,30 @@
+POST http://localhost:3000/api/exit-clearance
+Content-Type: application/json
+
+{
+  "student_name": "Juan Dela Cruz",
+  "id_number": "2023-0001",
+  "program": "BSIT",
+  "year_level": "3",
+  "acad_year": "2025-2026",
+  "semester": "1st Semester",
+  "reason_transfer": "Transfer to another school",
+  "requested_docs": [
+    "Transcript of Records",
+    "Good Moral Character"
+  ],
+  "purpose": "School transfer"
+}
+
+###
+
+# Example response
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": "fd661ec0-dbf9-45cb-b50e-b03f4a35ca91",
+  "reference_number": "EXIT-20260604-4213",
+  "tracking_number": "TRK-CCD-20260604-9821",
+  "status": "Pending"
+}
