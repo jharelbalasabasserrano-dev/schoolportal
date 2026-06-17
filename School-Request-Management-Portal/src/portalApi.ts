@@ -10,7 +10,7 @@ export type BootstrapData = {
   stockMovements: StockMovement[]
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://schoolportal-1nm8.onrender.com'
 
 function fromApiPayload(data: BootstrapData & { stock_movements?: StockMovement[] }): BootstrapData {
   return {
