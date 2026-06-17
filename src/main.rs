@@ -5,7 +5,9 @@ mod routes;
 
 use axum::{Router, middleware::from_fn_with_state, routing::get, routing::post};
 use limiter::{ConcurrencyLimiter, enforce_concurrency};
-use routes::{AppState, health_check, submit_exit_clearance};
+use routes::{
+    AppState, get_bootstrap_data, health_check, submit_exit_clearance, sync_bootstrap_data,
+};
 use std::{io::ErrorKind, net::SocketAddr};
 use tower_http::cors::CorsLayer;
 
@@ -13,17 +15,27 @@ use tower_http::cors::CorsLayer;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    let state = build_app_state().await;
+    let state = match build_app_state().await {
+        Ok(state) => state,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
     let concurrency_limiter = ConcurrencyLimiter::new(20);
 
     let app = Router::new()
         .route("/", get(health_check))
         .route("/api/exit-clearance", post(submit_exit_clearance))
+        .route(
+            "/api/bootstrap",
+            get(get_bootstrap_data).put(sync_bootstrap_data),
+        )
         .layer(from_fn_with_state(concurrency_limiter, enforce_concurrency))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3002".to_string());
     let address = format!("0.0.0.0:{port}");
 
     let listener = match bind_server(&address).await {
@@ -60,22 +72,13 @@ async fn bind_server(address: &str) -> Option<tokio::net::TcpListener> {
     }
 }
 
-async fn build_app_state() -> AppState {
-    match connect_configured_database().await {
-        Ok(db) => AppState {
-            db: Some(db),
-            db_status: "connected".to_string(),
-        },
-        Err(error) => {
-            eprintln!("{error}");
-            eprintln!("Starting without Postgres. Submissions will be accepted but not persisted.");
+async fn build_app_state() -> Result<AppState, String> {
+    let db = connect_configured_database().await?;
 
-            AppState {
-                db: None,
-                db_status: "memory only".to_string(),
-            }
-        }
-    }
+    Ok(AppState {
+        db,
+        db_status: "connected".to_string(),
+    })
 }
 
 async fn connect_configured_database() -> Result<sqlx::PgPool, String> {
@@ -84,11 +87,13 @@ async fn connect_configured_database() -> Result<sqlx::PgPool, String> {
     })?;
 
     validate_database_url(&database_url)?;
+    let database_host = database_url_host(&database_url);
 
     let pool = db::connect_db(&database_url).await.map_err(|error| {
         format!(
-            "Database connection failed: {error}\n{}",
-            connection_help(&database_url)
+            "Database connection failed for host '{}': {error}\n{}",
+            database_host.as_deref().unwrap_or("unknown"),
+            connection_help(&database_url, &error.to_string())
         )
     })?;
 
@@ -100,7 +105,11 @@ async fn connect_configured_database() -> Result<sqlx::PgPool, String> {
     Ok(pool)
 }
 
-fn connection_help(database_url: &str) -> &'static str {
+fn connection_help(database_url: &str, error: &str) -> &'static str {
+    if error.contains("password authentication failed") {
+        return "Supabase rejected the database login. Use the database password from Supabase Project Settings > Database, not your Supabase account password. If the password contains symbols, URL-encode it in DATABASE_URL.";
+    }
+
     if database_url.contains("localhost") || database_url.contains("127.0.0.1") {
         "Start a local Postgres server that matches DATABASE_URL, or replace DATABASE_URL with your real Supabase connection string."
     } else {
@@ -117,6 +126,9 @@ fn validate_database_url(database_url: &str) -> Result<(), String> {
         "<YOUR-PASSWORD>",
         "<DB_PASSWORD>",
         "<REGION>",
+        "YOUR_PROJECT_REF",
+        "YOUR_DATABASE_PASSWORD",
+        "YOUR_REGION",
     ];
 
     if placeholder_patterns
@@ -143,6 +155,13 @@ fn validate_database_url(database_url: &str) -> Result<(), String> {
         );
     }
 
+    if database_url.matches('@').count() > 1 {
+        return Err(
+            "DATABASE_URL contains more than one @ symbol. URL-encode @ in the database password as %40."
+                .to_string(),
+        );
+    }
+
     if (database_url.contains(".supabase.co") || database_url.contains(".pooler.supabase.com"))
         && !database_url.contains("sslmode=require")
     {
@@ -155,14 +174,36 @@ fn validate_database_url(database_url: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn database_url_host(database_url: &str) -> Option<String> {
+    let after_at = database_url.rsplit_once('@')?.1;
+    let host_with_port = after_at.split('/').next()?;
+    let host = host_with_port.split(':').next()?;
+
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{connection_help, validate_database_url};
+    use super::{connection_help, database_url_host, validate_database_url};
 
     #[test]
     fn rejects_placeholder_database_url() {
         let error = validate_database_url(
             "postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require",
+        )
+        .unwrap_err();
+
+        assert!(error.contains("placeholder values"));
+    }
+
+    #[test]
+    fn rejects_supabase_template_database_url() {
+        let error = validate_database_url(
+            "postgresql://postgres.YOUR_PROJECT_REF:YOUR_DATABASE_PASSWORD@aws-0-YOUR_REGION.pooler.supabase.com:6543/postgres?sslmode=require",
         )
         .unwrap_err();
 
@@ -190,6 +231,16 @@ mod tests {
     }
 
     #[test]
+    fn explains_unencoded_at_symbol_in_database_password() {
+        let error = validate_database_url(
+            "postgresql://postgres.project:pa@ssword@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require",
+        )
+        .unwrap_err();
+
+        assert!(error.contains("%40"));
+    }
+
+    #[test]
     fn accepts_supabase_url_with_sslmode() {
         validate_database_url(
             "postgresql://postgres:password@db.example.supabase.co:5432/postgres?sslmode=require",
@@ -198,10 +249,34 @@ mod tests {
     }
 
     #[test]
+    fn extracts_database_host_without_credentials() {
+        let host = database_url_host(
+            "postgresql://postgres:password@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require",
+        );
+
+        assert_eq!(
+            host.as_deref(),
+            Some("aws-0-ap-southeast-1.pooler.supabase.com")
+        );
+    }
+
+    #[test]
     fn gives_local_database_help_for_localhost_urls() {
-        let help =
-            connection_help("postgresql://postgres:password@localhost:5432/ccd_exit_clearance");
+        let help = connection_help(
+            "postgresql://postgres:password@localhost:5432/ccd_exit_clearance",
+            "connection refused",
+        );
 
         assert!(help.contains("Start a local Postgres server"));
+    }
+
+    #[test]
+    fn gives_authentication_help_for_bad_passwords() {
+        let help = connection_help(
+            "postgresql://postgres.project:password@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require",
+            "password authentication failed for user \"postgres\"",
+        );
+
+        assert!(help.contains("database password"));
     }
 }

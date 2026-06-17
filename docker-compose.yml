@@ -1,34 +1,56 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16
     container_name: ccd-exit-clearance-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: ccd_exit_clearance
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ccd_exit_clearance"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ccd-exit-clearance-api
-    environment:
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/ccd_exit_clearance
-      PORT: 3002
-    ports:
-      - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PORT: 8080
+      CLIENT_URL: http://localhost
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
+  web:
+    build:
+      context: ./frontend/School-Request-Management-Portal/School-Request-Management-Portal
+      dockerfile: Dockerfile
+    container_name: ccd-exit-clearance-web
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
-  postgres-data:
+  postgres_data:

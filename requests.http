@@ -1,4 +1,4 @@
-POST http://localhost:3000/api/exit-clearance
+POST http://localhost:8080/api/exit-clearance
 Content-Type: application/json
 
 {
