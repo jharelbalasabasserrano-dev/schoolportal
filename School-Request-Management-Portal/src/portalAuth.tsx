@@ -5,6 +5,7 @@ import { storageKeys, type User } from './portalData'
 type AuthContextValue = {
   accounts: User[]
   user: User | null
+  isInitializing: boolean
   addAccount: (account: Omit<User, 'id'>) => void
   deleteAccount: (id: string) => void
   updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
@@ -28,6 +29,7 @@ export function readStored<T>(key: string, fallback: T) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<User[]>([])
   const [user, setUser] = useState<User | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((error) => {
         console.error(error)
       })
+      .finally(() => {
+        if (!cancelled) setIsInitializing(false)
+      })
 
     return () => {
       cancelled = true
@@ -54,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
+    isInitializing,
     addAccount: (account) => {
       setAccounts((current) => [...current, { ...account, id: `${account.role}-${Date.now()}` }])
     },
@@ -90,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
       setUser(updated)
     },
-  }), [accounts, user])
+  }), [accounts, isInitializing, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

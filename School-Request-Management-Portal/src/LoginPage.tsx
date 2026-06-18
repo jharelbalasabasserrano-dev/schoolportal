@@ -6,7 +6,7 @@ import collegeGate from './assets/college-gate.jpg'
 import { useAuth } from './portalAuth'
 
 export function LoginPage() {
-  const { login, user } = useAuth()
+  const { isInitializing, login, user } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,6 +14,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
 
+  if (isInitializing) return <AuthLoadingScreen />
   if (user) return <Navigate to="/dashboard" replace />
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -111,6 +112,18 @@ export function LoginPage() {
 }
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { isInitializing, user } = useAuth()
+  if (isInitializing) return <AuthLoadingScreen />
   return user ? <>{children}</> : <Navigate to="/" replace />
+}
+
+function AuthLoadingScreen() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#faf9f7] text-[#111111]">
+      <div className="flex items-center gap-3 rounded-md border border-[#d9d3cc] bg-white px-5 py-4 shadow-sm">
+        <span className="h-3 w-3 animate-pulse rounded-full bg-[#228b22]" />
+        <span className="font-semibold text-slate-700">Loading your session...</span>
+      </div>
+    </main>
+  )
 }
