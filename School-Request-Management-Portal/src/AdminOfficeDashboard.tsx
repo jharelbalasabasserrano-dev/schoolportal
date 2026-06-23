@@ -157,18 +157,18 @@ function FacilityReservationsTable({ onReview, requests }: { onReview: (request:
 
 function MetricCard({ icon: Icon, label, tone, value }: { icon: IconComponent; label: string; tone: string; value: number | string }) {
   return (
-    <div className={`group rounded-2xl border border-white/10 ${tone} relative overflow-hidden bg-gradient-to-br p-8 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
-      <div className="absolute -right-12 -top-12 opacity-5 transition-transform duration-300 group-hover:scale-110">
-        <Icon size={150} />
+    <div className={`relative overflow-hidden rounded-lg border border-black/5 ${tone} bg-white p-5 shadow-sm transition-shadow hover:shadow-md`}>
+      <div className="absolute -right-8 -top-8 opacity-5">
+        <Icon size={118} />
       </div>
       <div className="relative z-10">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wider opacity-70">{label}</p>
-            <p className="mt-3 text-5xl font-black">{value}</p>
+            <p className="text-xs font-semibold uppercase tracking-[.12em] opacity-70">{label}</p>
+            <p className="mt-2 text-3xl font-black">{value}</p>
           </div>
-          <span className={`flex h-16 w-16 items-center justify-center rounded-xl ${tone} shadow-lg`}>
-            <Icon size={28} />
+          <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/60 ring-1 ring-black/5">
+            <Icon size={21} />
           </span>
         </div>
       </div>
@@ -261,5 +261,3 @@ function getTopFacilities(requests: PortalRequest[]) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
 }
-
-

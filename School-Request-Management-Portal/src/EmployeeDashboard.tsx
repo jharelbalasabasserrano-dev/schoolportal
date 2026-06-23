@@ -1,17 +1,12 @@
 import { Building2, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers3, PackageCheck, Plus, Printer, Send, XCircle } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { facilities, leaveKinds, type PortalRequest, type RequestKind, type User } from './portalData'
-import { formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
-import { MetricCard, StatusPill } from './portalComponents'
+import { facilities, leaveKinds, type Announcement, type PortalRequest, type RequestKind, type User } from './portalData'
+import { formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
+import { AnnouncementsPanel, MetricCard, StatusPill } from './portalComponents'
 import { RoomAvailabilityView } from './portalViews'
 
-export function EmployeePortalView({ activeView, existingRequests, onSubmit, onView, onViewRequest, requests, user }: { activeView: string; existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; onView: (view: string) => void; onViewRequest: (request: PortalRequest) => void; requests: PortalRequest[]; user: User }) {
-  const employeeRequests = requests.filter((request) => request.ownerId === user.id && (
-    request.kind === 'Supply Request' ||
-    request.kind === 'Inventory Request' ||
-    request.kind === 'Facility Reservation' ||
-    isLeaveApplication(request)
-  ))
+export function EmployeePortalView({ activeView, announcements, existingRequests, onSubmit, onView, onViewRequest, requests, user }: { activeView: string; announcements: Announcement[]; existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; onView: (view: string) => void; onViewRequest: (request: PortalRequest) => void; requests: PortalRequest[]; user: User }) {
+  const employeeRequests = requests.filter((request) => isEmployeePortalRequest(request))
   const counts = getCounts(employeeRequests)
   const total = employeeRequests.length
 
@@ -24,12 +19,21 @@ export function EmployeePortalView({ activeView, existingRequests, onSubmit, onV
         <MetricCard label="Total" value={total} icon={Layers3} tone="bg-stone-100 text-stone-700" />
       </section>
 
-      {activeView === 'Overview' && <EmployeeOverviewCards onView={onView} />}
+      {activeView === 'Overview' && <EmployeeOverview announcements={announcements} onView={onView} />}
       {activeView === 'File Leave' && <EmployeeFileLeaveView onSubmit={onSubmit} user={user} />}
       {activeView === 'Request Supplies' && <EmployeeSupplyRequestView onSubmit={onSubmit} user={user} />}
       {activeView === 'Reserve Facility' && <EmployeeReserveFacilityView existingRequests={existingRequests} onSubmit={onSubmit} user={user} />}
       {activeView === 'My Requests' && <EmployeeRequestsView onView={onViewRequest} requests={employeeRequests} />}
       {activeView === 'Room Availability' && <RoomAvailabilityView requests={existingRequests} />}
+    </div>
+  )
+}
+
+function EmployeeOverview({ announcements, onView }: { announcements: Announcement[]; onView: (view: string) => void }) {
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+      <EmployeeOverviewCards onView={onView} />
+      <AnnouncementsPanel announcements={announcements} />
     </div>
   )
 }
@@ -42,7 +46,7 @@ function EmployeeOverviewCards({ onView }: { onView: (view: string) => void }) {
   ]
 
   return (
-    <section className="grid gap-5 xl:grid-cols-3">
+    <section className="grid gap-5 md:grid-cols-3">
       {cards.map(({ description, highlighted, icon: Icon, title, tone, view }) => (
         <button key={title} onClick={() => onView(view)} className={`group rounded-lg border bg-white p-7 text-left transition hover:border-[#228b22] ${highlighted ? 'border-[#4cbb17] ring-1 ring-[#4cbb17]/30' : 'border-[#e7e1db]'}`}>
           <div className="mb-14 flex items-start justify-between">
@@ -59,16 +63,16 @@ function EmployeeOverviewCards({ onView }: { onView: (view: string) => void }) {
 
 function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalRequest) => void; user: User }) {
   const [kind, setKind] = useState<RequestKind>('Vacation Leave')
-  const [filingDate, setFilingDate] = useState(new Date().toISOString().slice(0, 10))
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
-  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
+  const [officeDepartment, setOfficeDepartment] = useState(user.department || 'CITY COLLEGE OF DAVAO')
+  const [filedDate, setFiledDate] = useState('2026-06-03')
+  const [startDate, setStartDate] = useState('2026-06-03')
+  const [endDate, setEndDate] = useState('2026-06-03')
   const [position, setPosition] = useState('')
   const [salary, setSalary] = useState('')
   const [communication, setCommunication] = useState('Not Requested')
   const [leaveDetail, setLeaveDetail] = useState('')
   const [reason, setReason] = useState('')
   const duration = getDateDuration(startDate, endDate)
-  const LeaveIcon = getLeaveTypeIcon(kind)
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -81,18 +85,17 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
       owner: user.name,
       office: 'HR Office',
       status: 'Pending',
-      date: filingDate,
+      date: startDate,
       time: endDate,
       remarks: reason.trim(),
+      filedDate,
+      officeDepartment: officeDepartment.trim(),
       position: position.trim(),
       salary: salary.trim(),
       workingDays: duration,
       inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
-      filingDate,
-      leaveStartDate: startDate,
-      leaveEndDate: endDate,
     })
     setReason('')
     setLeaveDetail('')
@@ -100,54 +103,85 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
 
   return (
     <form onSubmit={submit} className="rounded-lg border border-[#e7e1db] bg-white p-7">
-      <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
-        <label>
-          <span className="mb-2 block font-medium">Leave type</span>
-          <span className="flex h-14 items-center rounded-md border border-[#d9d3cc] bg-white px-4 focus-within:border-[#228b22]">
-            <LeaveIcon size={20} className="mr-3 shrink-0 text-[#228b22]" />
-            <select value={kind} onChange={(event) => setKind(event.target.value as RequestKind)} className="min-w-0 flex-1 bg-transparent text-lg outline-none">
-              {leaveKinds.map((item) => <option key={item} value={item}>{getLeaveTypeLabel(item)}</option>)}
-            </select>
-          </span>
-        </label>
-        <div className="rounded-md border border-[#e7e1db] bg-stone-50 px-5 py-4">
-          <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Duration</p>
-          <p className="mt-1 text-3xl font-bold text-[#228b22]">{duration} day(s)</p>
+      <div className="mb-6 rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
+        <div className="mb-4">
+          <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">Application for Leave</p>
+          <h2 className="mt-1 text-2xl font-bold">Civil Service Form No. 6</h2>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2">
+          <label>
+            <span className="mb-2 block font-medium">1. Office/Department</span>
+            <input value={officeDepartment} onChange={(event) => setOfficeDepartment(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">2. Name</span>
+            <input value={user.name} readOnly className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg text-slate-700 outline-none" />
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">3. Date of Filing</span>
+            <input type="date" value={filedDate} onChange={(event) => setFiledDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+          <div className="rounded-md border border-[#e7e1db] bg-white px-4 py-3">
+            <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Signature of Applicant</p>
+            <p className="mt-2 text-lg font-semibold">{user.name}</p>
+          </div>
+        </div>
+      </div>
+      <div className="leave-type-nav rounded-lg border border-[#e7e1db] bg-stone-50 p-4">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">6.A Type of Leave to be Availed Of</p>
+            <p className="mt-1 text-sm text-slate-600">Choose the leave category for this application.</p>
+          </div>
+          <div className="rounded-lg border border-[#e7e1db] bg-white px-4 py-2 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[.12em] text-slate-500">Selected</p>
+            <p className="mt-1 font-bold text-[#228b22]">{getLeaveTypeLabel(kind)}</p>
+          </div>
+        </div>
+        <div className="leave-type-scroll flex gap-3 overflow-x-auto pb-2">
+          {leaveKinds.map((item) => {
+            const selected = kind === item
+            const Icon = getLeaveTypeIcon(item)
+            return (
+              <button key={item} type="button" onClick={() => setKind(item)} className={`leave-type-tab min-w-[210px] rounded-lg border p-4 text-left ${selected ? 'is-active border-[#228b22] bg-[#228b22] text-white' : 'border-[#e7e1db] bg-white text-slate-700 hover:border-[#4cbb17]'}`}>
+                <span className={`mb-4 flex h-11 w-11 items-center justify-center rounded-md ${selected ? 'bg-white/18 text-white' : 'bg-stone-100 text-[#228b22]'}`}><Icon size={20} /></span>
+                <span className="block text-sm font-bold leading-snug">{getLeaveTypeLabel(item)}</span>
+                <span className={`mt-3 block text-xs leading-5 ${selected ? 'text-white/75' : 'text-slate-500'}`}>Civil Service Form No. 6</span>
+              </button>
+            )
+          })}
         </div>
       </div>
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         <label>
-          <span className="mb-2 block font-medium">Date of filing</span>
-          <input type="date" value={filingDate} onChange={(event) => setFilingDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
-        </label>
-        <label>
-          <span className="mb-2 block font-medium">Position</span>
+          <span className="mb-2 block font-medium">4. Position</span>
           <input value={position} onChange={(event) => setPosition(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <label>
-          <span className="mb-2 block font-medium">Salary</span>
+          <span className="mb-2 block font-medium">5. Salary</span>
           <input value={salary} onChange={(event) => setSalary(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <label>
-          <span className="mb-2 block font-medium">Start date</span>
+          <span className="mb-2 block font-medium">Inclusive dates - Start</span>
           <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <label>
-          <span className="mb-2 block font-medium">End date</span>
+          <span className="mb-2 block font-medium">Inclusive dates - End</span>
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
       </div>
+      <p className="mt-4 text-slate-600">6.C Number of working days applied for: <span className="font-semibold">{duration} day(s)</span></p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">
         <label>
-          <span className="mb-2 block font-medium">Communication</span>
+          <span className="mb-2 block font-medium">6.D Communication</span>
           <select value={communication} onChange={(event) => setCommunication(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
             <option>Not Requested</option>
             <option>Requested</option>
           </select>
         </label>
         <label>
-          <span className="mb-2 block font-medium">Leave details</span>
-          <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder={kind === 'Other Leave' ? 'Specify leave type or purpose' : 'Location, illness, study leave detail, or other purpose'} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          <span className="mb-2 block font-medium">6.B Details of Leave</span>
+          <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder="Location, illness, study leave detail, or other purpose" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
       </div>
       <label className="mt-5 block">

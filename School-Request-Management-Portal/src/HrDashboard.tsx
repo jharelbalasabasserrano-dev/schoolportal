@@ -64,16 +64,34 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by ID, name, reason..." className="h-14 w-full rounded-md border border-[#e7e1db] bg-stone-50 pl-12 pr-4 text-lg outline-none focus:border-[#228b22] xl:w-[390px]" />
             </label>
           </div>
-          <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="flex flex-wrap rounded-lg border border-[#e7e1db] bg-stone-50 p-1">
-              {[
-                ['All', 'All types'],
-                ...leaveKinds.map((kind) => [kind, getLeaveTypeLabel(kind)]),
-              ].map(([value, label]) => (
-                <button key={value} onClick={() => setTypeFilter(value as RequestKind | 'All')} className={`rounded-md px-4 py-2 text-sm font-semibold ${typeFilter === value ? 'bg-[#228b22] text-white' : 'text-slate-700'}`}>{label}</button>
-              ))}
+          <div className="mb-6 space-y-4">
+            <div className="leave-type-nav rounded-lg border border-[#e7e1db] bg-stone-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">Leave type</p>
+                  <p className="mt-1 text-sm text-slate-600">Filter applications by Civil Service leave category.</p>
+                </div>
+                <span className="hidden rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-600 shadow-sm sm:inline-flex">
+                  {filtered.length} shown
+                </span>
+              </div>
+              <div className="leave-type-scroll flex gap-3 overflow-x-auto pb-2">
+                {[
+                  ['All', 'All types'],
+                  ...leaveKinds.map((kind) => [kind, getLeaveTypeLabel(kind)]),
+                ].map(([value, label]) => {
+                  const active = typeFilter === value
+                  const count = value === 'All' ? leaveApplications.length : leaveApplications.filter((request) => request.kind === value).length
+                  return (
+                    <button key={value} onClick={() => setTypeFilter(value as RequestKind | 'All')} className={`leave-type-tab min-w-[170px] rounded-lg border px-4 py-3 text-left ${active ? 'is-active border-[#228b22] bg-[#228b22] text-white' : 'border-[#e7e1db] bg-white text-slate-700 hover:border-[#4cbb17]'}`}>
+                      <span className="block truncate text-sm font-bold">{label}</span>
+                      <span className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? 'bg-white/20 text-white' : 'bg-[#4cbb17]/12 text-[#228b22]'}`}>{count} {count === 1 ? 'request' : 'requests'}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="flex flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
                 <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
               ))}
@@ -198,18 +216,18 @@ function LeaveTypeDistributionPanel({ requests }: { requests: PortalRequest[] })
 
 function MetricCard({ icon: Icon, label, tone, value }: { icon: IconComponent; label: string; tone: string; value: number | string }) {
   return (
-    <div className={`group rounded-2xl border border-white/10 ${tone} relative overflow-hidden bg-gradient-to-br p-8 shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
-      <div className="absolute -right-12 -top-12 opacity-5 transition-transform duration-300 group-hover:scale-110">
-        <Icon size={150} />
+    <div className={`relative overflow-hidden rounded-lg border border-black/5 ${tone} bg-white p-5 shadow-sm transition-shadow hover:shadow-md`}>
+      <div className="absolute -right-8 -top-8 opacity-5">
+        <Icon size={118} />
       </div>
       <div className="relative z-10">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wider opacity-70">{label}</p>
-            <p className="mt-3 text-5xl font-black">{value}</p>
+            <p className="text-xs font-semibold uppercase tracking-[.12em] opacity-70">{label}</p>
+            <p className="mt-2 text-3xl font-black">{value}</p>
           </div>
-          <span className={`flex h-16 w-16 items-center justify-center rounded-xl ${tone} shadow-lg`}>
-            <Icon size={28} />
+          <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/60 ring-1 ring-black/5">
+            <Icon size={21} />
           </span>
         </div>
       </div>
@@ -282,10 +300,8 @@ function getLeaveTypeLabel(kind: RequestKind) {
 
 function getLeaveDateRange(request: PortalRequest) {
   if (request.inclusiveDates) return request.inclusiveDates
-  const start = request.leaveStartDate ?? request.date
-  const end = request.leaveEndDate ?? request.time
-  if (start && end && /^\d{4}-\d{2}-\d{2}$/.test(end)) return `${formatShortDate(start)} - ${formatShortDate(end)}`
-  return formatShortDate(start)
+  if (request.date && request.time && /^\d{4}-\d{2}-\d{2}$/.test(request.time)) return `${formatShortDate(request.date)} - ${formatShortDate(request.time)}`
+  return formatShortDate(request.date)
 }
 
 function formatShortDate(value: string) {
@@ -302,5 +318,3 @@ function getLeaveTypeRows(requests: PortalRequest[]) {
     }))
     .filter((row) => row.count > 0)
 }
-
-

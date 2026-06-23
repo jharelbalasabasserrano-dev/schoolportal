@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Database,
   Eye,
   EyeOff,
   FileText,
@@ -14,6 +13,7 @@ import {
   Lock,
   LogOut,
   Mail,
+  Megaphone,
   Menu,
   MessageSquare,
   PackageCheck,
@@ -30,7 +30,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import ccdLogo from './assets/ccd-logo.png'
 import davaoCitySeal from './assets/davao-city-seal.png'
 import AdminOfficeDashboard from './AdminOfficeDashboard'
@@ -39,10 +39,9 @@ import HrDashboard from './HrDashboard'
 import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
-import { documentKinds, facilities, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
+import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
 import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
-import { hasBootstrapRows, loadBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 
@@ -52,161 +51,119 @@ type ActiveModal =
   | { type: 'users' }
   | null
 
-type SyncStatus = 'loading' | 'connected' | 'saving' | 'saved' | 'error'
-
-function mergeMessagesById(current: Message[], incoming: Message[]) {
-  return [...current, ...incoming].reduce<Message[]>((merged, message) => {
-    if (merged.some((item) => item.id === message.id)) return merged
-    return [...merged, message]
-  }, [])
-}
-
 export function Dashboard() {
-  const { accounts, user, logout } = useAuth()
-  const [requestList, setRequestList] = useState<PortalRequest[]>(initialRequests)
-  const [messageList, setMessageList] = useState<Message[]>(initialMessages)
-  const [inventory, setInventory] = useState<SupplyItem[]>(initialInventory)
-  const [categories, setCategories] = useState<SupplyCategory[]>(initialCategories)
-  const [suppliers, setSuppliers] = useState<SupplierInfo[]>(initialSuppliers)
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(initialStockMovements)
+  const { user, logout } = useAuth()
+  const [requestList, setRequestList] = useState<PortalRequest[]>(() => {
+    const stored = readStored<PortalRequest[]>(storageKeys.requests, [])
+    const merged = [...stored]
+    initialRequests.forEach((request) => {
+      if (!merged.some((item) => item.id === request.id)) merged.push(request)
+    })
+    return merged
+  })
+  const [messageList, setMessageList] = useState<Message[]>(() => readStored(storageKeys.messages, initialMessages))
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
+    const saved = localStorage.getItem(storageKeys.announcements)
+    if (saved !== null) {
+      try {
+        return JSON.parse(saved) as Announcement[]
+      } catch {
+        return []
+      }
+    }
+    return initialAnnouncements
+  })
+  const [inventory, setInventory] = useState<SupplyItem[]>(() => {
+    const stored = readStored<SupplyItem[]>(storageKeys.inventory, [])
+    const merged = [...stored]
+    initialInventory.forEach((item) => {
+      if (!merged.some((inv) => inv.id === item.id)) merged.push(item)
+    })
+    return merged
+  })
+  const [categories] = useState<SupplyCategory[]>(() => {
+    const stored = readStored<SupplyCategory[]>(storageKeys.categories, [])
+    const merged = [...stored]
+    initialCategories.forEach((cat) => {
+      if (!merged.some((c) => c.id === cat.id)) merged.push(cat)
+    })
+    return merged
+  })
+  const [suppliers, setSuppliers] = useState<SupplierInfo[]>(() => {
+    const stored = readStored<SupplierInfo[]>(storageKeys.suppliers, [])
+    const merged = [...stored]
+    initialSuppliers.forEach((sup) => {
+      if (!merged.some((s) => s.id === sup.id)) merged.push(sup)
+    })
+    return merged
+  })
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
+    const stored = readStored<StockMovement[]>(storageKeys.stockMovements, [])
+    const merged = [...stored]
+    initialStockMovements.forEach((move) => {
+      if (!merged.some((m) => m.id === move.id)) merged.push(move)
+    })
+    return merged
+  })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeView, setActiveView] = useState('Overview')
   const [modal, setModal] = useState<ActiveModal>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationRead, setNotificationRead] = useState<Record<string, boolean>>(() => readStored(storageKeys.notifications, {}))
-  const [databaseReady, setDatabaseReady] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading')
-  const [syncError, setSyncError] = useState('')
-  const [syncRetryTick, setSyncRetryTick] = useState(0)
-  const localChangeRevisionRef = useRef(0)
-  const syncedRevisionRef = useRef(0)
-  const remoteRefreshRef = useRef(false)
-
-  const markLocalChange = () => {
-    localChangeRevisionRef.current += 1
-  }
 
   useEffect(() => {
-    let cancelled = false
+    localStorage.setItem(storageKeys.requests, JSON.stringify(requestList))
+  }, [requestList])
 
-    loadBootstrapData()
-      .then((data) => {
-        if (cancelled) return
-        if (hasBootstrapRows(data)) {
-          setRequestList(data.requests)
-          setMessageList(data.messages)
-          setInventory(data.inventory)
-          setCategories(data.categories)
-          setSuppliers(data.suppliers)
-          setStockMovements(data.stockMovements)
-        }
-        setSyncStatus('connected')
-        setSyncError('')
-      })
-      .catch((error) => {
-        console.error(error)
-        setSyncStatus('error')
-        setSyncError('Database is offline. Submissions will retry when the backend is reachable.')
-      })
-      .finally(() => {
-        if (!cancelled) setDatabaseReady(true)
-      })
+  useEffect(() => {
+    localStorage.setItem(storageKeys.messages, JSON.stringify(messageList.map(stripAttachmentDataForStorage)))
+  }, [messageList])
 
-    return () => {
-      cancelled = true
+  useEffect(() => {
+    localStorage.setItem(storageKeys.announcements, JSON.stringify(announcements))
+  }, [announcements])
+
+  useEffect(() => {
+    const syncMessages = (event: StorageEvent) => {
+      if (event.key !== storageKeys.messages || event.newValue === null) return
+      try {
+        const incoming = JSON.parse(event.newValue) as Message[]
+        setMessageList((current) => {
+          const currentIds = current.map((message) => message.id).join('|')
+          const incomingIds = incoming.map((message) => message.id).join('|')
+          return currentIds === incomingIds ? current : incoming
+        })
+      } catch {
+        // Ignore malformed storage values and keep the current in-memory thread.
+      }
     }
+    window.addEventListener('storage', syncMessages)
+    return () => window.removeEventListener('storage', syncMessages)
   }, [])
 
   useEffect(() => {
-    if (!databaseReady) return
-
-    if (remoteRefreshRef.current) {
-      remoteRefreshRef.current = false
-      return
+    if (!('BroadcastChannel' in window)) return undefined
+    const channel = new BroadcastChannel('eduportal-messages')
+    channel.onmessage = (event: MessageEvent<Message>) => {
+      const incoming = event.data
+      if (!incoming?.id) return
+      setMessageList((current) => current.some((message) => message.id === incoming.id) ? current : [...current, incoming])
     }
-
-    if (localChangeRevisionRef.current === syncedRevisionRef.current) return
-
-    const syncRevision = localChangeRevisionRef.current
-    setSyncStatus('saving')
-    setSyncError('')
-    let retryTimeoutId: number | undefined
-
-    const timeoutId = window.setTimeout(() => {
-      loadBootstrapData()
-        .catch(() => undefined)
-        .then((latestData) => {
-          const mergedMessages = mergeMessagesById(latestData?.messages ?? [], messageList).map(stripAttachmentDataForStorage)
-          return syncBootstrapData({
-            accounts,
-            requests: requestList,
-            messages: mergedMessages,
-            inventory,
-            categories,
-            suppliers,
-            stockMovements,
-          }).then(() => mergedMessages)
-        })
-        .then((mergedMessages) => {
-          if (localChangeRevisionRef.current === syncRevision) {
-            syncedRevisionRef.current = syncRevision
-            setMessageList(mergedMessages)
-            setSyncStatus('saved')
-            setSyncError('')
-          }
-        })
-        .catch((error) => {
-          console.error(error)
-          setSyncStatus('error')
-          setSyncError('Database sync failed. Check that the backend is running on port 8080.')
-          retryTimeoutId = window.setTimeout(() => setSyncRetryTick((tick) => tick + 1), 3000)
-        })
-    }, 500)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-      if (retryTimeoutId !== undefined) window.clearTimeout(retryTimeoutId)
-    }
-  }, [accounts, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers, syncRetryTick])
+    return () => channel.close()
+  }, [])
 
   useEffect(() => {
-    if (!databaseReady) return
+    localStorage.setItem(storageKeys.inventory, JSON.stringify(inventory))
+  }, [inventory])
 
-    let cancelled = false
-    const refreshPortalMessages = () => {
-      if (localChangeRevisionRef.current !== syncedRevisionRef.current) return
+  useEffect(() => {
+    localStorage.setItem(storageKeys.stockMovements, JSON.stringify(stockMovements))
+  }, [stockMovements])
 
-      loadBootstrapData()
-        .then((data) => {
-          if (cancelled || !hasBootstrapRows(data)) return
-
-          setSyncStatus('connected')
-          setSyncError('')
-
-          const requestsChanged = JSON.stringify(data.requests) !== JSON.stringify(requestList)
-          const messagesChanged = JSON.stringify(data.messages) !== JSON.stringify(messageList)
-          if (!requestsChanged && !messagesChanged) return
-
-          remoteRefreshRef.current = true
-          if (requestsChanged) setRequestList(data.requests)
-          if (messagesChanged) setMessageList(data.messages)
-        })
-        .catch((error) => {
-          console.error(error)
-          if (localChangeRevisionRef.current === syncedRevisionRef.current) {
-            setSyncStatus('error')
-            setSyncError('Database is offline. Start the backend to sync new submissions.')
-          }
-        })
-    }
-
-    const intervalId = window.setInterval(refreshPortalMessages, 3000)
-    return () => {
-      cancelled = true
-      window.clearInterval(intervalId)
-    }
-  }, [databaseReady, messageList, requestList])
+  useEffect(() => {
+    localStorage.setItem(storageKeys.suppliers, JSON.stringify(suppliers))
+  }, [suppliers])
 
   useEffect(() => {
     localStorage.setItem(storageKeys.notifications, JSON.stringify(notificationRead))
@@ -219,8 +176,7 @@ export function Dashboard() {
   const canApprove = ['registrar', 'supply', 'adminOffice', 'hr', 'admin'].includes(user.role)
   const notifications = notificationItems.map((item) => ({ ...item, read: notificationRead[item.id] ?? item.read }))
   const unreadCount = notifications.filter((item) => !item.read).length
-  const syncLabel = syncStatus === 'loading' ? 'Connecting' : syncStatus === 'saving' ? 'Saving' : syncStatus === 'error' ? 'Offline' : 'Synced'
-  const syncTone = syncStatus === 'error' ? 'border-red-200 bg-red-50 text-red-700' : syncStatus === 'saving' || syncStatus === 'loading' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  const visibleAnnouncements = announcements.filter((announcement) => !announcement.audience || announcement.audience === 'all' || announcement.audience === user.role)
   const markAllNotificationsRead = () => {
     setNotificationRead(Object.fromEntries(notificationItems.map((item) => [item.id, true])))
   }
@@ -231,34 +187,25 @@ export function Dashboard() {
   }
 
   const addRequest = (request: PortalRequest) => {
-    markLocalChange()
     setRequestList((current) => [request, ...current])
     setActiveView(request.kind === 'Facility Reservation' ? 'My Requests' : 'My Requests')
   }
 
-  const updateRequestStatus = (requestId: string, status: Status, remarks: string) => {
-    markLocalChange()
+  const updateRequestStatus = (requestId: string, status: Status, remarks: string, updates: Partial<PortalRequest> = {}) => {
     setRequestList((current) => current.map((request) => {
       if (request.id !== requestId) return request
       if (request.kind === 'Facility Reservation') return { ...request, status, facilityRemarks: remarks, updatedBy: user.name }
-      if (isLeaveApplication(request)) return { ...request, status, hrRemarks: remarks, updatedBy: user.name }
+      if (isLeaveApplication(request)) return { ...request, ...updates, status, hrRemarks: remarks, updatedBy: user.name }
       return { ...request, status, remarks, updatedBy: user.name }
     }))
     setModal(null)
   }
 
-  const updateLeaveApplication = (updatedRequest: PortalRequest) => {
-    markLocalChange()
-    setRequestList((current) => current.map((request) => request.id === updatedRequest.id ? { ...updatedRequest, updatedBy: user.name } : request))
-    setModal(null)
-  }
-
   const sendMessage = (requestId: string, body: string, attachment?: MessageAttachment) => {
     if (!body.trim() && !attachment) return
-    markLocalChange()
     const messageId = `MSG-${Date.now()}`
     if (attachment) messageAttachmentCache.set(messageId, attachment)
-    setMessageList((current) => [...current, {
+    const newMessage: Message = {
       id: messageId,
       requestId,
       senderId: user.id,
@@ -266,19 +213,52 @@ export function Dashboard() {
       body: body.trim(),
       sentAt: new Date().toLocaleString(),
       attachment: attachment ? { ...attachment, dataUrl: '' } : undefined,
-    }])
+    }
+    setMessageList((current) => [...current, newMessage])
+    if ('BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('eduportal-messages')
+      channel.postMessage(newMessage)
+      channel.close()
+    }
+  }
+
+  const addAnnouncement = (title: string, body: string, audience: Announcement['audience'] = 'all') => {
+    const announcement: Announcement = {
+      id: `ANN-${Date.now()}`,
+      title: title.trim(),
+      body: body.trim(),
+      audience,
+      authorId: user.id,
+      authorName: user.name,
+      authorRole: user.role,
+      createdAt: new Date().toLocaleString(),
+    }
+    setAnnouncements((current) => [announcement, ...current])
+  }
+
+  const updateAnnouncement = (id: string, title: string, body: string) => {
+    setAnnouncements((current) => current.map((announcement) => (
+      announcement.id === id
+        ? { ...announcement, title: title.trim(), body: body.trim() }
+        : announcement
+    )))
+  }
+
+  const deleteAnnouncement = (id: string) => {
+    setAnnouncements((current) => current.filter((announcement) => announcement.id !== id))
   }
 
   return (
-    <div className="min-h-screen bg-[#faf9f7] text-[#121212]">
-      <aside className={`fixed inset-y-0 left-0 z-40 w-[345px] transform bg-[#228b22] text-white transition lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[86px] items-center justify-between border-b border-white/10 px-8">
+    <div className="portal-shell min-h-screen bg-[#f6f7f4] text-[#121212]">
+      {sidebarOpen && <button className="portal-mobile-backdrop fixed inset-0 z-30 bg-black/35 lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
+      <aside className={`portal-sidebar fixed inset-y-0 left-0 z-40 w-[300px] bg-[#1f7a34] text-white lg:translate-x-0 ${sidebarOpen ? 'is-open' : 'is-closed'}`}>
+        <div className="flex h-[76px] items-center justify-between border-b border-white/10 px-5">
           <button onClick={() => setActiveView('Overview')} className="flex items-center gap-4 text-left">
-            <span className="flex h-14 w-14 items-center justify-center overflow-hidden">
+            <span className="flex h-12 w-12 items-center justify-center overflow-hidden">
               <img src={ccdLogo} alt="City College of Davao logo" className="h-full w-full object-contain" />
             </span>
             <span>
-              <span className="block text-2xl font-bold">CCDPortal</span>
+              <span className="block text-xl font-bold">CCDPortal</span>
               <span className="block text-sm font-semibold uppercase tracking-[.16em] text-white/65">{roleMeta[user.role].portal}</span>
             </span>
           </button>
@@ -287,15 +267,15 @@ export function Dashboard() {
           </button>
         </div>
 
-        <nav className="px-5 py-7">
-          <p className="mb-3 px-3 text-sm font-semibold uppercase tracking-[.18em] text-white/45">{roleMeta[user.role].label} Menu</p>
-          <div className="space-y-2">
+        <nav className="px-4 py-5">
+          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[.18em] text-white/50">{roleMeta[user.role].label} Menu</p>
+          <div className="portal-nav-list space-y-1.5">
             {getNavItems(user.role).map((item) => {
               const Icon = item.icon
               const selected = activeView === item.label
               return (
-                <button key={item.label} onClick={() => { setActiveView(item.label); setSidebarOpen(false) }} className={`flex h-14 w-full items-center gap-4 rounded-md px-4 text-left text-lg font-medium ${selected ? 'bg-white/13 text-white' : 'text-white/88 hover:bg-white/8'}`}>
-                  <Icon size={20} />
+                <button key={item.label} onClick={() => { setActiveView(item.label); setSidebarOpen(false) }} className={`portal-nav-item flex h-12 w-full items-center gap-3 rounded-md px-3 text-left font-medium ${selected ? 'is-active text-white' : 'text-white/88'}`}>
+                  <Icon className="portal-nav-icon" size={20} />
                   {item.label}
                 </button>
               )
@@ -303,11 +283,11 @@ export function Dashboard() {
           </div>
         </nav>
 
-        <div className="absolute bottom-0 w-full border-t border-white/10 p-6">
+        <div className="absolute bottom-0 w-full border-t border-white/10 p-4">
           <div className="flex items-center gap-4">
             <Avatar user={user} size="md" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg font-semibold">{user.name}</p>
+              <p className="truncate font-semibold">{user.name}</p>
               <p className="truncate text-sm text-white/65">{user.email}</p>
             </div>
             <button onClick={logout} className="rounded-md p-2 text-white/80 hover:bg-white/10" aria-label="Sign out">
@@ -317,22 +297,18 @@ export function Dashboard() {
         </div>
       </aside>
 
-      <div className="lg:pl-[345px]">
-        <header className="sticky top-0 z-30 flex h-[86px] items-center justify-between border-b border-[#e7e1db] bg-[#faf9f7]/95 px-5 backdrop-blur lg:px-8">
+      <div className="lg:pl-[300px]">
+        <header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-[#e7e1db] bg-[#f6f7f4]/95 px-4 backdrop-blur lg:px-6">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(true)} className="rounded-md border border-[#e0dbd5] p-2 lg:hidden" aria-label="Open menu">
               <Menu size={22} />
             </button>
             <div>
               <p className="text-sm font-semibold uppercase tracking-[.16em] text-slate-500">{roleMeta[user.role].label} Dashboard</p>
-              <h1 className="text-2xl font-bold">{activeView}</h1>
+              <h1 className="text-2xl font-bold leading-tight">{activeView}</h1>
             </div>
           </div>
-          <div className="relative flex items-center gap-5">
-            <span className={`hidden h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold sm:inline-flex ${syncTone}`}>
-              <Database size={16} />
-              {syncLabel}
-            </span>
+          <div className="relative flex items-center gap-2 sm:gap-4">
             <button onClick={() => { setNotificationsOpen((open) => !open); setProfileOpen(false) }} className="relative rounded-md p-2 hover:bg-[#f2eee9]" aria-label="Notifications">
               <Bell size={23} />
               {unreadCount > 0 && <span className="absolute right-0 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-[#228b22] text-xs font-bold text-white">{unreadCount}</span>}
@@ -350,17 +326,12 @@ export function Dashboard() {
           </div>
         </header>
 
-        <main className="px-5 py-8 lg:px-8">
-          {syncError && (
-            <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 font-medium text-red-700">
-              {syncError}
-            </div>
-          )}
+        <main className="mx-auto max-w-[1500px] px-4 py-6 lg:px-6">
           {user.role === 'registrar' && ['Overview', 'TOR Requests', 'COE Requests', 'Exit Clearance'].includes(activeView) && (
             <RegistrarDashboard key={activeView} activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
           {user.role === 'supply' && ['Overview', 'Supply Requests', 'Inventory', 'Categories', 'Stock Movements', 'Suppliers', 'Reports'].includes(activeView) && (
-            <SupplyDashboard activeView={activeView} categories={categories} currentUserName={user.name} inventory={inventory} onInventoryChange={setInventory} suppliers={suppliers} onSuppliersChange={setSuppliers} stockMovements={stockMovements} onStockMovementAdd={setStockMovements} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
+            <SupplyDashboard activeView={activeView} categories={categories} inventory={inventory} onInventoryChange={setInventory} suppliers={suppliers} onSuppliersChange={setSuppliers} stockMovements={stockMovements} onStockMovementAdd={setStockMovements} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
           {user.role === 'adminOffice' && ['Overview', 'Facility Reservations', 'Reports'].includes(activeView) && (
             <AdminOfficeDashboard activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
@@ -369,12 +340,13 @@ export function Dashboard() {
             <HrDashboard activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
           {user.role === 'employee' && ['Overview', 'File Leave', 'Request Supplies', 'Reserve Facility', 'My Requests', 'Room Availability'].includes(activeView) && (
-            <EmployeeDashboard activeView={activeView} existingRequests={requestList} onSubmit={addRequest} onView={setActiveView} onViewRequest={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} user={user} />
+            <EmployeeDashboard activeView={activeView} announcements={visibleAnnouncements} existingRequests={requestList} onSubmit={addRequest} onView={setActiveView} onViewRequest={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} user={user} />
           )}
           {user.role === 'admin' && ['Overview', 'Users', 'All Requests', 'Reports', 'Activity Logs', 'Settings'].includes(activeView) && (
             <SystemAdminDashboard activeView={activeView} onViewRequest={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
-          {!['registrar', 'supply', 'adminOffice', 'hr', 'employee', 'admin'].includes(user.role) && activeView === 'Overview' && <OverviewView counts={counts} onView={setActiveView} requests={visibleRequests} user={user} />}
+          {!['registrar', 'supply', 'adminOffice', 'hr', 'employee', 'admin'].includes(user.role) && activeView === 'Overview' && <OverviewView announcements={visibleAnnouncements} counts={counts} onView={setActiveView} requests={visibleRequests} user={user} />}
+          {['admin', 'registrar'].includes(user.role) && activeView === 'Announcements' && <AnnouncementsManager announcements={announcements} onCreate={addAnnouncement} onDelete={deleteAnnouncement} onUpdate={updateAnnouncement} user={user} />}
           {activeView === 'Request Document' && <RequestDocumentView onSubmit={addRequest} user={user} />}
           {user.role !== 'employee' && activeView === 'Reserve Facility' && <ReserveFacilityView existingRequests={requestList} onSubmit={addRequest} user={user} />}
           {user.role !== 'employee' && activeView === 'Room Availability' && <RoomAvailabilityView requests={requestList} />}
@@ -389,7 +361,7 @@ export function Dashboard() {
       {modal?.type === 'viewRequest' && user.role === 'registrar' && <RegistrarReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'supply' && <SupplyReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'adminOffice' && <FacilityReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && user.role === 'hr' && <LeaveReviewModal onClose={() => setModal(null)} onSubmit={updateLeaveApplication} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'hr' && <LeaveReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && !['registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
       {modal?.type === 'decision' && <DecisionModal request={modal.request} status={modal.status} onClose={() => setModal(null)} onSubmit={updateRequestStatus} />}
       {modal?.type === 'users' && <UsersModal onClose={() => setModal(null)} />}
@@ -397,7 +369,7 @@ export function Dashboard() {
   )
 }
 
-function OverviewView({ counts, onView, requests, user }: { counts: Record<Status, number>; onView: (view: string) => void; requests: PortalRequest[]; user: User }) {
+function OverviewView({ announcements, counts, onView, requests, user }: { announcements: Announcement[]; counts: Record<Status, number>; onView: (view: string) => void; requests: PortalRequest[]; user: User }) {
   return (
     <div className="space-y-8">
       <section className="rounded-lg bg-[linear-gradient(100deg,#228b22,#228b22_56%,#4cbb17)] p-7 text-white shadow-sm">
@@ -457,7 +429,182 @@ function OverviewView({ counts, onView, requests, user }: { counts: Record<Statu
             ))}
           </div>
         </div>
-        <AnnouncementsPanel />
+        <AnnouncementsPanel announcements={announcements} />
+      </section>
+    </div>
+  )
+}
+
+function AnnouncementsManager({ announcements, onCreate, onDelete, onUpdate, user }: { announcements: Announcement[]; onCreate: (title: string, body: string, audience?: Announcement['audience']) => void; onDelete: (id: string) => void; onUpdate: (id: string, title: string, body: string) => void; user: User }) {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [audience, setAudience] = useState<NonNullable<Announcement['audience']>>('all')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const canPublish = ['admin', 'registrar'].includes(user.role)
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canPublish || !title.trim() || !body.trim()) return
+    onCreate(title, body, user.role === 'admin' ? audience : 'all')
+    setTitle('')
+    setBody('')
+    setAudience('all')
+  }
+
+  const startEdit = (announcement: Announcement) => {
+    setEditingId(announcement.id)
+    setEditTitle(announcement.title)
+    setEditBody(announcement.body)
+  }
+
+  const saveEdit = (announcement: Announcement) => {
+    if (!editTitle.trim() || !editBody.trim()) return
+    onUpdate(announcement.id, editTitle, editBody)
+    setEditingId(null)
+    setEditTitle('')
+    setEditBody('')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditTitle('')
+    setEditBody('')
+  }
+
+  const removeAnnouncement = (announcement: Announcement) => {
+    if (!window.confirm(`Delete announcement "${announcement.title}"?`)) return
+    if (editingId === announcement.id) cancelEdit()
+    onDelete(announcement.id)
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageIntro
+        title="Announcements"
+        description="Publish campus updates and targeted employee announcements."
+        icon={Megaphone}
+        tone="bg-amber-100 text-amber-800"
+      />
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,520px)_1fr]">
+        <form onSubmit={submit} className="rounded-lg border border-[#e7e1db] bg-white p-6 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold">Create announcement</h2>
+            <p className="mt-1 text-slate-500">Posting as {roleMeta[user.role].label}</p>
+          </div>
+          <label className="block">
+            <span className="mb-2 block font-medium">Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. Enrollment schedule update"
+              className="h-12 w-full rounded-md border border-[#d9d3cc] px-4 outline-none focus:border-[#228b22]"
+            />
+          </label>
+          {user.role === 'admin' && (
+            <label className="mt-4 block">
+              <span className="mb-2 block font-medium">Audience</span>
+              <select
+                value={audience}
+                onChange={(event) => setAudience(event.target.value as NonNullable<Announcement['audience']>)}
+                className="h-12 w-full rounded-md border border-[#d9d3cc] px-4 outline-none focus:border-[#228b22]"
+              >
+                <option value="all">Everyone</option>
+                <option value="employee">Employees only</option>
+              </select>
+            </label>
+          )}
+          <label className="mt-4 block">
+            <span className="mb-2 block font-medium">Message</span>
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value.slice(0, 700))}
+              rows={7}
+              placeholder="Write the announcement details..."
+              className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 outline-none focus:border-[#228b22]"
+            />
+          </label>
+          <div className="mt-5 flex items-center justify-between gap-4 border-t border-[#e7e1db] pt-5">
+            <span className="text-sm text-slate-500">{body.length}/700 characters</span>
+            <button disabled={!title.trim() || !body.trim()} className="inline-flex h-11 items-center gap-2 rounded-md bg-[#228b22] px-5 font-semibold text-white hover:bg-[#1f7a34] disabled:cursor-not-allowed disabled:opacity-45">
+              <Plus size={18} />
+              Publish
+            </button>
+          </div>
+        </form>
+
+        <div className="rounded-lg border border-[#e7e1db] bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold">Published announcements</h2>
+              <p className="mt-1 text-slate-500">{announcements.length} total</p>
+            </div>
+            <span className="flex h-11 w-11 items-center justify-center rounded-md bg-amber-100 text-amber-800">
+              <Megaphone size={21} />
+            </span>
+          </div>
+          <div className="space-y-3">
+            {announcements.map((announcement) => {
+              const editing = editingId === announcement.id
+              return (
+                <article key={announcement.id} className="rounded-md border border-[#e7e1db] p-4">
+                  {editing ? (
+                    <div className="space-y-3">
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-slate-600">Title</span>
+                        <input
+                          value={editTitle}
+                          onChange={(event) => setEditTitle(event.target.value)}
+                          className="h-11 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-slate-600">Message</span>
+                        <textarea
+                          value={editBody}
+                          onChange={(event) => setEditBody(event.target.value.slice(0, 700))}
+                          rows={5}
+                          className="w-full rounded-md border border-[#d9d3cc] px-3 py-2 outline-none focus:border-[#228b22]"
+                        />
+                      </label>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button type="button" onClick={cancelEdit} className="h-10 rounded-md border border-[#d9d3cc] px-4 font-semibold hover:bg-stone-50">Cancel</button>
+                        <button type="button" onClick={() => saveEdit(announcement)} disabled={!editTitle.trim() || !editBody.trim()} className="h-10 rounded-md bg-[#228b22] px-4 font-semibold text-white hover:bg-[#1f7a34] disabled:cursor-not-allowed disabled:opacity-45">Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <h3 className="text-lg font-bold">{announcement.title}</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="shrink-0 rounded-full bg-stone-100 px-3 py-1 text-sm font-semibold text-slate-600">
+                            {roleMeta[announcement.authorRole].label}
+                          </span>
+                          <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${announcement.audience === 'employee' ? 'bg-emerald-100 text-emerald-900' : 'bg-sky-100 text-sky-800'}`}>
+                            {announcement.audience === 'employee' ? 'Employees only' : 'Everyone'}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-2 leading-7 text-slate-600">{announcement.body}</p>
+                      <div className="mt-3 flex flex-col gap-3 border-t border-[#eee9e4] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-slate-500">
+                          Posted by {announcement.authorName} - {announcement.createdAt}
+                        </p>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => startEdit(announcement)} className="rounded-md border border-[#d9d3cc] px-3 py-1.5 text-sm font-semibold hover:bg-stone-50">Edit</button>
+                          <button type="button" onClick={() => removeAnnouncement(announcement)} className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50">Delete</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </article>
+              )
+            })}
+            {announcements.length === 0 && <p className="rounded-md border border-[#e7e1db] p-6 text-center text-slate-500">No announcements have been posted yet.</p>}
+          </div>
+        </div>
       </section>
     </div>
   )
@@ -1048,13 +1195,24 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
 
 export function RoomAvailabilityView({ requests }: { requests: PortalRequest[] }) {
   const [selectedDay, setSelectedDay] = useState(3)
-  const bookedDays = [10, 15, 18]
+  const bookedDays = requests
+    .filter((request) => request.kind === 'Facility Reservation' && request.date.startsWith('2026-06-') && request.status !== 'Rejected')
+    .map((request) => Number(request.date.slice(-2)))
+  const bookedDaySet = new Set(bookedDays)
   const selectedDate = `2026-06-${String(selectedDay).padStart(2, '0')}`
   const bookings = requests.filter((request) => request.kind === 'Facility Reservation' && request.date === selectedDate && request.status !== 'Rejected')
+  const bookedFacilityNames = new Set(bookings.map((booking) => booking.facility))
+  const availableCount = facilities.filter(([name]) => !bookedFacilityNames.has(name)).length
+  const bookedCount = facilities.length - availableCount
 
   return (
     <div className="space-y-6">
       <PageIntro title="Room & Facility Availability" description="View which rooms and facilities are available or booked. Click a date to see the full schedule." icon={CalendarClock} tone="bg-emerald-100 text-emerald-900" />
+      <section className="grid gap-5 md:grid-cols-3">
+        <MetricCard label="Available" value={availableCount} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
+        <MetricCard label="Booked" value={bookedCount} icon={Clock} tone="bg-amber-100 text-amber-800" />
+        <MetricCard label="Total Facilities" value={facilities.length} icon={Building2} tone="bg-stone-100 text-stone-700" />
+      </section>
       <section className="grid gap-6 xl:grid-cols-[480px_1fr]">
         <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
           <div className="mb-7 flex items-center justify-between">
@@ -1069,9 +1227,9 @@ export function RoomAvailabilityView({ requests }: { requests: PortalRequest[] }
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <p key={day} className="text-sm font-bold uppercase text-slate-400">{day}</p>)}
             <span />
             {Array.from({ length: 30 }, (_, index) => index + 1).map((day) => (
-              <button key={day} onClick={() => setSelectedDay(day)} className={`relative h-14 rounded-md text-lg ${selectedDay === day ? 'bg-[#228b22] font-bold text-white' : day === 12 ? 'bg-stone-100' : 'hover:bg-stone-100'}`}>
+              <button key={day} onClick={() => setSelectedDay(day)} className={`relative h-14 rounded-md text-lg ${selectedDay === day ? 'bg-[#228b22] font-bold text-white' : day === 3 ? 'bg-stone-100' : 'hover:bg-stone-100'}`}>
                 {day}
-                {bookedDays.includes(day) && <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#d66161]" />}
+                {bookedDaySet.has(day) && <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#d66161]" />}
               </button>
             ))}
           </div>
@@ -1205,15 +1363,12 @@ function MyRequestsView({ onView, requests }: { onView: (request: PortalRequest)
 }
 
 function MessagesView({ currentUser, messages, onSend, requests }: { currentUser: User; messages: Message[]; onSend: (requestId: string, body: string, attachment?: MessageAttachment) => void; requests: PortalRequest[] }) {
-  const getLastMessageIndex = (requestId: string) => messages.findLastIndex((message) => message.requestId === requestId)
-  const conversations = requests
-    .filter((request) => {
-      const hasMessages = getLastMessageIndex(request.id) >= 0
-      if (currentUser.role === 'student') return request.ownerId === currentUser.id && documentKinds.includes(request.kind)
-      if (currentUser.role === 'registrar') return request.office === 'Registrar' || hasMessages
-      return hasMessages
-    })
-    .sort((first, second) => getLastMessageIndex(second.id) - getLastMessageIndex(first.id))
+  const conversations = requests.filter((request) => {
+    const hasMessages = messages.some((message) => message.requestId === request.id)
+    if (currentUser.role === 'student') return request.ownerId === currentUser.id && documentKinds.includes(request.kind)
+    if (currentUser.role === 'registrar') return request.office === 'Registrar' || hasMessages
+    return hasMessages
+  })
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? '')
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<MessageAttachment | undefined>()
@@ -1221,10 +1376,7 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
   const thread = selected ? messages.filter((message) => message.requestId === selected.id) : []
 
   useEffect(() => {
-    if (!conversations.length) {
-      if (selectedId) setSelectedId('')
-      return
-    }
+    if (!conversations.length) return
     if (!selectedId || !conversations.some((request) => request.id === selectedId)) {
       setSelectedId(conversations[0].id)
     }
@@ -1273,7 +1425,7 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
                   <p className="text-xl font-bold">{request.title} - {request.id}</p>
                   <StatusPill status={request.status} />
                 </div>
-                <p className="mt-2 truncate text-slate-600">{last ? `${last.senderName}: ${last.body || last.attachment?.name}` : 'No message yet.'}</p>
+                <p className="mt-2 truncate text-slate-600">Registrar: {last?.body || last?.attachment?.name || 'No message yet.'}</p>
               </button>
             )
           })}
@@ -1904,22 +2056,21 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 }
 
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
-  const workingDays = request.workingDays ?? getDateDuration(request.leaveStartDate ?? request.date, request.leaveEndDate ?? request.time)
   return (
     <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 font-serif text-sm text-slate-950 shadow-sm">
       <LeaveApplicationHeader request={request} />
       <h3 className="my-3 text-center text-xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h3>
-      <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: CITY COLLEGE OF DAVAO</div>
+      <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
       <div className="space-y-2 pt-3 text-xs">
         <PrintLine label="2. Name" value={request.owner} />
-        <PrintLine label="3. Date of Filing" value={formatDate(request.filingDate ?? request.date)} />
+        <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
         <PrintLine label="4. Position" value={request.position ?? ''} />
         <PrintLine label="5. Salary" value={request.salary ?? ''} />
         <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
           <p className="mb-2 font-bold">6. Details of Application</p>
           <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
           <PrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
-          <PrintLine label="6.C Working days applied for" value={String(workingDays)} />
+          <PrintLine label="6.C Working days applied for" value={String(request.workingDays ?? getDateDuration(request.date, request.time))} />
           <PrintLine label="Inclusive dates" value={request.inclusiveDates ?? getLeaveDateRange(request)} />
           <PrintCheckGroup title="6.D Communication" options={['Not Requested', 'Requested']} selected={request.communication ?? 'Not Requested'} />
           <SignatureLine label="Signature of Applicant" value={request.owner} />
@@ -1956,9 +2107,12 @@ function PrintPreviewHeader({ children, logo = ccdLogo, logoAlt = 'City College 
 }
 
 function LeaveActionSection({ request }: { request: PortalRequest }) {
-  const workingDays = request.workingDays ?? getDateDuration(request.leaveStartDate ?? request.date, request.leaveEndDate ?? request.time)
-  const recommendation = request.hrRecommendation ?? (request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
-  const disapprovedDueTo = request.disapprovedDueTo ?? request.hrRemarks ?? request.remarks
+  const leaveCreditRows = [
+    ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
+    ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
+    ['Balance', request.vacationLeaveBalance ?? '', request.sickLeaveBalance ?? ''],
+  ]
+
   return (
     <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
       <p className="mb-2 font-bold">7. Details of Action on Application</p>
@@ -1968,15 +2122,15 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
           <tr><th className="border border-slate-400 p-2" /><th className="border border-slate-400 p-2">Vacation Leave</th><th className="border border-slate-400 p-2">Sick Leave</th></tr>
         </thead>
         <tbody>
-          <tr><td className="border border-slate-400 p-2 font-semibold">Total Earned</td><td className="border border-slate-400 p-2">{request.vacationLeaveEarned ?? ''}</td><td className="border border-slate-400 p-2">{request.sickLeaveEarned ?? ''}</td></tr>
-          <tr><td className="border border-slate-400 p-2 font-semibold">Less this application</td><td className="border border-slate-400 p-2">{request.vacationLeaveLess ?? ''}</td><td className="border border-slate-400 p-2">{request.sickLeaveLess ?? ''}</td></tr>
-          <tr><td className="border border-slate-400 p-2 font-semibold">Balance</td><td className="border border-slate-400 p-2">{request.vacationLeaveBalance ?? ''}</td><td className="border border-slate-400 p-2">{request.sickLeaveBalance ?? ''}</td></tr>
+          {leaveCreditRows.map(([label, vacation, sick]) => (
+            <tr key={label}><td className="border border-slate-400 p-2 font-semibold">{label}</td><td className="border border-slate-400 p-2">{vacation}</td><td className="border border-slate-400 p-2">{sick}</td></tr>
+          ))}
         </tbody>
       </table>
-      <CompactPrintCheckGroup title="7.B Recommendation" options={['For approval', 'For disapproval']} selected={recommendation} />
+      <CompactPrintCheckGroup title="7.B Recommendation" options={['For approval', 'For disapproval']} selected={request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'} />
       <PrintLine label="HR remarks" value={request.hrRemarks ?? request.updatedBy ?? ''} />
-      <PrintLine label="7.C Approved for" value={request.approvedFor ?? (request.status === 'Approved' ? `${workingDays} day(s) with pay` : '')} />
-      <PrintLine label="7.D Disapproved due to" value={recommendation === 'For disapproval' ? disapprovedDueTo : ''} />
+      <PrintLine label="7.C Approved for" value={request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : ''} />
+      <PrintLine label="7.D Disapproved due to" value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
       <div className="mt-3 text-center">
         <p className="font-bold">Wenefredo E. Cagape, EdD, PhD</p>
         <p>College President</p>
@@ -2309,44 +2463,70 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
   )
 }
 
-function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (request: PortalRequest) => void; request: PortalRequest }) {
-  const [draft, setDraft] = useState<PortalRequest>({
+function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string, updates?: Partial<PortalRequest>) => void; request: PortalRequest }) {
+  const [kind, setKind] = useState<RequestKind>(request.kind)
+  const [officeDepartment, setOfficeDepartment] = useState(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')
+  const [filedDate, setFiledDate] = useState(request.filedDate ?? request.date)
+  const [position, setPosition] = useState(request.position ?? '')
+  const [salary, setSalary] = useState(request.salary ?? '')
+  const [startDate, setStartDate] = useState(request.date)
+  const [endDate, setEndDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(request.time) ? request.time : request.date)
+  const [communication, setCommunication] = useState(request.communication ?? 'Not Requested')
+  const [leaveDetail, setLeaveDetail] = useState(request.leaveDetail ?? '')
+  const [reason, setReason] = useState(request.remarks)
+  const [hrRemarks, setHrRemarks] = useState(request.hrRemarks ?? '')
+  const [vacationLeaveTotalEarned, setVacationLeaveTotalEarned] = useState(request.vacationLeaveTotalEarned ?? '')
+  const [vacationLeaveLess, setVacationLeaveLess] = useState(request.vacationLeaveLess ?? '')
+  const [vacationLeaveBalance, setVacationLeaveBalance] = useState(request.vacationLeaveBalance ?? '')
+  const [sickLeaveTotalEarned, setSickLeaveTotalEarned] = useState(request.sickLeaveTotalEarned ?? '')
+  const [sickLeaveLess, setSickLeaveLess] = useState(request.sickLeaveLess ?? '')
+  const [sickLeaveBalance, setSickLeaveBalance] = useState(request.sickLeaveBalance ?? '')
+  const workingDays = getDateDuration(startDate, endDate)
+  const editedRequest: PortalRequest = {
     ...request,
-    filingDate: request.filingDate ?? request.date,
-    leaveStartDate: request.leaveStartDate ?? request.date,
-    leaveEndDate: request.leaveEndDate ?? (/^\d{4}-\d{2}-\d{2}$/.test(request.time) ? request.time : request.date),
-    workingDays: request.workingDays ?? getDateDuration(request.leaveStartDate ?? request.date, request.leaveEndDate ?? request.time),
-    inclusiveDates: request.inclusiveDates ?? getLeaveDateRange(request),
-    hrRecommendation: request.hrRecommendation ?? (request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'),
-    approvedFor: request.approvedFor ?? (request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.leaveStartDate ?? request.date, request.leaveEndDate ?? request.time)} day(s) with pay` : ''),
-    disapprovedDueTo: request.disapprovedDueTo ?? (request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''),
-    hrRemarks: request.hrRemarks ?? '',
-  })
-  const updateDraft = (changes: Partial<PortalRequest>) => setDraft((current) => ({ ...current, ...changes }))
-  const setLeaveDates = (changes: Partial<PortalRequest>) => {
-    setDraft((current) => {
-      const next = { ...current, ...changes }
-      const start = next.leaveStartDate ?? next.date
-      const end = next.leaveEndDate ?? next.time
-      return {
-        ...next,
-        time: end,
-        workingDays: getDateDuration(start, end),
-        inclusiveDates: `${formatDate(start)} - ${formatDate(end)}`,
-      }
-    })
+    title: getLeaveTypeLabel(kind),
+    kind,
+    date: startDate,
+    time: endDate,
+    remarks: reason,
+    officeDepartment,
+    filedDate,
+    position,
+    salary,
+    workingDays,
+    inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
+    communication,
+    leaveDetail,
+    vacationLeaveTotalEarned,
+    vacationLeaveLess,
+    vacationLeaveBalance,
+    sickLeaveTotalEarned,
+    sickLeaveLess,
+    sickLeaveBalance,
+    hrRemarks,
   }
-  const saveWithStatus = (status: Status) => {
-    const recommendation = status === 'Rejected' ? 'For disapproval' : status === 'Approved' ? 'For approval' : draft.hrRecommendation
-    onSubmit({
-      ...draft,
-      status,
-      date: draft.filingDate ?? draft.date,
-      time: draft.leaveEndDate ?? draft.time,
-      hrRecommendation: recommendation,
-      hrRemarks: draft.hrRemarks?.trim() || (status === 'Approved' ? 'Leave application approved by HR Office.' : status === 'Rejected' ? 'Leave application rejected by HR Office.' : ''),
-      approvedFor: status === 'Approved' ? draft.approvedFor || `${draft.workingDays ?? getDateDuration(draft.leaveStartDate ?? draft.date, draft.leaveEndDate ?? draft.time)} day(s) with pay` : draft.approvedFor,
-      disapprovedDueTo: status === 'Rejected' ? draft.disapprovedDueTo || draft.hrRemarks || draft.remarks : draft.disapprovedDueTo,
+
+  const submitDecision = (status: Status, fallbackRemarks: string) => {
+    onSubmit(request.id, status, hrRemarks.trim() || fallbackRemarks, {
+      title: getLeaveTypeLabel(kind),
+      kind,
+      date: startDate,
+      time: endDate,
+      remarks: reason.trim(),
+      officeDepartment: officeDepartment.trim(),
+      filedDate,
+      position: position.trim(),
+      salary: salary.trim(),
+      workingDays,
+      inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
+      communication,
+      leaveDetail: leaveDetail.trim(),
+      vacationLeaveTotalEarned: vacationLeaveTotalEarned.trim(),
+      vacationLeaveLess: vacationLeaveLess.trim(),
+      vacationLeaveBalance: vacationLeaveBalance.trim(),
+      sickLeaveTotalEarned: sickLeaveTotalEarned.trim(),
+      sickLeaveLess: sickLeaveLess.trim(),
+      sickLeaveBalance: sickLeaveBalance.trim(),
     })
   }
 
@@ -2356,8 +2536,99 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
         <div className="space-y-4">
           <div className="rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
             <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{request.id}</p>
-            <h3 className="mt-2 text-2xl font-bold">{getLeaveTypeLabel(request.kind)} - {request.owner}</h3>
-            <p className="mt-2 text-slate-600">{request.remarks}</p>
+            <h3 className="mt-2 text-2xl font-bold">{getLeaveTypeLabel(kind)} - {request.owner}</h3>
+            <p className="mt-2 text-slate-600">{reason}</p>
+          </div>
+          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold">Edit leave form</h3>
+              <p className="text-slate-500">Changes here update the printable form and are saved with the HR decision.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">Leave type</span>
+                <select value={kind} onChange={(event) => setKind(event.target.value as RequestKind)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                  {leaveKinds.map((item) => <option key={item} value={item}>{getLeaveTypeLabel(item)}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">1. Office/Department</span>
+                <input value={officeDepartment} onChange={(event) => setOfficeDepartment(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">3. Date of Filing</span>
+                <input type="date" value={filedDate} onChange={(event) => setFiledDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">4. Position</span>
+                <input value={position} onChange={(event) => setPosition(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">5. Salary</span>
+                <input value={salary} onChange={(event) => setSalary(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">Inclusive dates - Start</span>
+                <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">Inclusive dates - End</span>
+                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">6.D Communication</span>
+                <select value={communication} onChange={(event) => setCommunication(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                  <option>Not Requested</option>
+                  <option>Requested</option>
+                </select>
+              </label>
+              <div className="rounded-md border border-[#e7e1db] bg-stone-50 px-3 py-2">
+                <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Working days</p>
+                <p className="mt-1 text-lg font-bold">{workingDays}</p>
+              </div>
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">6.B Details of Leave</span>
+                <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">Reason</span>
+                <textarea value={reason} onChange={(event) => setReason(event.target.value.slice(0, 500))} rows={4} className="w-full rounded-md border border-[#d9d3cc] px-3 py-2 outline-none focus:border-[#228b22]" />
+              </label>
+            </div>
+          </div>
+          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold">7.A Certification of Leave Credits</h3>
+              <p className="text-slate-500">Edit the leave credit values that appear in the application form.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+                <thead>
+                  <tr>
+                    <th className="border border-[#d9d3cc] bg-stone-50 p-3">Credit row</th>
+                    <th className="border border-[#d9d3cc] bg-stone-50 p-3">Vacation Leave</th>
+                    <th className="border border-[#d9d3cc] bg-stone-50 p-3">Sick Leave</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['Total Earned', vacationLeaveTotalEarned, setVacationLeaveTotalEarned, sickLeaveTotalEarned, setSickLeaveTotalEarned],
+                    ['Less this application', vacationLeaveLess, setVacationLeaveLess, sickLeaveLess, setSickLeaveLess],
+                    ['Balance', vacationLeaveBalance, setVacationLeaveBalance, sickLeaveBalance, setSickLeaveBalance],
+                  ].map(([label, vacationValue, setVacationValue, sickValue, setSickValue]) => (
+                    <tr key={label as string}>
+                      <td className="border border-[#d9d3cc] p-3 font-semibold">{label as string}</td>
+                      <td className="border border-[#d9d3cc] p-2">
+                        <input value={vacationValue as string} onChange={(event) => (setVacationValue as (value: string) => void)(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                      </td>
+                      <td className="border border-[#d9d3cc] p-2">
+                        <input value={sickValue as string} onChange={(event) => (setSickValue as (value: string) => void)(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2365,21 +2636,21 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
                 <h3 className="text-xl font-bold">Printable leave application</h3>
                 <p className="text-slate-500">Civil Service Form No. 6 format.</p>
               </div>
-              <button type="button" onClick={() => printLeaveApplicationForm(draft)} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
+              <button type="button" onClick={() => printLeaveApplicationForm(editedRequest)} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
                 <Printer size={17} />
                 Print form
               </button>
             </div>
-            <LeaveApplicationPrintForm request={draft} />
+            <LeaveApplicationPrintForm request={editedRequest} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Employee', request.owner],
-              ['Leave type', getLeaveTypeLabel(draft.kind)],
-              ['Dates', getLeaveDateRange(draft)],
-              ['Working days', String(draft.workingDays ?? '')],
-              ['Current Status', draft.status],
-              ['Updated By', draft.updatedBy ?? 'No office action yet'],
+              ['Leave type', getLeaveTypeLabel(kind)],
+              ['Dates', getLeaveDateRange(editedRequest)],
+              ['Reason', reason],
+              ['Current Status', request.status],
+              ['Updated By', request.updatedBy ?? 'No office action yet'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-[#e7e1db] p-4">
                 <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">{label}</p>
@@ -2387,111 +2658,21 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               </div>
             ))}
           </div>
-          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
-            <h3 className="mb-4 text-lg font-bold">Employee form details</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label>
-                <span className="mb-2 block font-medium">Date of filing</span>
-                <input type="date" value={draft.filingDate ?? ''} onChange={(event) => updateDraft({ filingDate: event.target.value, date: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Leave type</span>
-                <select value={draft.kind} onChange={(event) => updateDraft({ kind: event.target.value as RequestKind, title: getLeaveTypeLabel(event.target.value as RequestKind) })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
-                  {leaveKinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
-                </select>
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Position</span>
-                <input value={draft.position ?? ''} onChange={(event) => updateDraft({ position: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Salary</span>
-                <input value={draft.salary ?? ''} onChange={(event) => updateDraft({ salary: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Leave start</span>
-                <input type="date" value={draft.leaveStartDate ?? ''} onChange={(event) => setLeaveDates({ leaveStartDate: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Leave end</span>
-                <input type="date" value={draft.leaveEndDate ?? ''} onChange={(event) => setLeaveDates({ leaveEndDate: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Working days</span>
-                <input type="number" min={1} value={draft.workingDays ?? 1} onChange={(event) => updateDraft({ workingDays: Math.max(1, Number(event.target.value)) })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Communication</span>
-                <select value={draft.communication ?? 'Not Requested'} onChange={(event) => updateDraft({ communication: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
-                  <option>Not Requested</option>
-                  <option>Requested</option>
-                </select>
-              </label>
-              <label className="md:col-span-2">
-                <span className="mb-2 block font-medium">Details of leave</span>
-                <input value={draft.leaveDetail ?? ''} onChange={(event) => updateDraft({ leaveDetail: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label className="md:col-span-2">
-                <span className="mb-2 block font-medium">Reason</span>
-                <textarea value={draft.remarks} onChange={(event) => updateDraft({ remarks: event.target.value })} rows={3} className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 outline-none focus:border-[#228b22]" />
-              </label>
-            </div>
-          </div>
-          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
-            <h3 className="mb-4 text-lg font-bold">HR action details</h3>
-            <div className="grid gap-4 md:grid-cols-3">
-              {[
-                ['Vacation earned', 'vacationLeaveEarned'],
-                ['Vacation less', 'vacationLeaveLess'],
-                ['Vacation balance', 'vacationLeaveBalance'],
-                ['Sick earned', 'sickLeaveEarned'],
-                ['Sick less', 'sickLeaveLess'],
-                ['Sick balance', 'sickLeaveBalance'],
-              ].map(([label, key]) => (
-                <label key={key}>
-                  <span className="mb-2 block font-medium">{label}</span>
-                  <input value={String(draft[key as keyof PortalRequest] ?? '')} onChange={(event) => updateDraft({ [key]: event.target.value } as Partial<PortalRequest>)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-                </label>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <label>
-                <span className="mb-2 block font-medium">Recommendation</span>
-                <select value={draft.hrRecommendation ?? ''} onChange={(event) => updateDraft({ hrRecommendation: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
-                  <option value="">No recommendation yet</option>
-                  <option>For approval</option>
-                  <option>For disapproval</option>
-                </select>
-              </label>
-              <label>
-                <span className="mb-2 block font-medium">Approved for</span>
-                <input value={draft.approvedFor ?? ''} onChange={(event) => updateDraft({ approvedFor: event.target.value })} placeholder="e.g. 3 day(s) with pay" className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label className="md:col-span-2">
-                <span className="mb-2 block font-medium">Disapproved due to</span>
-                <input value={draft.disapprovedDueTo ?? ''} onChange={(event) => updateDraft({ disapprovedDueTo: event.target.value })} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-              </label>
-              <label className="md:col-span-2">
-                <span className="mb-2 block font-medium">HR remarks</span>
-                <textarea value={draft.hrRemarks ?? ''} onChange={(event) => updateDraft({ hrRemarks: event.target.value })} rows={4} className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 outline-none focus:border-[#228b22]" />
-              </label>
-            </div>
-          </div>
+          <label className="block">
+            <span className="mb-2 block font-medium">HR remarks</span>
+            <textarea value={hrRemarks} onChange={(event) => setHrRemarks(event.target.value)} rows={5} className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 outline-none focus:border-[#228b22]" />
+          </label>
         </div>
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-5">
           <h3 className="mb-4 text-xl font-bold">Decision</h3>
           <div className="space-y-3">
-            <button disabled={draft.status === 'Approved'} onClick={() => saveWithStatus('Approved')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Approved'} onClick={() => submitDecision('Approved', 'Leave application approved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={draft.status === 'Rejected'} onClick={() => saveWithStatus('Rejected')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Rejected'} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
               Reject
-            </button>
-            <button onClick={() => onSubmit(draft)} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3cc] font-semibold">
-              <Save size={18} />
-              Save edits
             </button>
           </div>
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved leave applications are reflected immediately in HR reports and status totals.</p>
@@ -2527,26 +2708,23 @@ function UsersModal({ onClose }: { onClose: () => void }) {
   const { accounts, addAccount, deleteAccount } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [role, setRole] = useState<Role>('employee')
   const [department, setDepartment] = useState('')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!name.trim() || !email.trim() || password.length < 8) return
-    addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password, role, department: department.trim() || roleMeta[role].label })
+    if (!name.trim() || !email.trim()) return
+    addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password: 'password123', role, department: department.trim() || roleMeta[role].label })
     setName('')
     setEmail('')
-    setPassword('')
     setDepartment('')
   }
 
   return (
     <Modal title="Manage Users" onClose={onClose} wide>
-      <form onSubmit={submit} className="mb-5 grid gap-3 rounded-lg border border-[#e7e1db] p-4 lg:grid-cols-6">
+      <form onSubmit={submit} className="mb-5 grid gap-3 rounded-lg border border-[#e7e1db] p-4 lg:grid-cols-5">
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
         <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required placeholder="Initial password" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
         <select value={role} onChange={(event) => setRole(event.target.value as Role)} className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
           {Object.entries(roleMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
         </select>
@@ -2582,8 +2760,8 @@ function UsersModal({ onClose }: { onClose: () => void }) {
 
 export function Modal({ children, onClose, title, wide = false }: { children: ReactNode; onClose: () => void; title: string; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8">
-      <div className={`max-h-full w-full overflow-auto rounded-lg bg-white shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-xl'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-3 py-4 sm:px-4 sm:py-8">
+      <div className={`max-h-[calc(100vh-2rem)] w-full overflow-auto rounded-lg bg-white shadow-2xl sm:max-h-full ${wide ? 'max-w-5xl' : 'max-w-xl'}`}>
         <div className="sticky top-0 flex items-center justify-between border-b border-[#e7e1db] bg-white px-5 py-4">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-stone-100" aria-label="Close modal">
@@ -2595,4 +2773,3 @@ export function Modal({ children, onClose, title, wide = false }: { children: Re
     </div>
   )
 }
-

@@ -155,7 +155,7 @@ function AdminUsersView() {
           onClose={() => setFormOpen(false)}
           onSubmit={(payload) => {
             if (editing) updateAccount(editing.id, payload)
-            else addAccount({ ...payload, password: payload.password ?? '' })
+            else addAccount({ ...payload, password: 'password123' })
             setFormOpen(false)
           }}
         />
@@ -164,18 +164,16 @@ function AdminUsersView() {
   )
 }
 
-function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: Omit<User, 'id' | 'password'> & { password?: string }) => void }) {
+function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: Omit<User, 'id' | 'password'>) => void }) {
   const [name, setName] = useState(account?.name ?? '')
   const [email, setEmail] = useState(account?.email ?? '')
-  const [password, setPassword] = useState('')
   const [role, setRole] = useState<Role>(account?.role ?? 'student')
   const [department, setDepartment] = useState(account?.department ?? '')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!name.trim() || !email.trim()) return
-    if (!account && password.length < 8) return
-    onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), password: account ? undefined : password, role, department: department.trim() || roleMeta[role].label })
+    onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), role, department: department.trim() || roleMeta[role].label })
   }
 
   return (
@@ -189,12 +187,6 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
           <span className="mb-2 block font-medium">Email</span>
           <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="e.g. juan@student.edu" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
-        {!account && (
-          <label className="block">
-            <span className="mb-2 block font-medium">Initial password</span>
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required placeholder="Enter at least 8 characters" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
-          </label>
-        )}
         <div className="grid gap-5 md:grid-cols-2">
           <label>
             <span className="mb-2 block font-medium">Role</span>
@@ -207,6 +199,7 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
             <input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. College of Science" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
         </div>
+        <p className="rounded-md border border-[#e7e1db] bg-stone-50 p-4 text-slate-600">Default password will be <span className="font-bold">password123</span>.</p>
         <div className="flex justify-end gap-3 border-t border-[#e7e1db] pt-5">
           <button type="button" onClick={onClose} className="h-12 rounded-md border border-[#d9d3cc] px-6 font-semibold">Cancel</button>
           <button className="h-12 rounded-md bg-[#228b22] px-6 font-semibold text-white">{account ? 'Save user' : 'Create user'}</button>

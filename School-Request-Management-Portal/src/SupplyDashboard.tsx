@@ -1,11 +1,11 @@
-import { CheckCircle2, Clock, Layers3, PackageCheck, Plus, Search, X, XCircle } from 'lucide-react'
+import { BarChart3, CheckCircle2, ClipboardList, Clock, Handshake, Layers3, Mail, PackageCheck, Phone, Plus, Search, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import type { PortalRequest, Status, StockMovement, SupplierInfo, SupplyCategory, SupplyItem } from './portalData'
 import { formatShortDate, getCounts, getSupplyItems } from './portalHelpers'
 import { MetricCard, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 
-export function SupplyOfficeView({ activeView, categories, currentUserName, inventory, onInventoryChange, suppliers, onSuppliersChange, stockMovements, onStockMovementAdd, onReview, requests }: { activeView: string; categories: SupplyCategory[]; currentUserName: string; inventory: SupplyItem[]; onInventoryChange: (inventory: SupplyItem[]) => void; suppliers: SupplierInfo[]; onSuppliersChange: (suppliers: SupplierInfo[]) => void; stockMovements: StockMovement[]; onStockMovementAdd: (movements: StockMovement[]) => void; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+export function SupplyOfficeView({ activeView, categories, inventory, onInventoryChange, suppliers, onSuppliersChange, stockMovements, onStockMovementAdd, onReview, requests }: { activeView: string; categories: SupplyCategory[]; inventory: SupplyItem[]; onInventoryChange: (inventory: SupplyItem[]) => void; suppliers: SupplierInfo[]; onSuppliersChange: (suppliers: SupplierInfo[]) => void; stockMovements: StockMovement[]; onStockMovementAdd: (movements: StockMovement[]) => void; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
   const [query, setQuery] = useState('')
   const supplyRequests = requests.filter((request) => ['Supply Request', 'Inventory Request'].includes(request.kind))
@@ -70,7 +70,7 @@ export function SupplyOfficeView({ activeView, categories, currentUserName, inve
       )}
 
       {activeView === 'Inventory' && (
-        <InventoryView categories={categories} currentUserName={currentUserName} inventory={inventory} onInventoryChange={onInventoryChange} suppliers={suppliers} onStockMovementAdd={onStockMovementAdd} />
+        <InventoryView categories={categories} inventory={inventory} onInventoryChange={onInventoryChange} suppliers={suppliers} onStockMovementAdd={onStockMovementAdd} />
       )}
 
       {activeView === 'Categories' && (
@@ -138,7 +138,7 @@ function SupplyRequestsTable({ onReview, requests }: { onReview: (request: Porta
   )
 }
 
-function InventoryView({ categories, currentUserName, inventory, onInventoryChange, onStockMovementAdd }: { categories: SupplyCategory[]; currentUserName: string; inventory: SupplyItem[]; onInventoryChange: (inventory: SupplyItem[]) => void; suppliers: SupplierInfo[]; onStockMovementAdd: (movements: StockMovement[]) => void }) {
+function InventoryView({ categories, inventory, onInventoryChange, onStockMovementAdd }: { categories: SupplyCategory[]; inventory: SupplyItem[]; onInventoryChange: (inventory: SupplyItem[]) => void; suppliers: SupplierInfo[]; onStockMovementAdd: (movements: StockMovement[]) => void }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editQty, setEditQty] = useState<number>(0)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -185,14 +185,14 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
             <h2 className="text-3xl font-bold">Supply Inventory</h2>
             <p className="mt-2 text-xl text-slate-600">Monitor and manage current stock levels.</p>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-6 font-bold text-white hover:from-orange-600 hover:to-red-600 shadow-lg transition-all hover:shadow-xl hover:scale-105">
+          <button onClick={() => setShowAddModal(true)} className="flex h-12 items-center gap-2 rounded-md bg-[#228b22] px-6 font-semibold text-white shadow-sm transition hover:bg-[#1f7a34]">
             <Plus size={20} />
             Add Item
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1050px] text-left">
-            <thead className="bg-gradient-to-r from-slate-100 to-slate-50 text-xs font-bold uppercase tracking-widest text-slate-700 border-b-2 border-slate-200">
+            <thead className="border-b border-slate-200 bg-stone-50 text-xs font-bold uppercase tracking-widest text-slate-700">
               <tr>
                 <th className="px-7 py-5">Item Name</th>
                 <th className="px-7 py-5">Category</th>
@@ -250,31 +250,31 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
       </section>
 
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl bg-gradient-to-br from-white to-slate-50 p-10 shadow-2xl border border-white/20">
-            <div className="mb-8 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <div className="max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-auto rounded-lg border border-[#e7e1db] bg-white p-6 shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-bold">{selectedItem.name}</h2>
+                <h2 className="text-2xl font-bold">{selectedItem.name}</h2>
                 <p className="mt-1 text-slate-600">{selectedItem.category} • {selectedItem.sku || 'No SKU'}</p>
               </div>
-              <button onClick={() => setSelectedItem(null)} className="text-slate-500 hover:text-slate-700">
-                <X size={28} />
+              <button onClick={() => setSelectedItem(null)} className="rounded-md p-2 text-slate-500 hover:bg-stone-100 hover:text-slate-700" aria-label="Close item details">
+                <X size={20} />
               </button>
             </div>
 
-            <div className="mb-8 grid grid-cols-4 gap-4">
-              <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 p-5 border border-blue-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Current Stock</p>
-                <p className="mt-2 text-3xl font-black text-blue-900">{selectedItem.quantity}</p>
-                <p className="text-xs text-blue-600 mt-1">{selectedItem.unit}</p>
+            <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-[#dbe8df] bg-[#f4faf5] p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#276b3f]">Current Stock</p>
+                <p className="mt-2 text-2xl font-black text-[#1f5d34]">{selectedItem.quantity}</p>
+                <p className="mt-1 text-xs text-[#276b3f]">{selectedItem.unit}</p>
               </div>
-              <div className="rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 p-5 border border-orange-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-orange-700">Min Stock Level</p>
-                <p className="mt-2 text-3xl font-black text-orange-900">{selectedItem.minThreshold}</p>
-                <p className="text-xs text-orange-600 mt-1">{selectedItem.unit}</p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Min Stock Level</p>
+                <p className="mt-2 text-2xl font-black text-amber-950">{selectedItem.minThreshold}</p>
+                <p className="mt-1 text-xs text-amber-700">{selectedItem.unit}</p>
               </div>
-              <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 p-5 border border-purple-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-purple-700">Status</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Status</p>
                 <p className="mt-2">
                   {selectedItem.quantity === 0 ? (
                     <span className="inline-block rounded-full bg-red-200 px-3 py-1 text-xs font-bold text-red-900">Out of Stock</span>
@@ -285,16 +285,16 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                   )}
                 </p>
               </div>
-              <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100 p-5 border border-indigo-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">Location</p>
-                <p className="mt-2 text-lg font-black text-indigo-900">{selectedItem.location}</p>
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-stone-700">Location</p>
+                <p className="mt-2 text-base font-black text-stone-900">{selectedItem.location}</p>
               </div>
             </div>
 
-            <div className="mb-8 grid grid-cols-2 gap-4 border-t border-[#e7e1db] pt-8">
+            <div className="mb-6 grid gap-4 border-t border-[#e7e1db] pt-6 sm:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-slate-600">Unit Cost</p>
-                <p className="mt-1 text-2xl font-bold">₱{selectedItem.cost || 0}</p>
+                <p className="mt-1 text-2xl font-bold">PHP {selectedItem.cost || 0}</p>
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-600">Supplier</p>
@@ -302,7 +302,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-600">Total Value</p>
-                <p className="mt-1 text-2xl font-bold text-blue-600">₱{(selectedItem.cost || 0) * selectedItem.quantity}</p>
+                <p className="mt-1 text-2xl font-bold text-[#228b22]">PHP {(selectedItem.cost || 0) * selectedItem.quantity}</p>
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-600">Expiry Date</p>
@@ -310,9 +310,9 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
               </div>
             </div>
 
-            <div className="mb-8 border-t border-[#e7e1db] pt-8">
+            <div className="mb-6 border-t border-[#e7e1db] pt-6">
               <p className="mb-4 text-sm font-semibold text-slate-700">Stock Adjustment</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-xs font-semibold text-slate-600">Quantity</label>
                   <input
@@ -344,7 +344,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                         type: 'Stock In',
                         quantity: stockChangeQty,
                         reason: stockChangeReason || 'Stock In',
-                        performedBy: currentUserName,
+                        performedBy: 'Liza Mendoza',
                         date: new Date().toLocaleString(),
                         previousQty: selectedItem.quantity,
                         newQty,
@@ -353,7 +353,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                       setStockChangeQty(0)
                       setStockChangeReason('')
                     }}
-                    className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3 font-bold text-white hover:from-emerald-600 hover:to-teal-600 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+                    className="flex-1 rounded-md bg-emerald-700 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-800"
                   >
                     <CheckCircle2 className="mb-1 inline mr-2" size={18} />
                     Stock In
@@ -373,7 +373,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                         type: 'Stock Out',
                         quantity: stockChangeQty,
                         reason: stockChangeReason || 'Stock Out',
-                        performedBy: currentUserName,
+                        performedBy: 'Liza Mendoza',
                         date: new Date().toLocaleString(),
                         previousQty: selectedItem.quantity,
                         newQty,
@@ -382,7 +382,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                       setStockChangeQty(0)
                       setStockChangeReason('')
                     }}
-                    className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 py-3 font-bold text-white hover:from-red-600 hover:to-pink-600 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+                    className="flex-1 rounded-md bg-red-700 py-3 font-semibold text-white shadow-sm transition hover:bg-red-800"
                   >
                     <XCircle className="mb-1 inline mr-2" size={18} />
                     Stock Out
@@ -401,12 +401,12 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white p-7 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <div className="max-h-[calc(100vh-3rem)] w-full max-w-md overflow-auto rounded-lg border border-[#e7e1db] bg-white p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-2xl font-bold">Add New Item</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-700">
-                <X size={24} />
+              <button onClick={() => setShowAddModal(false)} className="rounded-md p-2 text-slate-500 hover:bg-stone-100 hover:text-slate-700" aria-label="Close add item form">
+                <X size={20} />
               </button>
             </div>
             <div className="space-y-4">
@@ -448,7 +448,7 @@ function InventoryView({ categories, currentUserName, inventory, onInventoryChan
                 <input value={newItem.location} onChange={(e) => setNewItem({ ...newItem, location: e.target.value })} placeholder="e.g., Shelf A1" className="w-full rounded border border-[#e7e1db] px-4 py-2 outline-none focus:border-[#228b22]" />
               </label>
               <div className="flex gap-3 pt-4">
-                <button onClick={handleAddItem} className="flex-1 rounded-md bg-orange-500 px-4 py-2 font-semibold text-white hover:bg-orange-600">Add Item</button>
+                <button onClick={handleAddItem} className="flex-1 rounded-md bg-[#228b22] px-4 py-2 font-semibold text-white hover:bg-[#1f7a34]">Add Item</button>
                 <button onClick={() => setShowAddModal(false)} className="flex-1 rounded-md border border-[#e7e1db] px-4 py-2 font-semibold hover:bg-stone-50">Cancel</button>
               </div>
             </div>
@@ -595,7 +595,7 @@ function SuppliersView({ suppliers, onSuppliersChange }: { suppliers: SupplierIn
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
             <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search suppliers..." className="w-full rounded-md border border-[#e7e1db] bg-stone-50 py-2 pl-12 pr-4 outline-none focus:border-[#228b22]" />
           </label>
-          <button onClick={() => setShowAddModal(true)} className="ml-4 flex h-10 items-center gap-2 rounded-md bg-orange-500 px-5 font-semibold text-white hover:bg-orange-600">
+          <button onClick={() => setShowAddModal(true)} className="ml-4 flex h-10 items-center gap-2 rounded-md bg-[#228b22] px-5 font-semibold text-white hover:bg-[#1f7a34]">
             <Plus size={18} />
             Add Supplier
           </button>
@@ -603,14 +603,14 @@ function SuppliersView({ suppliers, onSuppliersChange }: { suppliers: SupplierIn
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((supplier) => (
-            <div key={supplier.id} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-7 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div key={supplier.id} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-start justify-between mb-3">
                 <h3 className="text-lg font-black text-slate-900">{supplier.name}</h3>
-                <span className="text-2xl">🤝</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-50 text-[#228b22]"><Handshake size={18} /></span>
               </div>
               <div className="space-y-3 text-sm">
-                <p className="flex items-center gap-2 text-slate-700"><span className="text-lg">📞</span> {supplier.contact}</p>
-                <p className="flex items-center gap-2 text-slate-700"><span className="text-lg">📧</span> {supplier.email}</p>
+                <p className="flex items-center gap-2 text-slate-700"><Phone size={16} className="text-slate-500" /> {supplier.contact}</p>
+                <p className="flex items-center gap-2 text-slate-700"><Mail size={16} className="text-slate-500" /> {supplier.email}</p>
                 <div className="mt-4 pt-4 border-t border-slate-200">
                   <p className="text-xs font-bold uppercase text-slate-500">Lead Time</p>
                   <p className="text-lg font-bold text-blue-600 mt-1">{supplier.leadTime} days</p>
@@ -622,18 +622,18 @@ function SuppliersView({ suppliers, onSuppliersChange }: { suppliers: SupplierIn
       </div>
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white p-7 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <div className="max-h-[calc(100vh-3rem)] w-full max-w-md overflow-auto rounded-lg border border-[#e7e1db] bg-white p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-2xl font-bold">Add Supplier</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-700">
-                <X size={24} />
+              <button onClick={() => setShowAddModal(false)} className="rounded-md p-2 text-slate-500 hover:bg-stone-100 hover:text-slate-700" aria-label="Close add supplier form">
+                <X size={20} />
               </button>
             </div>
             <div className="space-y-4">
               <label>
                 <p className="mb-2 font-semibold">Supplier Name *</p>
-                <input value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} placeholder="Supplier name" className="w-full rounded border border-[#e7e1db] px-4 py-2 outline-none focus:border-[#228b22]" />
+                <input value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} placeholder="e.g., Premium Papers Inc." className="w-full rounded border border-[#e7e1db] px-4 py-2 outline-none focus:border-[#228b22]" />
               </label>
               <label>
                 <p className="mb-2 font-semibold">Contact Number</p>
@@ -648,7 +648,7 @@ function SuppliersView({ suppliers, onSuppliersChange }: { suppliers: SupplierIn
                 <input type="number" min="1" value={newSupplier.leadTime} onChange={(e) => setNewSupplier({ ...newSupplier, leadTime: Math.max(1, Number(e.target.value)) })} className="w-full rounded border border-[#e7e1db] px-4 py-2 outline-none focus:border-[#228b22]" />
               </label>
               <div className="flex gap-3 pt-4">
-                <button onClick={handleAddSupplier} className="flex-1 rounded-md bg-orange-500 px-4 py-2 font-semibold text-white hover:bg-orange-600">Add Supplier</button>
+                <button onClick={handleAddSupplier} className="flex-1 rounded-md bg-[#228b22] px-4 py-2 font-semibold text-white hover:bg-[#1f7a34]">Add Supplier</button>
                 <button onClick={() => setShowAddModal(false)} className="flex-1 rounded-md border border-[#e7e1db] px-4 py-2 font-semibold hover:bg-stone-50">Cancel</button>
               </div>
             </div>
@@ -681,20 +681,20 @@ function AnalyticsView({ inventory, stockMovements, supplyRequests }: { inventor
       </div>
 
       <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Inventory Value" value={`₱${totalValue.toLocaleString()}`} icon={PackageCheck} tone="bg-blue-100 text-blue-800" />
+        <MetricCard label="Inventory Value" value={`PHP ${totalValue.toLocaleString()}`} icon={PackageCheck} tone="bg-blue-100 text-blue-800" />
         <MetricCard label="Stock Turnover" value={`${avgTurnover}%`} icon={Layers3} tone="bg-green-100 text-green-800" />
         <MetricCard label="Low Stock Items" value={lowStockItems} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Out of Stock" value={stockOutItems} icon={XCircle} tone="bg-red-100 text-red-800" />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-8 shadow-lg hover:shadow-xl transition-all">
-          <h2 className="mb-8 text-2xl font-bold text-slate-900">📊 Top Moved Items</h2>
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
+          <h2 className="mb-8 flex items-center gap-2 text-2xl font-bold text-slate-900"><BarChart3 size={22} />Top Moved Items</h2>
           <div className="space-y-4">
             {topMovedItems.map((item, idx) => (
-              <div key={item.name} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-orange-50 to-transparent hover:from-orange-100 transition-all">
+              <div key={item.name} className="flex items-center justify-between rounded-md bg-orange-50 p-3 transition-colors hover:bg-orange-100">
                 <div className="flex items-center gap-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-bold text-white shadow-md">{idx + 1}</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-600 text-sm font-bold text-white">{idx + 1}</span>
                   <span className="font-semibold text-slate-900">{item.name}</span>
                 </div>
                 <span className="text-sm font-bold text-orange-600 bg-orange-100 px-3 py-1 rounded-full">{item.movements} moves</span>
@@ -703,24 +703,24 @@ function AnalyticsView({ inventory, stockMovements, supplyRequests }: { inventor
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-8 shadow-lg hover:shadow-xl transition-all">
-          <h2 className="mb-8 text-2xl font-bold text-slate-900">📋 Supply Requests</h2>
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
+          <h2 className="mb-8 flex items-center gap-2 text-2xl font-bold text-slate-900"><ClipboardList size={22} />Supply Requests</h2>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all">
+            <div className="flex items-center justify-between rounded-md bg-slate-100 p-3 transition-colors hover:bg-slate-200">
               <span className="font-semibold text-slate-700">Total Requests</span>
               <span className="text-2xl font-black text-slate-900 bg-white px-4 py-2 rounded-lg">{supplyRequests.length}</span>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-amber-100 hover:bg-amber-200 transition-all">
+            <div className="flex items-center justify-between rounded-md bg-amber-50 p-3 transition-colors hover:bg-amber-100">
               <span className="font-semibold text-amber-900">Pending</span>
-              <span className="text-lg font-bold text-amber-900 bg-white px-3 py-1 rounded">{supplyRequests.filter((r) => r.status === 'Pending').length}</span>
+              <span className="rounded bg-white px-3 py-1 text-lg font-bold text-amber-900">{supplyRequests.filter((r) => r.status === 'Pending').length}</span>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-100 hover:bg-emerald-200 transition-all">
+            <div className="flex items-center justify-between rounded-md bg-emerald-50 p-3 transition-colors hover:bg-emerald-100">
               <span className="font-semibold text-emerald-900">Approved</span>
-              <span className="text-lg font-bold text-emerald-900 bg-white px-3 py-1 rounded">{supplyRequests.filter((r) => r.status === 'Approved').length}</span>
+              <span className="rounded bg-white px-3 py-1 text-lg font-bold text-emerald-900">{supplyRequests.filter((r) => r.status === 'Approved').length}</span>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-blue-100 hover:bg-blue-200 transition-all">
-              <span className="font-semibold text-blue-900">Completed</span>
-              <span className="text-lg font-bold text-blue-900 bg-white px-3 py-1 rounded">{supplyRequests.filter((r) => r.status === 'Completed').length}</span>
+            <div className="flex items-center justify-between rounded-md bg-sky-50 p-3 transition-colors hover:bg-sky-100">
+              <span className="font-semibold text-sky-900">Completed</span>
+              <span className="rounded bg-white px-3 py-1 text-lg font-bold text-sky-900">{supplyRequests.filter((r) => r.status === 'Completed').length}</span>
             </div>
           </div>
         </div>

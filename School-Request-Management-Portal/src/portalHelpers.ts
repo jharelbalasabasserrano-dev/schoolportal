@@ -27,6 +27,7 @@ export function getNavItems(role: Role) {
     { label: 'Overview', icon: Home },
     { label: 'Users', icon: UsersRound },
     { label: 'All Requests', icon: Layers3 },
+    { label: 'Announcements', icon: Megaphone },
     { label: 'Reports', icon: Megaphone },
     { label: 'Activity Logs', icon: Clock },
     { label: 'Settings', icon: Save },
@@ -37,6 +38,7 @@ export function getNavItems(role: Role) {
     { label: 'COE Requests', icon: BadgeCheck },
     { label: 'Exit Clearance', icon: ShieldCheck },
     { label: 'Messages', icon: MessageSquare },
+    { label: 'Announcements', icon: Megaphone },
   ]
   if (role === 'supply') return [
     { label: 'Overview', icon: Home },
@@ -50,6 +52,7 @@ export function getNavItems(role: Role) {
   if (role === 'adminOffice') return [
     { label: 'Overview', icon: Home },
     { label: 'Facility Reservations', icon: Building2 },
+    { label: 'Room Availability', icon: CalendarClock },
     { label: 'Reports', icon: Layers3 },
   ]
   if (role === 'hr') return [
@@ -513,9 +516,12 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const leaveTypes = getCivilServiceLeaveTypes()
   const check = (selected: string, option: string) => `<span class="box">${selected === option ? 'x' : ''}</span>`
   const leaveType = getCivilServiceLeaveLabel(request.kind)
-  const recommendation = request.hrRecommendation ?? (request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
-  const workingDays = request.workingDays ?? getDateDuration(request.leaveStartDate ?? request.date, request.leaveEndDate ?? request.time)
-  const disapprovedDueTo = request.disapprovedDueTo ?? request.hrRemarks ?? request.remarks
+  const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const leaveCreditRows = [
+    ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
+    ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
+    ['Balance', request.vacationLeaveBalance ?? '', request.sickLeaveBalance ?? ''],
+  ]
 
   return `<!doctype html>
 <html>
@@ -561,9 +567,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <div style="font-weight:700;">DAVAO CITY</div>
     </header>
     <h1>APPLICATION FOR LEAVE</h1>
-    <div class="office">1. OFFICE/DEPARTMENT: CITY COLLEGE OF DAVAO</div>
+    <div class="office">1. OFFICE/DEPARTMENT: ${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
     ${printRow('2. Name', request.owner)}
-    ${printRow('3. Date of Filing', formatDate(request.filingDate ?? request.date))}
+    ${printRow('3. Date of Filing', formatDate(request.filedDate ?? request.date))}
     ${printRow('4. Position', request.position ?? '')}
     ${printRow('5. Salary', request.salary ?? '')}
     <section class="section">
@@ -571,7 +577,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <p class="section-title">6.A Type of Leave to be Availed Of</p>
       <div class="leave-grid">${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)} ${escapeHtml(type)}</div>`).join('')}</div>
       ${printRow('6.B Details of Leave', request.leaveDetail ?? '')}
-      ${printRow('6.C Number of Working Days Applied For', String(workingDays))}
+      ${printRow('6.C Number of Working Days Applied For', String(request.workingDays ?? getDateDuration(request.date, request.time)))}
       ${printRow('Inclusive Dates', request.inclusiveDates ?? getLeaveDateRange(request))}
       <p class="section-title">6.D Communication</p>
       <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')} Not Requested</div>
@@ -583,17 +589,13 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <p class="section-title">7.A Certification of Leave Credits</p>
       <table>
         <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Total Earned</strong></td><td>${escapeHtml(request.vacationLeaveEarned ?? '')}</td><td>${escapeHtml(request.sickLeaveEarned ?? '')}</td></tr>
-          <tr><td><strong>Less this application</strong></td><td>${escapeHtml(request.vacationLeaveLess ?? '')}</td><td>${escapeHtml(request.sickLeaveLess ?? '')}</td></tr>
-          <tr><td><strong>Balance</strong></td><td>${escapeHtml(request.vacationLeaveBalance ?? '')}</td><td>${escapeHtml(request.sickLeaveBalance ?? '')}</td></tr>
-        </tbody>
+        <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
       </table>
       <p class="section-title">7.B Recommendation</p>
       <div class="item">${check(recommendation, 'For approval')} For approval</div>
-      <div class="item">${check(recommendation, 'For disapproval')} For disapproval due to: ${escapeHtml(recommendation === 'For disapproval' ? disapprovedDueTo : '')}</div>
-      ${printRow('7.C Approved for', request.approvedFor ?? (request.status === 'Approved' ? `${workingDays} day(s) with pay` : ''))}
-      ${printRow('7.D Disapproved due to', recommendation === 'For disapproval' ? disapprovedDueTo : '')}
+      <div class="item">${check(recommendation, 'For disapproval')} For disapproval due to: ${escapeHtml(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}</div>
+      ${printRow('7.C Approved for', request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : '')}
+      ${printRow('7.D Disapproved due to', request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
     </section>
     <div class="president">
       <p style="font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
@@ -609,6 +611,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
 export function getCivilServiceLeaveLabel(kind: RequestKind) {
   const leaveType = getCivilServiceLeaveTypes().find((type) => type.startsWith(kind))
   if (leaveType) return leaveType
+  if (kind === 'Other Leave') return 'Others'
   if (kind === 'Personal Leave') return 'Special Privilege Leave (Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)'
   if (kind === 'Official Leave') return 'Study Leave (Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)'
   return ''
@@ -629,7 +632,7 @@ export function getCivilServiceLeaveTypes() {
     'Special Leave Benefits for Women (R.A. No. 9710 / CSC MC No. 25, s. 2010)',
     'Special Emergency (Calamity) Leave (CSC MC No. 2, s. 2012, as amended)',
     'Adoption Leave (R.A. No. 8552)',
-    'Other Leave',
+    'Others',
   ]
 }
 
@@ -773,10 +776,8 @@ export function getLeaveTypeIcon(kind: RequestKind) {
 }
 
 export function getLeaveDateRange(request: PortalRequest) {
-  const startDate = request.leaveStartDate ?? request.date
-  const endDate = request.leaveEndDate ?? request.time
-  const start = formatShortDate(startDate)
-  const end = /^\d{4}-\d{2}-\d{2}$/.test(endDate) ? formatShortDate(endDate) : start
+  const start = formatShortDate(request.date)
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(request.time) ? formatShortDate(request.time) : start
   return start === end ? start : `${start} - ${end}`
 }
 
@@ -795,7 +796,6 @@ export function getLeaveTypeRows(requests: PortalRequest[]) {
     'Special Leave for Women': 'bg-fuchsia-600',
     Calamity: 'bg-orange-600',
     Adoption: 'bg-violet-600',
-    Other: 'bg-slate-500',
   }
   const rows = new Map<string, { color: string; count: number; label: string }>()
   allLeaveKinds.forEach((kind) => {
@@ -840,7 +840,7 @@ export function getEmployeeRequestTitle(request: PortalRequest) {
 
 export function getEmployeeRequestDetails(request: PortalRequest) {
   if (request.kind === 'Facility Reservation') return `${request.date} - ${request.time}`
-  if (allLeaveKinds.includes(request.kind)) return `${getLeaveDateRange(request)}: ${request.remarks}`
+  if (allLeaveKinds.includes(request.kind)) return `${request.date} -> ${request.time}: ${request.remarks}`
   return request.remarks
 }
 
@@ -933,4 +933,3 @@ export function getRequestActivityTimestamp(request: PortalRequest) {
   const displayTime = request.id === 'FR-2026-102' ? '4:15:00 PM' : request.id === 'DR-2026-002' ? '10:02:00 PM' : request.time.includes('-') ? '7:00:00 PM' : '5:00:00 PM'
   return `${formatDate(request.date)}, ${displayTime}`
 }
-

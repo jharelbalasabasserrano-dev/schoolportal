@@ -1,12 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { loadBootstrapData } from './portalApi'
-import { storageKeys, type User } from './portalData'
+import { initialUsers, storageKeys, type User } from './portalData'
 
 type AuthContextValue = {
   accounts: User[]
   user: User | null
-  isInitializing: boolean
-  authError: string
   addAccount: (account: Omit<User, 'id'>) => void
   deleteAccount: (id: string) => void
   updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
@@ -28,51 +25,26 @@ export function readStored<T>(key: string, fallback: T) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccounts] = useState<User[]>([])
-  const [user, setUser] = useState<User | null>(null)
-  const [isInitializing, setIsInitializing] = useState(true)
-  const [authError, setAuthError] = useState('')
+  const [accounts, setAccounts] = useState<User[]>(() => {
+    const stored = readStored<User[]>(storageKeys.accounts, [])
+    const merged = [...initialUsers]
+    stored.forEach((account) => {
+      if (!merged.some((item) => item.email === account.email)) merged.push(account)
+    })
+    return merged
+  })
+  const [user, setUser] = useState<User | null>(() => {
+    const savedEmail = localStorage.getItem(storageKeys.user)
+    const storedAccounts = readStored<User[]>(storageKeys.accounts, initialUsers)
+    return [...initialUsers, ...storedAccounts].find((account) => account.email === savedEmail) ?? null
+  })
 
   useEffect(() => {
-    let cancelled = false
-    const loadingTimeoutId = window.setTimeout(() => {
-      if (cancelled) return
-      setAuthError('Database is taking too long to respond. Check that the backend is running on port 8080.')
-      setIsInitializing(false)
-    }, 6000)
-
-    loadBootstrapData()
-      .then((data) => {
-        if (cancelled) return
-        setAccounts(data.accounts)
-        setAuthError('')
-
-        const savedEmail = localStorage.getItem(storageKeys.user)
-        if (savedEmail) {
-          setUser(data.accounts.find((account) => account.email === savedEmail) ?? null)
-        }
-      })
-      .catch((error) => {
-        console.error(error)
-        if (!cancelled) {
-          setAuthError('Could not load accounts from the database. Start the backend, then refresh this page.')
-        }
-      })
-      .finally(() => {
-        window.clearTimeout(loadingTimeoutId)
-        if (!cancelled) setIsInitializing(false)
-      })
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(loadingTimeoutId)
-    }
-  }, [])
+    localStorage.setItem(storageKeys.accounts, JSON.stringify(accounts))
+  }, [accounts])
 
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
-    authError,
-    isInitializing,
     addAccount: (account) => {
       setAccounts((current) => [...current, { ...account, id: `${account.role}-${Date.now()}` }])
     },
@@ -109,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
       setUser(updated)
     },
-  }), [accounts, authError, isInitializing, user])
+  }), [accounts, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
