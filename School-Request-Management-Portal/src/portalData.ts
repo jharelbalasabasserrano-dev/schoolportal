@@ -26,6 +26,7 @@ export type RequestKind =
   | 'Special Leave Benefits for Women'
   | 'Special Emergency (Calamity) Leave'
   | 'Adoption Leave'
+  | 'Other Leave'
   | 'Personal Leave'
   | 'Official Leave'
   | 'Facility Reservation'
@@ -72,6 +73,18 @@ export type PortalRequest = {
   inclusiveDates?: string
   communication?: string
   leaveDetail?: string
+  filingDate?: string
+  leaveStartDate?: string
+  leaveEndDate?: string
+  vacationLeaveEarned?: string
+  vacationLeaveLess?: string
+  vacationLeaveBalance?: string
+  sickLeaveEarned?: string
+  sickLeaveLess?: string
+  sickLeaveBalance?: string
+  hrRecommendation?: string
+  approvedFor?: string
+  disapprovedDueTo?: string
   hrRemarks?: string
   updatedBy?: string
 }
@@ -139,7 +152,7 @@ export type SupplierInfo = {
 
 export const studentRequestKinds: RequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request', 'Facility Reservation']
 export const documentKinds: RequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request']
-export const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave']
+export const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Other Leave']
 export const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
 export const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
 export const storageKeys = {

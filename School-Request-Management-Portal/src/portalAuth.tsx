@@ -6,6 +6,7 @@ type AuthContextValue = {
   accounts: User[]
   user: User | null
   isInitializing: boolean
+  authError: string
   addAccount: (account: Omit<User, 'id'>) => void
   deleteAccount: (id: string) => void
   updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
@@ -30,15 +31,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<User[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [isInitializing, setIsInitializing] = useState(true)
+  const [authError, setAuthError] = useState('')
 
   useEffect(() => {
     let cancelled = false
+    const loadingTimeoutId = window.setTimeout(() => {
+      if (cancelled) return
+      setAuthError('Database is taking too long to respond. Check that the backend is running on port 8080.')
+      setIsInitializing(false)
+    }, 6000)
 
-    localStorage.removeItem(storageKeys.accounts)
     loadBootstrapData()
       .then((data) => {
         if (cancelled) return
         setAccounts(data.accounts)
+        setAuthError('')
 
         const savedEmail = localStorage.getItem(storageKeys.user)
         if (savedEmail) {
@@ -47,18 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((error) => {
         console.error(error)
+        if (!cancelled) {
+          setAuthError('Could not load accounts from the database. Start the backend, then refresh this page.')
+        }
       })
       .finally(() => {
+        window.clearTimeout(loadingTimeoutId)
         if (!cancelled) setIsInitializing(false)
       })
 
     return () => {
       cancelled = true
+      window.clearTimeout(loadingTimeoutId)
     }
   }, [])
 
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
+    authError,
     isInitializing,
     addAccount: (account) => {
       setAccounts((current) => [...current, { ...account, id: `${account.role}-${Date.now()}` }])
@@ -96,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
       setUser(updated)
     },
-  }), [accounts, isInitializing, user])
+  }), [accounts, authError, isInitializing, user])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

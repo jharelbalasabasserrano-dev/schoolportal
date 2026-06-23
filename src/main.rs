@@ -8,12 +8,12 @@ use limiter::{ConcurrencyLimiter, enforce_concurrency};
 use routes::{
     AppState, get_bootstrap_data, health_check, submit_exit_clearance, sync_bootstrap_data,
 };
-use std::{io::ErrorKind, net::SocketAddr};
+use std::{io::ErrorKind, net::SocketAddr, path::PathBuf};
 use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    load_env();
 
     let state = match build_app_state().await {
         Ok(state) => state,
@@ -52,6 +52,15 @@ async fn main() {
     .await
     {
         eprintln!("Server error: {error}");
+    }
+}
+
+fn load_env() {
+    dotenvy::dotenv().ok();
+
+    if std::env::var("DATABASE_URL").is_err() {
+        let manifest_env = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env");
+        dotenvy::from_path(manifest_env).ok();
     }
 }
 

@@ -1,9 +1,9 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16
     container_name: ccd-exit-clearance-postgres
+    profiles:
+      - local-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -23,9 +23,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ccd-exit-clearance-api
-    depends_on:
-      postgres:
-        condition: service_healthy
     env_file:
       - .env
     environment:
@@ -38,7 +35,7 @@ services:
 
   web:
     build:
-      context: ./frontend/School-Request-Management-Portal/School-Request-Management-Portal
+      context: ./School-Request-Management-Portal
       dockerfile: Dockerfile
     container_name: ccd-exit-clearance-web
     depends_on:

@@ -6,7 +6,7 @@ import collegeGate from './assets/college-gate.jpg'
 import { useAuth } from './portalAuth'
 
 export function LoginPage() {
-  const { isInitializing, login, user } = useAuth()
+  const { authError, isInitializing, login, user } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -98,6 +98,7 @@ export function LoginPage() {
               </label>
               <button type="button" className="font-medium text-[#228b22]">Forgot password?</button>
             </div>
+            {authError && <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">{authError}</p>}
             {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <button className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 text-lg font-semibold text-white hover:bg-[#228b22]">
               Sign in to dashboard

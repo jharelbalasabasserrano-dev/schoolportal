@@ -77,6 +77,18 @@ pub async fn get_bootstrap_data(
             inclusive_dates,
             communication,
             leave_detail,
+            filing_date::text AS filing_date,
+            leave_start_date::text AS leave_start_date,
+            leave_end_date::text AS leave_end_date,
+            vacation_leave_earned,
+            vacation_leave_less,
+            vacation_leave_balance,
+            sick_leave_earned,
+            sick_leave_less,
+            sick_leave_balance,
+            hr_recommendation,
+            approved_for,
+            disapproved_due_to,
             hr_remarks,
             updated_by
         FROM portal_requests
@@ -298,14 +310,17 @@ pub async fn sync_bootstrap_data(
                 id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
                 facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
                 program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
-                position, salary, working_days, inclusive_dates, communication, leave_detail, hr_remarks, updated_by
+                position, salary, working_days, inclusive_dates, communication, leave_detail,
+                filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
+                vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
+                hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
             )
             VALUES (
                 $1, $2, $3,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33
+                $31::date, $32::date, $33::date, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
             )
             "#,
         )
@@ -340,6 +355,18 @@ pub async fn sync_bootstrap_data(
         .bind(&request.inclusive_dates)
         .bind(&request.communication)
         .bind(&request.leave_detail)
+        .bind(&request.filing_date)
+        .bind(&request.leave_start_date)
+        .bind(&request.leave_end_date)
+        .bind(&request.vacation_leave_earned)
+        .bind(&request.vacation_leave_less)
+        .bind(&request.vacation_leave_balance)
+        .bind(&request.sick_leave_earned)
+        .bind(&request.sick_leave_less)
+        .bind(&request.sick_leave_balance)
+        .bind(&request.hr_recommendation)
+        .bind(&request.approved_for)
+        .bind(&request.disapproved_due_to)
         .bind(&request.hr_remarks)
         .bind(&request.updated_by)
         .execute(&mut *tx)

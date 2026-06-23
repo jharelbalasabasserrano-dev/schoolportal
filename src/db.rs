@@ -9,8 +9,8 @@ pub async fn connect_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let connect_options = connect_options(database_url)?;
 
     PgPoolOptions::new()
-        .max_connections(10)
-        .acquire_timeout(Duration::from_secs(15))
+        .max_connections(2)
+        .acquire_timeout(Duration::from_secs(30))
         .connect_with(connect_options)
         .await
 }

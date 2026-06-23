@@ -11,7 +11,7 @@ COPY src ./src
 COPY migrations ./migrations
 
 ENV SQLX_OFFLINE=true
-RUN cargo build --release
+RUN cargo build --locked --release
 
 FROM debian:stable-slim
 

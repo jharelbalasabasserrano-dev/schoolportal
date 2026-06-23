@@ -4,7 +4,7 @@ import type { PortalRequest, RequestKind, Status } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
-const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave']
+const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Other Leave']
 const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
 const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
 
@@ -282,8 +282,10 @@ function getLeaveTypeLabel(kind: RequestKind) {
 
 function getLeaveDateRange(request: PortalRequest) {
   if (request.inclusiveDates) return request.inclusiveDates
-  if (request.date && request.time && /^\d{4}-\d{2}-\d{2}$/.test(request.time)) return `${formatShortDate(request.date)} - ${formatShortDate(request.time)}`
-  return formatShortDate(request.date)
+  const start = request.leaveStartDate ?? request.date
+  const end = request.leaveEndDate ?? request.time
+  if (start && end && /^\d{4}-\d{2}-\d{2}$/.test(end)) return `${formatShortDate(start)} - ${formatShortDate(end)}`
+  return formatShortDate(start)
 }
 
 function formatShortDate(value: string) {

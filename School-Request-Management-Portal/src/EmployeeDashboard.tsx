@@ -1,12 +1,17 @@
 import { Building2, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers3, PackageCheck, Plus, Printer, Send, XCircle } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { facilities, leaveKinds, type PortalRequest, type RequestKind, type User } from './portalData'
-import { formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
+import { formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
 import { MetricCard, StatusPill } from './portalComponents'
 import { RoomAvailabilityView } from './portalViews'
 
 export function EmployeePortalView({ activeView, existingRequests, onSubmit, onView, onViewRequest, requests, user }: { activeView: string; existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; onView: (view: string) => void; onViewRequest: (request: PortalRequest) => void; requests: PortalRequest[]; user: User }) {
-  const employeeRequests = requests.filter((request) => isEmployeePortalRequest(request))
+  const employeeRequests = requests.filter((request) => request.ownerId === user.id && (
+    request.kind === 'Supply Request' ||
+    request.kind === 'Inventory Request' ||
+    request.kind === 'Facility Reservation' ||
+    isLeaveApplication(request)
+  ))
   const counts = getCounts(employeeRequests)
   const total = employeeRequests.length
 
@@ -54,14 +59,16 @@ function EmployeeOverviewCards({ onView }: { onView: (view: string) => void }) {
 
 function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalRequest) => void; user: User }) {
   const [kind, setKind] = useState<RequestKind>('Vacation Leave')
-  const [startDate, setStartDate] = useState('2026-06-03')
-  const [endDate, setEndDate] = useState('2026-06-03')
+  const [filingDate, setFilingDate] = useState(new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
   const [position, setPosition] = useState('')
   const [salary, setSalary] = useState('')
   const [communication, setCommunication] = useState('Not Requested')
   const [leaveDetail, setLeaveDetail] = useState('')
   const [reason, setReason] = useState('')
   const duration = getDateDuration(startDate, endDate)
+  const LeaveIcon = getLeaveTypeIcon(kind)
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -74,7 +81,7 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
       owner: user.name,
       office: 'HR Office',
       status: 'Pending',
-      date: startDate,
+      date: filingDate,
       time: endDate,
       remarks: reason.trim(),
       position: position.trim(),
@@ -83,6 +90,9 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
       inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
+      filingDate,
+      leaveStartDate: startDate,
+      leaveEndDate: endDate,
     })
     setReason('')
     setLeaveDetail('')
@@ -90,20 +100,26 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
 
   return (
     <form onSubmit={submit} className="rounded-lg border border-[#e7e1db] bg-white p-7">
-      <p className="mb-4 text-lg font-medium">Leave type</p>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {leaveKinds.map((item) => {
-          const selected = kind === item
-          const Icon = getLeaveTypeIcon(item)
-          return (
-            <button key={item} type="button" onClick={() => setKind(item)} className={`flex min-h-20 items-center gap-3 rounded-lg border p-4 text-left font-semibold ${selected ? 'border-[#bd4448] bg-red-50/40 ring-1 ring-[#bd4448]' : 'border-[#e7e1db] hover:border-[#bd4448]'}`}>
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${selected ? 'bg-[#228b22] text-white' : 'bg-stone-100 text-[#228b22]'}`}><Icon size={20} /></span>
-              <span className="leading-snug">{getLeaveTypeLabel(item)}</span>
-            </button>
-          )
-        })}
+      <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+        <label>
+          <span className="mb-2 block font-medium">Leave type</span>
+          <span className="flex h-14 items-center rounded-md border border-[#d9d3cc] bg-white px-4 focus-within:border-[#228b22]">
+            <LeaveIcon size={20} className="mr-3 shrink-0 text-[#228b22]" />
+            <select value={kind} onChange={(event) => setKind(event.target.value as RequestKind)} className="min-w-0 flex-1 bg-transparent text-lg outline-none">
+              {leaveKinds.map((item) => <option key={item} value={item}>{getLeaveTypeLabel(item)}</option>)}
+            </select>
+          </span>
+        </label>
+        <div className="rounded-md border border-[#e7e1db] bg-stone-50 px-5 py-4">
+          <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Duration</p>
+          <p className="mt-1 text-3xl font-bold text-[#228b22]">{duration} day(s)</p>
+        </div>
       </div>
       <div className="mt-6 grid gap-5 md:grid-cols-2">
+        <label>
+          <span className="mb-2 block font-medium">Date of filing</span>
+          <input type="date" value={filingDate} onChange={(event) => setFilingDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
         <label>
           <span className="mb-2 block font-medium">Position</span>
           <input value={position} onChange={(event) => setPosition(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
@@ -121,7 +137,6 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
       </div>
-      <p className="mt-4 text-slate-600">Duration: {duration} day(s)</p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">
         <label>
           <span className="mb-2 block font-medium">Communication</span>
@@ -132,7 +147,7 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
         </label>
         <label>
           <span className="mb-2 block font-medium">Leave details</span>
-          <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder="Location, illness, study leave detail, or other purpose" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder={kind === 'Other Leave' ? 'Specify leave type or purpose' : 'Location, illness, study leave detail, or other purpose'} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
       </div>
       <label className="mt-5 block">
