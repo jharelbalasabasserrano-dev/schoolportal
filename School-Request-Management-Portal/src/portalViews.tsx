@@ -52,7 +52,7 @@ type ActiveModal =
   | { type: 'users' }
   | null
 
-const messageRefreshMs = 3500
+const messageRefreshMs = 1500
 
 function mergeMessages(current: Message[], incoming: Message[]) {
   const localById = new Map(current.map((message) => [message.id, message]))

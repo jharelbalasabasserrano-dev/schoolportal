@@ -1,5 +1,4 @@
 import { initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, initialUsers, type Announcement, type Message, type PortalRequest, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
-import { stripAttachmentDataForStorage } from './portalHelpers'
 
 export type BootstrapData = {
   accounts: User[]
@@ -119,7 +118,7 @@ function toApiPayload(data: BootstrapData) {
     announcements: data.announcements.map(toApiAnnouncement),
     inventory: data.inventory.map(toApiInventoryItem),
     stockMovements: data.stockMovements.map(toApiStockMovement),
-    messages: data.messages.map(stripAttachmentDataForStorage),
+    messages: data.messages,
   }
 }
 
