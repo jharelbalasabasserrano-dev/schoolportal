@@ -12,7 +12,12 @@ export type BootstrapData = {
   stockMovements: StockMovement[]
 }
 
-const apiBaseUrl = import.meta.env.DEV ? '' : import.meta.env.VITE_API_BASE_URL ?? 'https://schoolportal-1nm8.onrender.com'
+const productionApiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const apiBaseUrl = import.meta.env.DEV
+  ? ''
+  : productionApiBaseUrl && !productionApiBaseUrl.includes('127.0.0.1') && !productionApiBaseUrl.includes('localhost')
+    ? productionApiBaseUrl
+    : 'https://schoolportal-1nm8.onrender.com'
 const requestTimeoutMs = import.meta.env.DEV ? 6000 : 20000
 
 type ApiPortalRequest = PortalRequest & {
