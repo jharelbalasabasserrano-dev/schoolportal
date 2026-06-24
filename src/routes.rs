@@ -218,46 +218,71 @@ pub async fn sync_bootstrap_data(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let mut tx = state.db.begin().await.map_err(api_error)?;
 
-    sqlx::query("DELETE FROM request_messages")
+    let sql = "DELETE FROM request_messages";
+    log_db_query("request_messages", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM stock_movements")
+        .map_err(|error| api_query_error("request_messages", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM stock_movements";
+    log_db_query("stock_movements", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM announcements")
+        .map_err(|error| api_query_error("stock_movements", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM announcements";
+    log_db_query("announcements", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM portal_requests")
+        .map_err(|error| api_query_error("announcements", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM portal_requests";
+    log_db_query("portal_requests", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM supply_items")
+        .map_err(|error| api_query_error("portal_requests", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM supply_items";
+    log_db_query("supply_items", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM suppliers")
+        .map_err(|error| api_query_error("supply_items", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM suppliers";
+    log_db_query("suppliers", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM supply_categories")
+        .map_err(|error| api_query_error("suppliers", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM supply_categories";
+    log_db_query("supply_categories", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
-    sqlx::query("DELETE FROM app_users")
+        .map_err(|error| api_query_error("supply_categories", sql, serde_json::json!({}), error))?;
+    let sql = "DELETE FROM app_users";
+    log_db_query("app_users", sql, serde_json::json!({}));
+    sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("app_users", sql, serde_json::json!({}), error))?;
 
     for account in &payload.accounts {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": account.id,
+            "name": account.name,
+            "email": account.email,
+            "password_hash": "[redacted]",
+            "role": account.role,
+            "department": account.department,
+            "avatar_url": account.avatar_url,
+        });
+        log_db_query("app_users", sql, params.clone());
+        sqlx::query(sql)
         .bind(&account.id)
         .bind(&account.name)
         .bind(&account.email)
@@ -267,31 +292,43 @@ pub async fn sync_bootstrap_data(
         .bind(&account.avatar_url)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
     }
 
     for category in &payload.categories {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO supply_categories (id, name, color)
             VALUES ($1, $2, $3)
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": category.id,
+            "name": category.name,
+            "color": category.color,
+        });
+        log_db_query("supply_categories", sql, params.clone());
+        sqlx::query(sql)
         .bind(&category.id)
         .bind(&category.name)
         .bind(&category.color)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("supply_categories", sql, params, error))?;
     }
 
     for supplier in &payload.suppliers {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO suppliers (id, name, contact, email, lead_time)
             VALUES ($1, $2, $3, $4, $5)
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": supplier.id,
+            "name": supplier.name,
+            "contact": supplier.contact,
+            "email": supplier.email,
+            "lead_time": supplier.lead_time,
+        });
+        log_db_query("suppliers", sql, params.clone());
+        sqlx::query(sql)
         .bind(&supplier.id)
         .bind(&supplier.name)
         .bind(&supplier.contact)
@@ -299,18 +336,31 @@ pub async fn sync_bootstrap_data(
         .bind(supplier.lead_time)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("suppliers", sql, params, error))?;
     }
 
     for item in &payload.inventory {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO supply_items (
                 id, name, quantity, unit, min_threshold, location, category, cost, supplier, expiry_date, sku
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, '')::date, $11)
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": item.id,
+            "name": item.name,
+            "quantity": item.quantity,
+            "unit": item.unit,
+            "min_threshold": item.min_threshold,
+            "location": item.location,
+            "category": item.category,
+            "cost": item.cost,
+            "supplier": item.supplier,
+            "expiry_date": item.expiry_date,
+            "sku": item.sku,
+        });
+        log_db_query("supply_items", sql, params.clone());
+        sqlx::query(sql)
         .bind(&item.id)
         .bind(&item.name)
         .bind(item.quantity)
@@ -324,12 +374,11 @@ pub async fn sync_bootstrap_data(
         .bind(&item.sku)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("supply_items", sql, params, error))?;
     }
 
     for request in &payload.requests {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO portal_requests (
                 id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
                 facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
@@ -345,10 +394,17 @@ pub async fn sync_bootstrap_data(
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
                 NULLIF($31, '')::date, NULLIF($32, '')::date, NULLIF($33, '')::date,
-                $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
+                $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
             )
-            "#,
-        )
+            "#;
+        let params = serde_json::to_value(request).unwrap_or_else(|_| {
+            serde_json::json!({
+                "id": request.id,
+                "error": "failed to serialize request parameters"
+            })
+        });
+        log_db_query("portal_requests", sql, params.clone());
+        sqlx::query(sql)
         .bind(&request.id)
         .bind(&request.title)
         .bind(&request.kind)
@@ -396,20 +452,28 @@ pub async fn sync_bootstrap_data(
         .bind(&request.updated_by)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
     }
 
     for message in &payload.messages {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO request_messages (id, request_id, sender_id, sender_name, body, sent_at)
             VALUES (
                 $1, $2,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
                 $4, $5, NOW()
             )
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": message.id,
+            "request_id": message.request_id,
+            "sender_id": message.sender_id,
+            "sender_name": message.sender_name,
+            "body": message.body,
+            "sent_at": "NOW()",
+        });
+        log_db_query("request_messages", sql, params.clone());
+        sqlx::query(sql)
         .bind(&message.id)
         .bind(&message.request_id)
         .bind(&message.sender_id)
@@ -417,20 +481,30 @@ pub async fn sync_bootstrap_data(
         .bind(&message.body)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("request_messages", sql, params, error))?;
     }
 
     for announcement in &payload.announcements {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO announcements (id, title, body, audience, author_id, author_name, author_role, created_at)
             VALUES (
                 $1, $2, $3, NULLIF($4, ''),
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $5) THEN $5 ELSE NULL END,
                 $6, $7, NULLIF($8, '')::timestamptz
             )
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": announcement.id,
+            "title": announcement.title,
+            "body": announcement.body,
+            "audience": announcement.audience,
+            "author_id": announcement.author_id,
+            "author_name": announcement.author_name,
+            "author_role": announcement.author_role,
+            "created_at": announcement.created_at,
+        });
+        log_db_query("announcements", sql, params.clone());
+        sqlx::query(sql)
         .bind(&announcement.id)
         .bind(&announcement.title)
         .bind(&announcement.body)
@@ -441,19 +515,31 @@ pub async fn sync_bootstrap_data(
         .bind(&announcement.created_at)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("announcements", sql, params, error))?;
     }
 
     for movement in &payload.stock_movements {
-        sqlx::query(
-            r#"
+        let sql = r#"
             INSERT INTO stock_movements (
                 id, item_id, item_name, movement_type, quantity, reason, performed_by,
                 movement_date, previous_qty, new_qty
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, '')::timestamptz, $9, $10)
-            "#,
-        )
+            "#;
+        let params = serde_json::json!({
+            "id": movement.id,
+            "item_id": movement.item_id,
+            "item_name": movement.item_name,
+            "movement_type": movement.movement_type,
+            "quantity": movement.quantity,
+            "reason": movement.reason,
+            "performed_by": movement.performed_by,
+            "movement_date": movement.date,
+            "previous_qty": movement.previous_qty,
+            "new_qty": movement.new_qty,
+        });
+        log_db_query("stock_movements", sql, params.clone());
+        sqlx::query(sql)
         .bind(&movement.id)
         .bind(&movement.item_id)
         .bind(&movement.item_name)
@@ -466,7 +552,7 @@ pub async fn sync_bootstrap_data(
         .bind(movement.new_qty)
         .execute(&mut *tx)
         .await
-        .map_err(api_error)?;
+        .map_err(|error| api_query_error("stock_movements", sql, params, error))?;
     }
 
     tx.commit().await.map_err(api_error)?;
@@ -546,6 +632,46 @@ fn api_error(error: sqlx::Error) -> (StatusCode, Json<serde_json::Value>) {
         Json(serde_json::json!({
             "error": "Database operation failed",
             "message": error.to_string()
+        })),
+    )
+}
+
+fn log_db_query(table: &str, sql: &str, params: serde_json::Value) {
+    eprintln!(
+        "{}",
+        serde_json::json!({
+            "event": "database_query",
+            "table": table,
+            "sql": sql.trim(),
+            "params": params,
+        })
+    );
+}
+
+fn api_query_error(
+    table: &str,
+    sql: &str,
+    params: serde_json::Value,
+    error: sqlx::Error,
+) -> (StatusCode, Json<serde_json::Value>) {
+    eprintln!(
+        "{}",
+        serde_json::json!({
+            "event": "database_query_error",
+            "table": table,
+            "sql": sql.trim(),
+            "params": params,
+            "message": error.to_string(),
+            "debug": format!("{error:?}"),
+        })
+    );
+
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({
+            "error": "Database operation failed",
+            "table": table,
+            "message": error.to_string(),
         })),
     )
 }
