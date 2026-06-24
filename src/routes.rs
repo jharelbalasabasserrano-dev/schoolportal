@@ -344,7 +344,8 @@ pub async fn sync_bootstrap_data(
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-                $31::date, $32::date, $33::date, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
+                NULLIF($31, '')::date, NULLIF($32, '')::date, NULLIF($33, '')::date,
+                $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
             )
             "#,
         )
@@ -426,7 +427,7 @@ pub async fn sync_bootstrap_data(
             VALUES (
                 $1, $2, $3, NULLIF($4, ''),
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $5) THEN $5 ELSE NULL END,
-                $6, $7, $8::timestamptz
+                $6, $7, NULLIF($8, '')::timestamptz
             )
             "#,
         )
@@ -450,7 +451,7 @@ pub async fn sync_bootstrap_data(
                 id, item_id, item_name, movement_type, quantity, reason, performed_by,
                 movement_date, previous_qty, new_qty
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, '')::timestamptz, $9, $10)
             "#,
         )
         .bind(&movement.id)

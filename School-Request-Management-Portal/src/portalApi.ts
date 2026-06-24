@@ -26,6 +26,13 @@ function toApiTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
 }
 
+function toApiDate(value: string | undefined, fallback = new Date()) {
+  if (!value?.trim()) return undefined
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return fallback.toISOString().slice(0, 10)
+  return parsed.toISOString().slice(0, 10)
+}
+
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs)
@@ -52,7 +59,8 @@ function fromApiRequest(request: ApiPortalRequest): PortalRequest {
 function toApiRequest(request: PortalRequest): ApiPortalRequest {
   return {
     ...request,
-    filingDate: request.filedDate,
+    date: toApiDate(request.date) ?? new Date().toISOString().slice(0, 10),
+    filingDate: toApiDate(request.filedDate),
     vacationLeaveEarned: request.vacationLeaveTotalEarned,
     sickLeaveEarned: request.sickLeaveTotalEarned,
   }
@@ -62,6 +70,20 @@ function toApiAnnouncement(announcement: Announcement): Announcement {
   return {
     ...announcement,
     createdAt: toApiTimestamp(announcement.createdAt),
+  }
+}
+
+function toApiInventoryItem(item: SupplyItem): SupplyItem {
+  return {
+    ...item,
+    expiryDate: toApiDate(item.expiryDate),
+  }
+}
+
+function toApiStockMovement(movement: StockMovement): StockMovement {
+  return {
+    ...movement,
+    date: toApiTimestamp(movement.date),
   }
 }
 
@@ -79,7 +101,21 @@ function toApiPayload(data: BootstrapData) {
     ...data,
     requests: data.requests.map(toApiRequest),
     announcements: data.announcements.map(toApiAnnouncement),
+    inventory: data.inventory.map(toApiInventoryItem),
+    stockMovements: data.stockMovements.map(toApiStockMovement),
     messages: data.messages.map(stripAttachmentDataForStorage),
+  }
+}
+
+async function getErrorMessage(response: Response, fallback: string) {
+  const text = await response.text().catch(() => '')
+  if (!text) return fallback
+
+  try {
+    const data = JSON.parse(text) as { error?: string; message?: string }
+    return [data.error, data.message].filter(Boolean).join(': ') || fallback
+  } catch {
+    return text
   }
 }
 
@@ -114,7 +150,7 @@ export async function loadBootstrapData() {
       : error instanceof Error ? error.message : String(error)
     throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
   })
-  if (!response.ok) throw new Error(`Failed to load database data (${response.status})`)
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to load database data (${response.status})`))
   return fromApiPayload(await response.json())
 }
 
@@ -129,5 +165,5 @@ export async function syncBootstrapData(data: BootstrapData) {
       : error instanceof Error ? error.message : String(error)
     throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
   })
-  if (!response.ok) throw new Error(`Failed to sync database data (${response.status})`)
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to sync database data (${response.status})`))
 }
