@@ -6,6 +6,7 @@ pub struct BootstrapData {
     pub accounts: Vec<UserAccount>,
     pub requests: Vec<PortalRequest>,
     pub messages: Vec<RequestMessage>,
+    pub announcements: Vec<Announcement>,
     pub inventory: Vec<SupplyItem>,
     pub categories: Vec<SupplyCategory>,
     pub suppliers: Vec<SupplierInfo>,
@@ -83,6 +84,19 @@ pub struct RequestMessage {
     pub sender_name: String,
     pub body: String,
     pub sent_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Announcement {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub audience: Option<String>,
+    pub author_id: String,
+    pub author_name: String,
+    pub author_role: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]

@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::{
-    BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage, StockMovement,
+    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage, StockMovement,
     SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem, UserAccount,
 };
 
@@ -181,10 +181,30 @@ pub async fn get_bootstrap_data(
     .await
     .map_err(api_error)?;
 
+    let announcements = sqlx::query_as::<_, Announcement>(
+        r#"
+        SELECT
+            id,
+            title,
+            body,
+            audience,
+            COALESCE(author_id, '') AS author_id,
+            author_name,
+            author_role,
+            to_char(created_at, 'Mon DD, YYYY, HH12:MI AM') AS created_at
+        FROM announcements
+        ORDER BY created_at DESC
+        "#,
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(api_error)?;
+
     Ok(Json(BootstrapData {
         accounts,
         requests,
         messages,
+        announcements,
         inventory,
         categories,
         suppliers,
@@ -203,6 +223,10 @@ pub async fn sync_bootstrap_data(
         .await
         .map_err(api_error)?;
     sqlx::query("DELETE FROM stock_movements")
+        .execute(&mut *tx)
+        .await
+        .map_err(api_error)?;
+    sqlx::query("DELETE FROM announcements")
         .execute(&mut *tx)
         .await
         .map_err(api_error)?;
@@ -390,6 +414,30 @@ pub async fn sync_bootstrap_data(
         .bind(&message.sender_id)
         .bind(&message.sender_name)
         .bind(&message.body)
+        .execute(&mut *tx)
+        .await
+        .map_err(api_error)?;
+    }
+
+    for announcement in &payload.announcements {
+        sqlx::query(
+            r#"
+            INSERT INTO announcements (id, title, body, audience, author_id, author_name, author_role, created_at)
+            VALUES (
+                $1, $2, $3, NULLIF($4, ''),
+                CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $5) THEN $5 ELSE NULL END,
+                $6, $7, $8::timestamptz
+            )
+            "#,
+        )
+        .bind(&announcement.id)
+        .bind(&announcement.title)
+        .bind(&announcement.body)
+        .bind(announcement.audience.as_deref().unwrap_or(""))
+        .bind(&announcement.author_id)
+        .bind(&announcement.author_name)
+        .bind(&announcement.author_role)
+        .bind(&announcement.created_at)
         .execute(&mut *tx)
         .await
         .map_err(api_error)?;

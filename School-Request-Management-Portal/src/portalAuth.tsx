@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { loadBootstrapData } from './portalApi'
 import { initialUsers, storageKeys, type User } from './portalData'
 
 type AuthContextValue = {
@@ -42,6 +43,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem(storageKeys.accounts, JSON.stringify(accounts))
   }, [accounts])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadBootstrapData()
+      .then((data) => {
+        if (cancelled || data.accounts.length === 0) return
+        setAccounts(data.accounts)
+        localStorage.setItem(storageKeys.accounts, JSON.stringify(data.accounts))
+
+        setUser((current) => {
+          const savedEmail = current?.email ?? localStorage.getItem(storageKeys.user)
+          return data.accounts.find((account) => account.email === savedEmail) ?? current
+        })
+      })
+      .catch((error) => {
+        console.warn(error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const value = useMemo<AuthContextValue>(() => ({
     accounts,

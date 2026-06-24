@@ -42,6 +42,7 @@ import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
 import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
+import { createInitialBootstrapData, hasBootstrapRows, loadBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 
@@ -52,7 +53,7 @@ type ActiveModal =
   | null
 
 export function Dashboard() {
-  const { user, logout } = useAuth()
+  const { user, logout, accounts } = useAuth()
   const [requestList, setRequestList] = useState<PortalRequest[]>(() => {
     const stored = readStored<PortalRequest[]>(storageKeys.requests, [])
     const merged = [...stored]
@@ -81,7 +82,7 @@ export function Dashboard() {
     })
     return merged
   })
-  const [categories] = useState<SupplyCategory[]>(() => {
+  const [categories, setCategories] = useState<SupplyCategory[]>(() => {
     const stored = readStored<SupplyCategory[]>(storageKeys.categories, [])
     const merged = [...stored]
     initialCategories.forEach((cat) => {
@@ -111,6 +112,7 @@ export function Dashboard() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationRead, setNotificationRead] = useState<Record<string, boolean>>(() => readStored(storageKeys.notifications, {}))
+  const [databaseReady, setDatabaseReady] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(storageKeys.requests, JSON.stringify(requestList))
@@ -168,6 +170,65 @@ export function Dashboard() {
   useEffect(() => {
     localStorage.setItem(storageKeys.notifications, JSON.stringify(notificationRead))
   }, [notificationRead])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadBootstrapData()
+      .then(async (data) => {
+        if (cancelled) return
+
+        if (!hasBootstrapRows(data)) {
+          await syncBootstrapData(createInitialBootstrapData(accounts))
+          if (!cancelled) setDatabaseReady(true)
+          return
+        }
+
+        setRequestList(data.requests)
+        setMessageList(data.messages)
+        setAnnouncements(data.announcements)
+        setInventory(data.inventory)
+        setCategories(data.categories)
+        setSuppliers(data.suppliers)
+        setStockMovements(data.stockMovements)
+        localStorage.setItem(storageKeys.requests, JSON.stringify(data.requests))
+        localStorage.setItem(storageKeys.messages, JSON.stringify(data.messages.map(stripAttachmentDataForStorage)))
+        localStorage.setItem(storageKeys.announcements, JSON.stringify(data.announcements))
+        localStorage.setItem(storageKeys.inventory, JSON.stringify(data.inventory))
+        localStorage.setItem(storageKeys.categories, JSON.stringify(data.categories))
+        localStorage.setItem(storageKeys.suppliers, JSON.stringify(data.suppliers))
+        localStorage.setItem(storageKeys.stockMovements, JSON.stringify(data.stockMovements))
+        setDatabaseReady(true)
+      })
+      .catch((error) => {
+        console.warn(error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!databaseReady) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      syncBootstrapData({
+        accounts,
+        requests: requestList,
+        messages: messageList,
+        announcements,
+        inventory,
+        categories,
+        suppliers,
+        stockMovements,
+      }).catch((error) => {
+        console.warn(error)
+      })
+    }, 500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [accounts, announcements, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers])
 
   if (!user) return null
 
