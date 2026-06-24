@@ -13,12 +13,17 @@ export type BootstrapData = {
 }
 
 const apiBaseUrl = import.meta.env.DEV ? '' : import.meta.env.VITE_API_BASE_URL ?? 'https://schoolportal-1nm8.onrender.com'
-const requestTimeoutMs = 6000
+const requestTimeoutMs = import.meta.env.DEV ? 6000 : 20000
 
 type ApiPortalRequest = PortalRequest & {
   filingDate?: string
   vacationLeaveEarned?: string
   sickLeaveEarned?: string
+}
+
+function toApiTimestamp(value: string) {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
@@ -53,6 +58,13 @@ function toApiRequest(request: PortalRequest): ApiPortalRequest {
   }
 }
 
+function toApiAnnouncement(announcement: Announcement): Announcement {
+  return {
+    ...announcement,
+    createdAt: toApiTimestamp(announcement.createdAt),
+  }
+}
+
 function fromApiPayload(data: BootstrapData & { requests?: ApiPortalRequest[]; announcements?: Announcement[]; stock_movements?: StockMovement[] }): BootstrapData {
   return {
     ...data,
@@ -66,6 +78,7 @@ function toApiPayload(data: BootstrapData) {
   return {
     ...data,
     requests: data.requests.map(toApiRequest),
+    announcements: data.announcements.map(toApiAnnouncement),
     messages: data.messages.map(stripAttachmentDataForStorage),
   }
 }
@@ -96,7 +109,10 @@ export function hasBootstrapRows(data: BootstrapData) {
 
 export async function loadBootstrapData() {
   const response = await fetchWithTimeout(`${apiBaseUrl}/api/bootstrap`).catch((error) => {
-    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${error instanceof Error ? error.message : String(error)}`)
+    const message = error instanceof DOMException && error.name === 'AbortError'
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
   })
   if (!response.ok) throw new Error(`Failed to load database data (${response.status})`)
   return fromApiPayload(await response.json())
@@ -108,7 +124,10 @@ export async function syncBootstrapData(data: BootstrapData) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toApiPayload(data)),
   }).catch((error) => {
-    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${error instanceof Error ? error.message : String(error)}`)
+    const message = error instanceof DOMException && error.name === 'AbortError'
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
   })
   if (!response.ok) throw new Error(`Failed to sync database data (${response.status})`)
 }
