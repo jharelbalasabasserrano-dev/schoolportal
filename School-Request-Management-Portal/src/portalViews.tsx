@@ -52,42 +52,6 @@ type ActiveModal =
   | { type: 'users' }
   | null
 
-const messageRefreshMs = 1500
-
-function mergeMessages(current: Message[], incoming: Message[]) {
-  const localById = new Map(current.map((message) => [message.id, message]))
-  const merged = incoming.map((message) => {
-    const local = localById.get(message.id)
-    const localAttachmentData = local?.attachment?.dataUrl
-    if (!localAttachmentData || !message.attachment) return message
-    return {
-      ...message,
-      attachment: {
-        ...message.attachment,
-        dataUrl: localAttachmentData,
-      },
-    }
-  })
-  current.forEach((message) => {
-    if (!incoming.some((item) => item.id === message.id)) merged.push(message)
-  })
-  return merged
-}
-
-function messagesChanged(current: Message[], incoming: Message[]) {
-  if (current.length !== incoming.length) return true
-  return current.some((message, index) => {
-    const next = incoming[index]
-    return !next ||
-      message.id !== next.id ||
-      message.requestId !== next.requestId ||
-      message.senderId !== next.senderId ||
-      message.body !== next.body ||
-      message.sentAt !== next.sentAt ||
-      message.attachment?.name !== next.attachment?.name
-  })
-}
-
 export function Dashboard() {
   const { user, logout, accounts } = useAuth()
   const [requestList, setRequestList] = useState<PortalRequest[]>(() => {
@@ -221,7 +185,7 @@ export function Dashboard() {
         }
 
         setRequestList(data.requests)
-        setMessageList((current) => mergeMessages(current, data.messages))
+        setMessageList(data.messages)
         setAnnouncements(data.announcements)
         setInventory(data.inventory)
         setCategories(data.categories)
@@ -265,32 +229,6 @@ export function Dashboard() {
 
     return () => window.clearTimeout(timeoutId)
   }, [accounts, announcements, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers])
-
-  useEffect(() => {
-    if (!databaseReady || activeView !== 'Messages') return undefined
-
-    let cancelled = false
-    const refreshMessages = () => {
-      loadBootstrapData(true)
-        .then((data) => {
-          if (cancelled) return
-          setMessageList((current) => {
-            const merged = mergeMessages(current, data.messages)
-            return messagesChanged(current, merged) ? merged : current
-          })
-        })
-        .catch((error) => {
-          console.warn(error)
-        })
-    }
-    const intervalId = window.setInterval(refreshMessages, messageRefreshMs)
-    refreshMessages()
-
-    return () => {
-      cancelled = true
-      window.clearInterval(intervalId)
-    }
-  }, [activeView, databaseReady])
 
   if (!user) return null
 

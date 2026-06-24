@@ -84,17 +84,6 @@ pub struct RequestMessage {
     pub sender_name: String,
     pub body: String,
     pub sent_at: String,
-    pub attachment: Option<MessageAttachment>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageAttachment {
-    pub data_url: String,
-    pub name: String,
-    pub size: i32,
-    #[serde(rename = "type")]
-    pub content_type: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]

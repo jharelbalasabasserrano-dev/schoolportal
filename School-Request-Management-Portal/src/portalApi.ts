@@ -1,4 +1,5 @@
 import { initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, initialUsers, type Announcement, type Message, type PortalRequest, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
+import { stripAttachmentDataForStorage } from './portalHelpers'
 
 export type BootstrapData = {
   accounts: User[]
@@ -118,7 +119,7 @@ function toApiPayload(data: BootstrapData) {
     announcements: data.announcements.map(toApiAnnouncement),
     inventory: data.inventory.map(toApiInventoryItem),
     stockMovements: data.stockMovements.map(toApiStockMovement),
-    messages: data.messages,
+    messages: data.messages.map(stripAttachmentDataForStorage),
   }
 }
 
@@ -158,9 +159,7 @@ export function hasBootstrapRows(data: BootstrapData) {
     data.stockMovements.length > 0
 }
 
-export async function loadBootstrapData(forceRefresh = false) {
-  if (forceRefresh) return loadBootstrapDataOnce()
-
+export async function loadBootstrapData() {
   bootstrapLoadPromise ??= loadBootstrapDataOnce().catch((error) => {
     bootstrapLoadPromise = null
     throw error

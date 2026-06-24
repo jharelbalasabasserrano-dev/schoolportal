@@ -1,12 +1,11 @@
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{NaiveDate, Utc};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::{
-    Announcement, BootstrapData, ExitClearanceRequest, MessageAttachment, PortalRequest,
-    RequestMessage, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem,
-    UserAccount,
+    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage, StockMovement,
+    SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem, UserAccount,
 };
 
 #[derive(Clone)]
@@ -100,7 +99,7 @@ pub async fn get_bootstrap_data(
     .await
     .map_err(api_error)?;
 
-    let message_rows = sqlx::query(
+    let messages = sqlx::query_as::<_, RequestMessage>(
         r#"
         SELECT
             id,
@@ -108,11 +107,7 @@ pub async fn get_bootstrap_data(
             COALESCE(sender_id, '') AS sender_id,
             sender_name,
             body,
-            to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at,
-            attachment_data_url,
-            attachment_name,
-            attachment_size,
-            attachment_type
+            to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at
         FROM request_messages
         ORDER BY sent_at
         "#,
@@ -120,30 +115,6 @@ pub async fn get_bootstrap_data(
     .fetch_all(&state.db)
     .await
     .map_err(api_error)?;
-    let messages = message_rows
-        .into_iter()
-        .map(|row| {
-            let attachment_data_url: Option<String> = row.get("attachment_data_url");
-            let attachment_name: Option<String> = row.get("attachment_name");
-            let attachment_size: Option<i32> = row.get("attachment_size");
-            let attachment_type: Option<String> = row.get("attachment_type");
-            RequestMessage {
-                id: row.get("id"),
-                request_id: row.get("request_id"),
-                sender_id: row.get("sender_id"),
-                sender_name: row.get("sender_name"),
-                body: row.get("body"),
-                sent_at: row.get("sent_at"),
-                attachment: attachment_name.map(|name| MessageAttachment {
-                    data_url: attachment_data_url.unwrap_or_default(),
-                    name,
-                    size: attachment_size.unwrap_or_default(),
-                    content_type: attachment_type
-                        .unwrap_or_else(|| "application/octet-stream".to_string()),
-                }),
-            }
-        })
-        .collect();
 
     let inventory = sqlx::query_as::<_, SupplyItem>(
         r#"
@@ -489,17 +460,13 @@ pub async fn sync_bootstrap_data(
 
     for message in &payload.messages {
         let sql = r#"
-            INSERT INTO request_messages (
-                id, request_id, sender_id, sender_name, body, sent_at,
-                attachment_data_url, attachment_name, attachment_size, attachment_type
-            )
+            INSERT INTO request_messages (id, request_id, sender_id, sender_name, body, sent_at)
             VALUES (
                 $1, $2,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
-                $4, $5, NOW(), $6, $7, $8, $9
+                $4, $5, NOW()
             )
             "#;
-        let attachment = message.attachment.as_ref();
         let params = serde_json::json!({
             "id": message.id,
             "request_id": message.request_id,
@@ -507,7 +474,6 @@ pub async fn sync_bootstrap_data(
             "sender_name": message.sender_name,
             "body": message.body,
             "sent_at": "NOW()",
-            "attachment": message.attachment,
         });
         log_db_query("request_messages", sql, params.clone());
         sqlx::query(sql)
@@ -516,10 +482,6 @@ pub async fn sync_bootstrap_data(
         .bind(&message.sender_id)
         .bind(&message.sender_name)
         .bind(&message.body)
-        .bind(attachment.map(|file| file.data_url.as_str()))
-        .bind(attachment.map(|file| file.name.as_str()))
-        .bind(attachment.map(|file| file.size))
-        .bind(attachment.map(|file| file.content_type.as_str()))
         .execute(&mut *tx)
         .await
         .map_err(|error| api_query_error("request_messages", sql, params, error))?;
