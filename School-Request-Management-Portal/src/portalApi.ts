@@ -159,7 +159,9 @@ export function hasBootstrapRows(data: BootstrapData) {
     data.stockMovements.length > 0
 }
 
-export async function loadBootstrapData() {
+export async function loadBootstrapData(forceRefresh = false) {
+  if (forceRefresh) return loadBootstrapDataOnce()
+
   bootstrapLoadPromise ??= loadBootstrapDataOnce().catch((error) => {
     bootstrapLoadPromise = null
     throw error
