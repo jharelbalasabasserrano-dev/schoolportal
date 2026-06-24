@@ -1,5 +1,5 @@
 use axum::{Json, extract::State, http::StatusCode};
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -378,6 +378,9 @@ pub async fn sync_bootstrap_data(
     }
 
     for request in &payload.requests {
+        let filing_date = parse_optional_date(request.filing_date.as_deref());
+        let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
+        let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
         let sql = r#"
             INSERT INTO portal_requests (
                 id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
@@ -393,7 +396,7 @@ pub async fn sync_bootstrap_data(
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-                NULLIF($31, '')::date, NULLIF($32, '')::date, NULLIF($33, '')::date,
+                $31, $32, $33,
                 $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
             )
             "#;
@@ -436,9 +439,9 @@ pub async fn sync_bootstrap_data(
         .bind(&request.inclusive_dates)
         .bind(&request.communication)
         .bind(&request.leave_detail)
-        .bind(&request.filing_date)
-        .bind(&request.leave_start_date)
-        .bind(&request.leave_end_date)
+        .bind(filing_date)
+        .bind(leave_start_date)
+        .bind(leave_end_date)
         .bind(&request.vacation_leave_earned)
         .bind(&request.vacation_leave_less)
         .bind(&request.vacation_leave_balance)
@@ -558,6 +561,19 @@ pub async fn sync_bootstrap_data(
     tx.commit().await.map_err(api_error)?;
 
     Ok(Json(serde_json::json!({ "status": "synced" })))
+}
+
+fn parse_optional_date(value: Option<&str>) -> Option<NaiveDate> {
+    value
+        .and_then(|date| {
+            let trimmed = date.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 
 pub async fn submit_exit_clearance(
