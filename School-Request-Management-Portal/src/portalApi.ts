@@ -18,7 +18,10 @@ const apiBaseUrl = import.meta.env.DEV
   : productionApiBaseUrl && !productionApiBaseUrl.includes('127.0.0.1') && !productionApiBaseUrl.includes('localhost')
     ? productionApiBaseUrl
     : 'https://schoolportal-1nm8.onrender.com'
-const requestTimeoutMs = import.meta.env.DEV ? 6000 : 20000
+const requestTimeoutMs = import.meta.env.DEV ? 6000 : 60000
+const bootstrapRetryDelayMs = 1500
+
+let bootstrapLoadPromise: Promise<BootstrapData> | null = null
 
 type ApiPortalRequest = PortalRequest & {
   filingDate?: string
@@ -50,6 +53,14 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   } finally {
     window.clearTimeout(timeoutId)
   }
+}
+
+function isTimeoutError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function fromApiRequest(request: ApiPortalRequest): PortalRequest {
@@ -149,14 +160,34 @@ export function hasBootstrapRows(data: BootstrapData) {
 }
 
 export async function loadBootstrapData() {
-  const response = await fetchWithTimeout(`${apiBaseUrl}/api/bootstrap`).catch((error) => {
-    const message = error instanceof DOMException && error.name === 'AbortError'
-      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
-      : error instanceof Error ? error.message : String(error)
-    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
+  bootstrapLoadPromise ??= loadBootstrapDataOnce().catch((error) => {
+    bootstrapLoadPromise = null
+    throw error
   })
-  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to load database data (${response.status})`))
-  return fromApiPayload(await response.json())
+
+  return bootstrapLoadPromise
+}
+
+async function loadBootstrapDataOnce() {
+  const url = `${apiBaseUrl}/api/bootstrap`
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url)
+      if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to load database data (${response.status})`))
+      return fromApiPayload(await response.json())
+    } catch (error) {
+      lastError = error
+      if (!isTimeoutError(error) || attempt === 1) break
+      await delay(bootstrapRetryDelayMs)
+    }
+  }
+
+  const message = isTimeoutError(lastError)
+    ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+    : lastError instanceof Error ? lastError.message : String(lastError)
+  throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
 }
 
 export async function syncBootstrapData(data: BootstrapData) {
@@ -165,7 +196,7 @@ export async function syncBootstrapData(data: BootstrapData) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toApiPayload(data)),
   }).catch((error) => {
-    const message = error instanceof DOMException && error.name === 'AbortError'
+    const message = isTimeoutError(error)
       ? `request timed out after ${requestTimeoutMs / 1000} seconds`
       : error instanceof Error ? error.message : String(error)
     throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${message}`)
