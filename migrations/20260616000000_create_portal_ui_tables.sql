@@ -81,11 +81,7 @@ CREATE TABLE IF NOT EXISTS request_messages (
     sender_id TEXT REFERENCES app_users(id) ON DELETE SET NULL,
     sender_name TEXT NOT NULL,
     body TEXT NOT NULL,
-    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    attachment_data_url TEXT,
-    attachment_name TEXT,
-    attachment_size INTEGER,
-    attachment_type TEXT
+    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS request_messages_request_id_idx ON request_messages(request_id);
