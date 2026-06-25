@@ -92,6 +92,8 @@ export type Message = {
   senderName: string
   body: string
   sentAt: string
+  status?: 'Sent' | 'Delivered' | 'Read'
+  readBy?: string[]
   attachment?: MessageAttachment
 }
 

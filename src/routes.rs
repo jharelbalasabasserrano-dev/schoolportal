@@ -108,6 +108,8 @@ pub async fn get_bootstrap_data(
             sender_name,
             body,
             to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at,
+            status,
+            read_by,
             attachment_data_url,
             attachment_name,
             attachment_size,
@@ -134,6 +136,8 @@ pub async fn get_bootstrap_data(
                 sender_name: row.get("sender_name"),
                 body: row.get("body"),
                 sent_at: row.get("sent_at"),
+                status: row.get("status"),
+                read_by: row.get("read_by"),
                 attachment: match (
                     attachment_data_url,
                     attachment_name,
@@ -502,12 +506,15 @@ pub async fn sync_bootstrap_data(
         let sql = r#"
             INSERT INTO request_messages (
                 id, request_id, sender_id, sender_name, body, sent_at,
-                attachment_data_url, attachment_name, attachment_size, attachment_type
+                attachment_data_url, attachment_name, attachment_size, attachment_type,
+                status, read_by
             )
             VALUES (
                 $1, $2,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
-                $4, $5, NOW(), NULLIF($6, ''), NULLIF($7, ''), $8, NULLIF($9, '')
+                $4, $5, COALESCE(NULLIF($6, '')::timestamptz, NOW()), NULLIF($7, ''), NULLIF($8, ''), $9, NULLIF($10, ''),
+                CASE WHEN $11 = 'Read' THEN 'Read' ELSE 'Delivered' END,
+                $12
             )
             "#;
         let attachment = message.attachment.as_ref();
@@ -517,7 +524,9 @@ pub async fn sync_bootstrap_data(
             "sender_id": message.sender_id,
             "sender_name": message.sender_name,
             "body": message.body,
-            "sent_at": "NOW()",
+            "sent_at": message.sent_at,
+            "status": message.status,
+            "read_by": message.read_by,
             "attachment": attachment.map(|file| serde_json::json!({
                 "name": file.name,
                 "size": file.size,
@@ -532,10 +541,13 @@ pub async fn sync_bootstrap_data(
             .bind(&message.sender_id)
             .bind(&message.sender_name)
             .bind(&message.body)
+            .bind(&message.sent_at)
             .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
             .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
             .bind(attachment.map(|file| file.size))
             .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
+            .bind(&message.status)
+            .bind(&message.read_by)
             .execute(&mut *tx)
             .await
             .map_err(|error| api_query_error("request_messages", sql, params, error))?;

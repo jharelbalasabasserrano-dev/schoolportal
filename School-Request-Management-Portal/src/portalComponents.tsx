@@ -1,5 +1,5 @@
 import { BadgeCheck, CheckCircle2, Clock, LogOut, Megaphone, User as UserIcon, XCircle, type LucideIcon } from 'lucide-react'
-import { getInitials, notificationItems } from './portalHelpers'
+import { getInitials, type NotificationItem } from './portalHelpers'
 import { initialAnnouncements, roleMeta, type Announcement, type Status, type User } from './portalData'
 
 type IconComponent = LucideIcon
@@ -102,7 +102,7 @@ export function InfoCard({ lines, title }: { lines: string[]; title: string }) {
   )
 }
 
-export function NotificationsDropdown({ notifications, onMarkAllRead }: { notifications: typeof notificationItems; onMarkAllRead: () => void }) {
+export function NotificationsDropdown({ notifications, onMarkAllRead }: { notifications: NotificationItem[]; onMarkAllRead: () => void }) {
   const unreadCount = notifications.filter((item) => !item.read).length
   return (
     <div className="fixed inset-x-3 top-[76px] z-50 max-h-[calc(100vh-92px)] overflow-hidden rounded-lg border border-[#e7e1db] bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-16 sm:w-[420px]">

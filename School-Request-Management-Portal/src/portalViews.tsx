@@ -30,7 +30,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import ccdLogo from './assets/ccd-logo.png'
 import davaoCitySeal from './assets/davao-city-seal.png'
 import AdminOfficeDashboard from './AdminOfficeDashboard'
@@ -40,9 +40,9 @@ import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
-import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage } from './portalHelpers'
+import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
-import { createInitialBootstrapData, hasBootstrapRows, loadBootstrapData, syncBootstrapData } from './portalApi'
+import { createInitialBootstrapData, hasBootstrapRows, loadBootstrapData, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 
@@ -51,6 +51,87 @@ type ActiveModal =
   | { type: 'decision'; request: PortalRequest; status: Status }
   | { type: 'users' }
   | null
+
+type MessageToast = {
+  body: string
+  id: string
+  requestId: string
+  senderName: string
+  title: string
+}
+
+type BroadcastMessageEvent =
+  | { type: 'message:new'; message: Message }
+  | { type: 'message:read'; messageId: string; readBy: string[]; status: Message['status'] }
+
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext
+  }
+}
+
+function getMessageTimeValue(message: Message) {
+  const parsed = new Date(message.sentAt)
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+}
+
+function getMessageStatus(message: Message, currentUser: User): 'Sent' | 'Delivered' | 'Read' {
+  if (message.senderId !== currentUser.id) return message.readBy?.includes(currentUser.id) ? 'Read' : 'Delivered'
+  return message.status ?? 'Delivered'
+}
+
+function playNotificationSound() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return
+  const context = new AudioContextClass()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.type = 'sine'
+  oscillator.frequency.value = 740
+  gain.gain.setValueAtTime(0.0001, context.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22)
+  oscillator.connect(gain)
+  gain.connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.24)
+}
+
+function requestBrowserNotificationPermission() {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'default') Notification.requestPermission().catch(() => undefined)
+}
+
+function normalizeMessage(message: Message): Message {
+  return {
+    ...message,
+    status: message.status ?? 'Delivered',
+    readBy: message.readBy ?? [],
+  }
+}
+
+function mergeMessages(current: Message[], incoming: Message[]) {
+  const merged = new Map<string, Message>()
+  current.forEach((message) => merged.set(message.id, normalizeMessage(message)))
+  incoming.forEach((message) => {
+    const next = normalizeMessage(message)
+    const existing = merged.get(next.id)
+    merged.set(next.id, existing ? { ...existing, ...next, attachment: next.attachment ?? existing.attachment } : next)
+  })
+  return [...merged.values()].sort((a, b) => getMessageTimeValue(a) - getMessageTimeValue(b))
+}
+
+function canUserSeeMessage(message: Message, currentUser: User, requests: PortalRequest[]) {
+  const request = requests.find((item) => item.id === message.requestId)
+  if (!request) return false
+  if (currentUser.role === 'student') return request.ownerId === currentUser.id && documentKinds.includes(request.kind)
+  if (currentUser.role === 'registrar') return request.office === 'Registrar'
+  return false
+}
+
+function isUnreadForUser(message: Message, currentUser: User, requests: PortalRequest[]) {
+  return message.senderId !== currentUser.id && canUserSeeMessage(message, currentUser, requests) && !(message.readBy ?? []).includes(currentUser.id)
+}
 
 export function Dashboard() {
   const { user, logout, accounts } = useAuth()
@@ -112,7 +193,10 @@ export function Dashboard() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationRead, setNotificationRead] = useState<Record<string, boolean>>(() => readStored(storageKeys.notifications, {}))
+  const [messageToasts, setMessageToasts] = useState<MessageToast[]>([])
   const [databaseReady, setDatabaseReady] = useState(false)
+  const seenMessageIdsRef = useRef<Set<string>>(new Set(messageList.map((message) => message.id)))
+  const messagesPrimedRef = useRef(false)
 
   useEffect(() => {
     localStorage.setItem(storageKeys.requests, JSON.stringify(requestList))
@@ -132,9 +216,8 @@ export function Dashboard() {
       try {
         const incoming = JSON.parse(event.newValue) as Message[]
         setMessageList((current) => {
-          const currentIds = current.map((message) => message.id).join('|')
-          const incomingIds = incoming.map((message) => message.id).join('|')
-          return currentIds === incomingIds ? current : incoming
+          const merged = mergeMessages(current, incoming)
+          return JSON.stringify(current.map(stripAttachmentDataForStorage)) === JSON.stringify(merged.map(stripAttachmentDataForStorage)) ? current : merged
         })
       } catch {
         // Ignore malformed storage values and keep the current in-memory thread.
@@ -147,10 +230,19 @@ export function Dashboard() {
   useEffect(() => {
     if (!('BroadcastChannel' in window)) return undefined
     const channel = new BroadcastChannel('eduportal-messages')
-    channel.onmessage = (event: MessageEvent<Message>) => {
-      const incoming = event.data
+    channel.onmessage = (event: MessageEvent<BroadcastMessageEvent | Message>) => {
+      const incomingEvent = event.data
+      if ('type' in incomingEvent && incomingEvent.type === 'message:read') {
+        setMessageList((current) => current.map((message) => (
+          message.id === incomingEvent.messageId
+            ? { ...message, readBy: incomingEvent.readBy, status: incomingEvent.status }
+            : message
+        )))
+        return
+      }
+      const incoming = 'type' in incomingEvent ? incomingEvent.message : incomingEvent
       if (!incoming?.id) return
-      setMessageList((current) => current.some((message) => message.id === incoming.id) ? current : [...current, incoming])
+      setMessageList((current) => mergeMessages(current, [incoming]))
     }
     return () => channel.close()
   }, [])
@@ -172,6 +264,18 @@ export function Dashboard() {
   }, [notificationRead])
 
   useEffect(() => {
+    requestBrowserNotificationPermission()
+  }, [])
+
+  useEffect(() => {
+    if (messageToasts.length === 0) return undefined
+    const timeoutId = window.setTimeout(() => {
+      setMessageToasts((current) => current.slice(0, -1))
+    }, 5200)
+    return () => window.clearTimeout(timeoutId)
+  }, [messageToasts])
+
+  useEffect(() => {
     let cancelled = false
 
     loadBootstrapData()
@@ -185,7 +289,7 @@ export function Dashboard() {
         }
 
         setRequestList(data.requests)
-        setMessageList(data.messages)
+        setMessageList((current) => mergeMessages(current, data.messages))
         setAnnouncements(data.announcements)
         setInventory(data.inventory)
         setCategories(data.categories)
@@ -212,6 +316,72 @@ export function Dashboard() {
   useEffect(() => {
     if (!databaseReady) return undefined
 
+    const intervalId = window.setInterval(() => {
+      refreshBootstrapData()
+        .then((data) => {
+          setRequestList(data.requests)
+          setMessageList((current) => mergeMessages(current, data.messages))
+          setAnnouncements(data.announcements)
+          setInventory(data.inventory)
+          setCategories(data.categories)
+          setSuppliers(data.suppliers)
+          setStockMovements(data.stockMovements)
+        })
+        .catch((error) => {
+          console.warn(error)
+        })
+    }, 3000)
+
+    return () => window.clearInterval(intervalId)
+  }, [databaseReady])
+
+  useEffect(() => {
+    if (!user) return
+
+    const visibleIds = new Set(messageList.filter((message) => canUserSeeMessage(message, user, requestList)).map((message) => message.id))
+    if (!messagesPrimedRef.current) {
+      seenMessageIdsRef.current = visibleIds
+      messagesPrimedRef.current = true
+      return
+    }
+
+    const incoming = messageList.filter((message) => (
+      visibleIds.has(message.id) &&
+      !seenMessageIdsRef.current.has(message.id) &&
+      message.senderId !== user.id
+    ))
+    seenMessageIdsRef.current = visibleIds
+    if (incoming.length === 0) return
+
+    playNotificationSound()
+    setMessageToasts((current) => [
+      ...incoming.map((message) => {
+        const request = requestList.find((item) => item.id === message.requestId)
+        return {
+          body: message.body || message.attachment?.name || 'New document attachment',
+          id: message.id,
+          requestId: message.requestId,
+          senderName: message.senderName,
+          title: request ? `${request.title} - ${request.id}` : 'New message',
+        }
+      }),
+      ...current,
+    ].slice(0, 4))
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      incoming.forEach((message) => {
+        const request = requestList.find((item) => item.id === message.requestId)
+        new Notification(`New message from ${message.senderName}`, {
+          body: `${request?.title ?? 'Portal conversation'}: ${message.body || message.attachment?.name || 'New attachment'}`,
+          tag: message.id,
+        })
+      })
+    }
+  }, [messageList, requestList, user])
+
+  useEffect(() => {
+    if (!databaseReady) return undefined
+
     const timeoutId = window.setTimeout(() => {
       syncBootstrapData({
         accounts,
@@ -230,18 +400,66 @@ export function Dashboard() {
     return () => window.clearTimeout(timeoutId)
   }, [accounts, announcements, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers])
 
+  const markMessagesRead = useCallback((requestId?: string) => {
+    if (!user) return
+    const changed = messageList
+      .filter((message) => (
+        message.senderId !== user.id &&
+        (!requestId || message.requestId === requestId) &&
+        canUserSeeMessage(message, user, requestList) &&
+        !(message.readBy ?? []).includes(user.id)
+      ))
+      .map((message) => {
+        const readBy = [...(message.readBy ?? []), user.id]
+        return { type: 'message:read' as const, messageId: message.id, readBy, status: 'Read' as const }
+      })
+    if (changed.length === 0) return
+    const changedById = new Map(changed.map((event) => [event.messageId, event]))
+    setMessageList((current) => current.map((message) => {
+      const event = changedById.get(message.id)
+      return event ? { ...message, readBy: event.readBy, status: event.status } : message
+    }))
+    if ('BroadcastChannel' in window && changed.length > 0) {
+      const channel = new BroadcastChannel('eduportal-messages')
+      changed.forEach((event) => channel.postMessage(event))
+      channel.close()
+    }
+  }, [messageList, requestList, user])
+
   if (!user) return null
 
   const visibleRequests = getVisibleRequests(user, requestList)
   const counts = getCounts(visibleRequests)
   const canApprove = ['registrar', 'supply', 'adminOffice', 'hr', 'admin'].includes(user.role)
-  const notifications = notificationItems.map((item) => ({ ...item, read: notificationRead[item.id] ?? item.read }))
+  const unreadMessages = messageList.filter((message) => isUnreadForUser(message, user, requestList))
+  const messageNotifications: NotificationItem[] = unreadMessages.map((message) => {
+    const request = requestList.find((item) => item.id === message.requestId)
+    return {
+      id: `message-${message.id}`,
+      kind: 'message',
+      title: `Message from ${message.senderName}`,
+      body: `${request?.title ?? 'Portal conversation'}: ${message.body || message.attachment?.name || 'New attachment'}`,
+      date: message.sentAt,
+      age: message.sentAt,
+      read: false,
+      icon: MessageSquare,
+      tone: 'bg-[#4cbb17]/15 text-[#228b22]',
+    }
+  })
+  const notifications = [...messageNotifications, ...notificationItems.map((item) => ({ ...item, read: notificationRead[item.id] ?? item.read }))]
   const unreadCount = notifications.filter((item) => !item.read).length
   const visibleAnnouncements = announcements.filter((announcement) => !announcement.audience || announcement.audience === 'all' || announcement.audience === user.role)
   const markAllNotificationsRead = () => {
     setNotificationRead(Object.fromEntries(notificationItems.map((item) => [item.id, true])))
+    markMessagesRead()
   }
   const toggleNotificationRead = (id: string) => {
+    if (id.startsWith('message-')) {
+      const messageId = id.replace('message-', '')
+      const message = messageList.find((item) => item.id === messageId)
+      if (message) markMessagesRead(message.requestId)
+      return
+    }
     const item = notifications.find((notice) => notice.id === id)
     if (!item) return
     setNotificationRead((current) => ({ ...current, [id]: !item.read }))
@@ -273,12 +491,14 @@ export function Dashboard() {
       senderName: user.name,
       body: body.trim(),
       sentAt: new Date().toLocaleString(),
+      status: 'Sent',
+      readBy: [user.id],
       attachment,
     }
     setMessageList((current) => [...current, newMessage])
     if ('BroadcastChannel' in window) {
       const channel = new BroadcastChannel('eduportal-messages')
-      channel.postMessage(newMessage)
+      channel.postMessage({ type: 'message:new', message: newMessage } satisfies BroadcastMessageEvent)
       channel.close()
     }
   }
@@ -370,7 +590,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="relative flex items-center gap-2 sm:gap-4">
-            <button onClick={() => { setNotificationsOpen((open) => !open); setProfileOpen(false) }} className="relative rounded-md p-2 hover:bg-[#f2eee9]" aria-label="Notifications">
+            <button onClick={() => { requestBrowserNotificationPermission(); setNotificationsOpen((open) => !open); setProfileOpen(false) }} className="relative rounded-md p-2 hover:bg-[#f2eee9]" aria-label="Notifications">
               <Bell size={23} />
               {unreadCount > 0 && <span className="absolute right-0 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-[#228b22] text-xs font-bold text-white">{unreadCount}</span>}
             </button>
@@ -412,7 +632,7 @@ export function Dashboard() {
           {user.role !== 'employee' && activeView === 'Reserve Facility' && <ReserveFacilityView existingRequests={requestList} onSubmit={addRequest} user={user} />}
           {user.role !== 'employee' && activeView === 'Room Availability' && <RoomAvailabilityView requests={requestList} />}
           {user.role !== 'employee' && activeView === 'My Requests' && <MyRequestsView requests={visibleRequests} onView={(request) => setModal({ type: 'viewRequest', request })} />}
-          {activeView === 'Messages' && <MessagesView currentUser={user} messages={messageList} onSend={sendMessage} requests={requestList} />}
+          {activeView === 'Messages' && <MessagesView currentUser={user} messages={messageList} onMarkRead={markMessagesRead} onSend={sendMessage} requests={requestList} />}
           {activeView === 'Notifications' && <NotificationsView notifications={notifications} onMarkAllRead={markAllNotificationsRead} onToggleRead={toggleNotificationRead} />}
           {activeView === 'Profile' && <ProfileView />}
           {user.role !== 'admin' && !getNavItems(user.role).some((item) => item.label === activeView) && <RequestsWorkspace requests={visibleRequests} canApprove={canApprove} onDecision={(request, status) => setModal({ type: 'decision', request, status })} onView={(request) => setModal({ type: 'viewRequest', request })} />}
@@ -426,6 +646,20 @@ export function Dashboard() {
       {modal?.type === 'viewRequest' && !['registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
       {modal?.type === 'decision' && <DecisionModal request={modal.request} status={modal.status} onClose={() => setModal(null)} onSubmit={updateRequestStatus} />}
       {modal?.type === 'users' && <UsersModal onClose={() => setModal(null)} />}
+      <div className="fixed bottom-4 right-4 z-[70] flex w-[min(390px,calc(100vw-32px))] flex-col gap-3">
+        {messageToasts.map((toast) => (
+          <button key={toast.id} onClick={() => { setActiveView('Messages'); setMessageToasts((current) => current.filter((item) => item.id !== toast.id)) }} className="rounded-lg border border-[#d8ead7] bg-white p-4 text-left shadow-2xl">
+            <div className="flex gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#4cbb17]/15 text-[#228b22]"><MessageSquare size={20} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold">New message from {toast.senderName}</p>
+                <p className="truncate text-sm font-medium text-slate-500">{toast.title}</p>
+                <p className="mt-1 line-clamp-2 text-slate-700">{toast.body}</p>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1423,7 +1657,7 @@ function MyRequestsView({ onView, requests }: { onView: (request: PortalRequest)
   )
 }
 
-function MessagesView({ currentUser, messages, onSend, requests }: { currentUser: User; messages: Message[]; onSend: (requestId: string, body: string, attachment?: MessageAttachment) => void; requests: PortalRequest[] }) {
+function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: { currentUser: User; messages: Message[]; onMarkRead: (requestId?: string) => void; onSend: (requestId: string, body: string, attachment?: MessageAttachment) => void; requests: PortalRequest[] }) {
   const conversations = requests.filter((request) => {
     const hasMessages = messages.some((message) => message.requestId === request.id)
     if (currentUser.role === 'student') return request.ownerId === currentUser.id && documentKinds.includes(request.kind)
@@ -1433,6 +1667,7 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? '')
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<MessageAttachment | undefined>()
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selected = conversations.find((request) => request.id === selectedId) ?? conversations[0]
   const thread = selected ? messages.filter((message) => message.requestId === selected.id) : []
 
@@ -1442,6 +1677,15 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
       setSelectedId(conversations[0].id)
     }
   }, [conversations, selectedId])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [selected?.id, thread.length])
+
+  useEffect(() => {
+    if (!selected) return
+    onMarkRead(selected.id)
+  }, [onMarkRead, selected, thread.length])
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1480,13 +1724,17 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
         <div>
           {conversations.map((request) => {
             const last = messages.filter((message) => message.requestId === request.id).at(-1)
+            const unreadInThread = messages.filter((message) => message.requestId === request.id && message.senderId !== currentUser.id && !(message.readBy ?? []).includes(currentUser.id)).length
             return (
               <button key={request.id} onClick={() => setSelectedId(request.id)} className={`w-full border-t border-[#eee9e4] p-7 text-left hover:bg-stone-50 ${selected?.id === request.id ? 'border-l-4 border-l-[#228b22] bg-red-50/55' : ''}`}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xl font-bold">{request.title} - {request.id}</p>
-                  <StatusPill status={request.status} />
+                  <div className="flex items-center gap-2">
+                    {unreadInThread > 0 && <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-[#228b22] px-2 text-sm font-bold text-white">{unreadInThread}</span>}
+                    <StatusPill status={request.status} />
+                  </div>
                 </div>
-                <p className="mt-2 truncate text-slate-600">Registrar: {last?.body || last?.attachment?.name || 'No message yet.'}</p>
+                <p className="mt-2 truncate text-slate-600">{last ? `${last.senderName}: ${last.body || last.attachment?.name || 'Attachment'}` : 'No message yet.'}</p>
               </button>
             )
           })}
@@ -1537,10 +1785,12 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
                           </div>
                         </div>
                       )}
+                      {mine && <p className="mt-3 text-right text-sm font-semibold text-white/70">{getMessageStatus(message, currentUser)}</p>}
                     </div>
                   </div>
                 )
               })}
+              <div ref={messagesEndRef} />
             </div>
             <div className="border-t border-[#e7e1db] p-7">
               {attachment && (
@@ -1571,13 +1821,14 @@ function MessagesView({ currentUser, messages, onSend, requests }: { currentUser
   )
 }
 
-function NotificationsView({ notifications, onMarkAllRead, onToggleRead }: { notifications: typeof notificationItems; onMarkAllRead: () => void; onToggleRead: (id: string) => void }) {
+function NotificationsView({ notifications, onMarkAllRead, onToggleRead }: { notifications: NotificationItem[]; onMarkAllRead: () => void; onToggleRead: (id: string) => void }) {
   const [filter, setFilter] = useState('All')
   const filtered = notifications.filter((item) => {
     if (filter === 'Unread') return !item.read
     if (filter === 'Approvals') return item.kind === 'approval'
     if (filter === 'Rejections') return item.kind === 'rejection'
     if (filter === 'Announcements') return item.kind === 'announcement'
+    if (filter === 'Messages') return item.kind === 'message'
     if (filter === 'Info') return item.kind === 'info'
     return true
   })
@@ -1590,7 +1841,7 @@ function NotificationsView({ notifications, onMarkAllRead, onToggleRead }: { not
             <h2 className="text-3xl font-bold">Notifications</h2>
             <p className="mt-2 text-xl text-slate-600">Approval updates, request status changes, and campus announcements.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              {['All', 'Unread', 'Approvals', 'Rejections', 'Announcements', 'Info'].map((item) => (
+              {['All', 'Unread', 'Approvals', 'Rejections', 'Messages', 'Announcements', 'Info'].map((item) => (
                 <button key={item} onClick={() => setFilter(item)} className={`rounded-full border px-5 py-2 ${filter === item ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db]'}`}>{item}</button>
               ))}
             </div>

@@ -3,7 +3,19 @@ import ccdLogo from './assets/ccd-logo.png'
 import davaoCitySeal from './assets/davao-city-seal.png'
 import { allLeaveKinds, documentKinds, facilities, messageAttachmentCache, studentRequestKinds, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type User } from './portalData'
 
-export const notificationItems = [
+export type NotificationItem = {
+  id: string
+  kind: string
+  title: string
+  body: string
+  date: string
+  age: string
+  read: boolean
+  icon: typeof CheckCircle2
+  tone: string
+}
+
+export const notificationItems: NotificationItem[] = [
   { id: 'tor-approved', kind: 'approval', title: 'TOR Request Approved', body: 'Your TOR request (DR-2026-001) has been approved. Please pick it up at Registrar Window 3.', date: '5/15/2026, 6:11:00 PM', age: '18d ago', read: false, icon: CheckCircle2, tone: 'bg-emerald-100 text-emerald-900' },
   { id: 'facility-approved', kind: 'approval', title: 'Facility Reservation Approved', body: 'AVR 2 reservation on June 10 has been confirmed.', date: '5/26/2026, 5:00:00 PM', age: '7d ago', read: false, icon: CheckCircle2, tone: 'bg-emerald-100 text-emerald-900' },
   { id: 'coe-rejected', kind: 'rejection', title: 'COE Request Rejected', body: 'Your COE request was rejected. Reason: please re-submit with correct semester indicated.', date: '3/4/2026, 5:46:00 PM', age: '90d ago', read: true, icon: XCircle, tone: 'bg-red-100 text-red-800' },
@@ -38,6 +50,7 @@ export function getNavItems(role: Role) {
     { label: 'COE Requests', icon: BadgeCheck },
     { label: 'Exit Clearance', icon: ShieldCheck },
     { label: 'Messages', icon: MessageSquare },
+    { label: 'Notifications', icon: Bell },
     { label: 'Announcements', icon: Megaphone },
   ]
   if (role === 'supply') return [

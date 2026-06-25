@@ -102,6 +102,15 @@ function toApiStockMovement(movement: StockMovement): StockMovement {
   }
 }
 
+function toApiMessage(message: Message): Message {
+  return {
+    ...message,
+    sentAt: toApiTimestamp(message.sentAt),
+    status: message.status ?? 'Delivered',
+    readBy: message.readBy ?? [],
+  }
+}
+
 function fromApiPayload(data: BootstrapData & { requests?: ApiPortalRequest[]; announcements?: Announcement[]; stock_movements?: StockMovement[] }): BootstrapData {
   return {
     ...data,
@@ -118,7 +127,7 @@ function toApiPayload(data: BootstrapData) {
     announcements: data.announcements.map(toApiAnnouncement),
     inventory: data.inventory.map(toApiInventoryItem),
     stockMovements: data.stockMovements.map(toApiStockMovement),
-    messages: data.messages,
+    messages: data.messages.map(toApiMessage),
   }
 }
 
@@ -165,6 +174,10 @@ export async function loadBootstrapData() {
   })
 
   return bootstrapLoadPromise
+}
+
+export async function refreshBootstrapData() {
+  return loadBootstrapDataOnce()
 }
 
 async function loadBootstrapDataOnce() {

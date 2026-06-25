@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+fn default_message_status() -> String {
+    "Delivered".to_string()
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BootstrapData {
@@ -84,6 +88,10 @@ pub struct RequestMessage {
     pub sender_name: String,
     pub body: String,
     pub sent_at: String,
+    #[serde(default = "default_message_status")]
+    pub status: String,
+    #[serde(default)]
+    pub read_by: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment: Option<MessageAttachment>,
 }
