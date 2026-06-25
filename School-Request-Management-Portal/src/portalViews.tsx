@@ -42,9 +42,10 @@ import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
 import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
-import { createInitialBootstrapData, hasBootstrapRows, loadBootstrapData, refreshBootstrapData, syncBootstrapData } from './portalApi'
+import { createInitialBootstrapData, createMessage, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
+import { isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, supabase, uploadMessageAttachment } from './portalSupabase'
 
 type ActiveModal =
   | { type: 'viewRequest'; request: PortalRequest }
@@ -60,10 +61,6 @@ type MessageToast = {
   title: string
 }
 
-type BroadcastMessageEvent =
-  | { type: 'message:new'; message: Message }
-  | { type: 'message:read'; messageId: string; readBy: string[]; status: Message['status'] }
-
 declare global {
   interface Window {
     webkitAudioContext?: typeof AudioContext
@@ -78,6 +75,12 @@ function getMessageTimeValue(message: Message) {
 function getMessageStatus(message: Message, currentUser: User): 'Sent' | 'Delivered' | 'Read' {
   if (message.senderId !== currentUser.id) return message.readBy?.includes(currentUser.id) ? 'Read' : 'Delivered'
   return message.status ?? 'Delivered'
+}
+
+function formatMessageTime(value: string) {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsed)
 }
 
 function playNotificationSound() {
@@ -228,26 +231,6 @@ export function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (!('BroadcastChannel' in window)) return undefined
-    const channel = new BroadcastChannel('eduportal-messages')
-    channel.onmessage = (event: MessageEvent<BroadcastMessageEvent | Message>) => {
-      const incomingEvent = event.data
-      if ('type' in incomingEvent && incomingEvent.type === 'message:read') {
-        setMessageList((current) => current.map((message) => (
-          message.id === incomingEvent.messageId
-            ? { ...message, readBy: incomingEvent.readBy, status: incomingEvent.status }
-            : message
-        )))
-        return
-      }
-      const incoming = 'type' in incomingEvent ? incomingEvent.message : incomingEvent
-      if (!incoming?.id) return
-      setMessageList((current) => mergeMessages(current, [incoming]))
-    }
-    return () => channel.close()
-  }, [])
-
-  useEffect(() => {
     localStorage.setItem(storageKeys.inventory, JSON.stringify(inventory))
   }, [inventory])
 
@@ -266,6 +249,23 @@ export function Dashboard() {
   useEffect(() => {
     requestBrowserNotificationPermission()
   }, [])
+
+  useEffect(() => {
+    if (!user || !isSupabaseRealtimeEnabled()) return undefined
+    let cancelled = false
+
+    loadReadNotificationIds(user.id)
+      .then((ids) => {
+        if (!cancelled) {
+          setNotificationRead((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, true])) }))
+        }
+      })
+      .catch((error) => console.warn(error))
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   useEffect(() => {
     if (messageToasts.length === 0) return undefined
@@ -288,15 +288,16 @@ export function Dashboard() {
           return
         }
 
+        const messages = await refreshMessageAttachmentUrls(data.messages)
         setRequestList(data.requests)
-        setMessageList((current) => mergeMessages(current, data.messages))
+        setMessageList((current) => mergeMessages(current, messages))
         setAnnouncements(data.announcements)
         setInventory(data.inventory)
         setCategories(data.categories)
         setSuppliers(data.suppliers)
         setStockMovements(data.stockMovements)
         localStorage.setItem(storageKeys.requests, JSON.stringify(data.requests))
-        localStorage.setItem(storageKeys.messages, JSON.stringify(data.messages.map(stripAttachmentDataForStorage)))
+        localStorage.setItem(storageKeys.messages, JSON.stringify(messages.map(stripAttachmentDataForStorage)))
         localStorage.setItem(storageKeys.announcements, JSON.stringify(data.announcements))
         localStorage.setItem(storageKeys.inventory, JSON.stringify(data.inventory))
         localStorage.setItem(storageKeys.categories, JSON.stringify(data.categories))
@@ -314,13 +315,14 @@ export function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (!databaseReady) return undefined
+    if (!databaseReady || isSupabaseRealtimeEnabled()) return undefined
 
     const intervalId = window.setInterval(() => {
       refreshBootstrapData()
-        .then((data) => {
+        .then(async (data) => {
+          const messages = await refreshMessageAttachmentUrls(data.messages)
           setRequestList(data.requests)
-          setMessageList((current) => mergeMessages(current, data.messages))
+          setMessageList((current) => mergeMessages(current, messages))
           setAnnouncements(data.announcements)
           setInventory(data.inventory)
           setCategories(data.categories)
@@ -333,6 +335,27 @@ export function Dashboard() {
     }, 3000)
 
     return () => window.clearInterval(intervalId)
+  }, [databaseReady])
+
+  useEffect(() => {
+    if (!databaseReady || !supabase) return undefined
+    const realtimeClient = supabase
+
+    const channel = realtimeClient
+      .channel('portal-request-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_messages' }, async (payload) => {
+        const message = await messageFromRealtimePayload(payload)
+        if (message) setMessageList((current) => mergeMessages(current, [message]))
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'request_messages' }, async (payload) => {
+        const message = await messageFromRealtimePayload(payload)
+        if (message) setMessageList((current) => mergeMessages(current, [message]))
+      })
+      .subscribe()
+
+    return () => {
+      realtimeClient.removeChannel(channel)
+    }
   }, [databaseReady])
 
   useEffect(() => {
@@ -400,11 +423,12 @@ export function Dashboard() {
     return () => window.clearTimeout(timeoutId)
   }, [accounts, announcements, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers])
 
-  const markMessagesRead = useCallback((requestId?: string) => {
+  const markMessagesRead = useCallback((requestId?: string, messageId?: string) => {
     if (!user) return
     const changed = messageList
       .filter((message) => (
         message.senderId !== user.id &&
+        (!messageId || message.id === messageId) &&
         (!requestId || message.requestId === requestId) &&
         canUserSeeMessage(message, user, requestList) &&
         !(message.readBy ?? []).includes(user.id)
@@ -419,11 +443,12 @@ export function Dashboard() {
       const event = changedById.get(message.id)
       return event ? { ...message, readBy: event.readBy, status: event.status } : message
     }))
-    if ('BroadcastChannel' in window && changed.length > 0) {
-      const channel = new BroadcastChannel('eduportal-messages')
-      changed.forEach((event) => channel.postMessage(event))
-      channel.close()
-    }
+    changed.forEach((event) => {
+      markMessageRead(event.messageId, user.id)
+        .then((updated) => refreshMessageAttachmentUrl(updated))
+        .then((updated) => setMessageList((current) => mergeMessages(current, [updated])))
+        .catch((error) => console.warn(error))
+    })
   }, [messageList, requestList, user])
 
   if (!user) return null
@@ -439,30 +464,43 @@ export function Dashboard() {
       kind: 'message',
       title: `Message from ${message.senderName}`,
       body: `${request?.title ?? 'Portal conversation'}: ${message.body || message.attachment?.name || 'New attachment'}`,
-      date: message.sentAt,
-      age: message.sentAt,
+      date: formatMessageTime(message.sentAt),
+      age: formatMessageTime(message.sentAt),
       read: false,
       icon: MessageSquare,
       tone: 'bg-[#4cbb17]/15 text-[#228b22]',
     }
   })
-  const notifications = [...messageNotifications, ...notificationItems.map((item) => ({ ...item, read: notificationRead[item.id] ?? item.read }))]
+  const notifications = [
+    ...messageNotifications,
+    ...notificationItems.map((item) => ({
+      ...item,
+      date: formatMessageTime(item.date),
+      age: formatMessageTime(item.date),
+      read: notificationRead[item.id] ?? item.read,
+    })),
+  ]
   const unreadCount = notifications.filter((item) => !item.read).length
   const visibleAnnouncements = announcements.filter((announcement) => !announcement.audience || announcement.audience === 'all' || announcement.audience === user.role)
   const markAllNotificationsRead = () => {
-    setNotificationRead(Object.fromEntries(notificationItems.map((item) => [item.id, true])))
+    const nextRead = Object.fromEntries(notificationItems.map((item) => [item.id, true]))
+    setNotificationRead(nextRead)
+    notificationItems.forEach((item) => {
+      markNotificationReadInSupabase(user.id, item.id).catch((error) => console.warn(error))
+    })
     markMessagesRead()
   }
   const toggleNotificationRead = (id: string) => {
     if (id.startsWith('message-')) {
       const messageId = id.replace('message-', '')
-      const message = messageList.find((item) => item.id === messageId)
-      if (message) markMessagesRead(message.requestId)
+      markMessagesRead(undefined, messageId)
       return
     }
     const item = notifications.find((notice) => notice.id === id)
     if (!item) return
     setNotificationRead((current) => ({ ...current, [id]: !item.read }))
+    const persist = item.read ? markNotificationUnreadInSupabase : markNotificationReadInSupabase
+    persist(user.id, id).catch((error) => console.warn(error))
   }
 
   const addRequest = (request: PortalRequest) => {
@@ -480,27 +518,34 @@ export function Dashboard() {
     setModal(null)
   }
 
-  const sendMessage = (requestId: string, body: string, attachment?: MessageAttachment) => {
+  const sendMessage = async (requestId: string, body: string, attachment?: MessageAttachment) => {
     if (!body.trim() && !attachment) return
     const messageId = `MSG-${Date.now()}`
     if (attachment) messageAttachmentCache.set(messageId, attachment)
+    let storedAttachment: MessageAttachment | undefined
+    try {
+      storedAttachment = attachment ? await uploadMessageAttachment(requestId, messageId, attachment) : undefined
+    } catch (error) {
+      console.warn(error)
+      window.alert('The attachment could not be uploaded. Please try again.')
+      return
+    }
     const newMessage: Message = {
       id: messageId,
       requestId,
       senderId: user.id,
       senderName: user.name,
       body: body.trim(),
-      sentAt: new Date().toLocaleString(),
+      sentAt: new Date().toISOString(),
       status: 'Sent',
       readBy: [user.id],
-      attachment,
+      attachment: storedAttachment,
     }
     setMessageList((current) => [...current, newMessage])
-    if ('BroadcastChannel' in window) {
-      const channel = new BroadcastChannel('eduportal-messages')
-      channel.postMessage({ type: 'message:new', message: newMessage } satisfies BroadcastMessageEvent)
-      channel.close()
-    }
+    createMessage(newMessage)
+      .then((saved) => refreshMessageAttachmentUrl(saved))
+      .then((saved) => setMessageList((current) => mergeMessages(current, [saved])))
+      .catch((error) => console.warn(error))
   }
 
   const addAnnouncement = (title: string, body: string, audience: Announcement['audience'] = 'all') => {
@@ -590,7 +635,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="relative flex items-center gap-2 sm:gap-4">
-            <button onClick={() => { requestBrowserNotificationPermission(); setNotificationsOpen((open) => !open); setProfileOpen(false) }} className="relative rounded-md p-2 hover:bg-[#f2eee9]" aria-label="Notifications">
+            <button onClick={() => { requestBrowserNotificationPermission(); setNotificationsOpen((open) => { const next = !open; if (next) markMessagesRead(); return next }); setProfileOpen(false) }} className="relative rounded-md p-2 hover:bg-[#f2eee9]" aria-label="Notifications">
               <Bell size={23} />
               {unreadCount > 0 && <span className="absolute right-0 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-[#228b22] text-xs font-bold text-white">{unreadCount}</span>}
             </button>
@@ -1657,7 +1702,7 @@ function MyRequestsView({ onView, requests }: { onView: (request: PortalRequest)
   )
 }
 
-function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: { currentUser: User; messages: Message[]; onMarkRead: (requestId?: string) => void; onSend: (requestId: string, body: string, attachment?: MessageAttachment) => void; requests: PortalRequest[] }) {
+function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: { currentUser: User; messages: Message[]; onMarkRead: (requestId?: string) => void; onSend: (requestId: string, body: string, attachment?: MessageAttachment) => Promise<void> | void; requests: PortalRequest[] }) {
   const conversations = requests.filter((request) => {
     const hasMessages = messages.some((message) => message.requestId === request.id)
     if (currentUser.role === 'student') return request.ownerId === currentUser.id && documentKinds.includes(request.kind)
@@ -1757,7 +1802,7 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
                 return (
                   <div key={message.id} className={mine ? 'flex justify-end' : ''}>
                     <div className={`max-w-[760px] rounded-lg border border-[#e7e1db] px-6 py-4 ${mine ? 'bg-[#228b22] text-white' : 'bg-stone-50'}`}>
-                      <p className="mb-2 font-semibold">{message.senderName} <span className={mine ? 'ml-2 text-sm font-normal text-white/70' : 'ml-2 text-sm font-normal text-slate-500'}>{message.sentAt}</span></p>
+                      <p className="mb-2 font-semibold">{message.senderName} <span className={mine ? 'ml-2 text-sm font-normal text-white/70' : 'ml-2 text-sm font-normal text-slate-500'}>{formatMessageTime(message.sentAt)}</span></p>
                       {message.body && <p className="text-xl leading-8">{message.body}</p>}
                       {message.attachment && (
                         <div className={`mt-4 rounded-md border p-4 ${mine ? 'border-white/25 bg-white/10' : 'border-[#e7e1db] bg-white'}`}>
@@ -1771,7 +1816,7 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
                             </div>
                             <div className="flex gap-2">
                               {getMessageAttachmentData(message) ? (
-                                <a href={getMessageAttachmentData(message)!.dataUrl} download={message.attachment.name} target="_blank" rel="noreferrer" className={`rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-stone-100 text-slate-700 hover:bg-stone-200'}`}>Open</a>
+                                <a href={getMessageAttachmentData(message)!.dataUrl || getMessageAttachmentData(message)!.accessUrl} download={message.attachment.name} target="_blank" rel="noreferrer" className={`rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-stone-100 text-slate-700 hover:bg-stone-200'}`}>Open</a>
                               ) : (
                                 <span className={`rounded-md px-4 py-2 text-sm font-semibold ${mine ? 'bg-white/10 text-white/75' : 'bg-stone-100 text-slate-500'}`}>File unavailable after refresh</span>
                               )}
@@ -1851,7 +1896,7 @@ function NotificationsView({ notifications, onMarkAllRead, onToggleRead }: { not
       </section>
       <section className="overflow-hidden rounded-lg border border-[#e7e1db] bg-white">
         {filtered.map((item) => (
-          <div key={item.title} className="flex gap-5 border-b border-[#eee9e4] p-7 last:border-b-0">
+          <div key={item.id} className="flex gap-5 border-b border-[#eee9e4] p-7 last:border-b-0">
             <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-md ${item.tone}`}>
               <item.icon size={23} />
             </span>

@@ -102,6 +102,8 @@ export type MessageAttachment = {
   name: string
   size: number
   type: string
+  storagePath?: string
+  accessUrl?: string
 }
 
 export const messageAttachmentCache = new Map<string, MessageAttachment>()

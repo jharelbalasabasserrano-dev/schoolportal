@@ -110,6 +110,10 @@ pub struct MessageAttachment {
     pub size: i32,
     #[serde(rename = "type")]
     pub file_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]

@@ -259,6 +259,8 @@ export function printHtmlDocument(html: string) {
 }
 
 export function printMessageAttachment(attachment: MessageAttachment) {
+  const attachmentUrl = attachment.dataUrl || attachment.accessUrl || ''
+  if (!attachmentUrl) return
   if (attachment.type.startsWith('image/')) {
     printHtmlDocument(`<!doctype html>
 <html>
@@ -275,7 +277,7 @@ export function printMessageAttachment(attachment: MessageAttachment) {
 </head>
 <body>
   <h1>${escapeHtml(attachment.name)}</h1>
-  <img src="${attachment.dataUrl}" alt="${escapeHtml(attachment.name)}">
+  <img src="${attachmentUrl}" alt="${escapeHtml(attachment.name)}">
 </body>
 </html>`)
     return
@@ -288,10 +290,10 @@ export function printMessageAttachment(attachment: MessageAttachment) {
   }
 
   const printableContent = attachment.type === 'application/pdf'
-    ? `<embed src="${attachment.dataUrl}" type="application/pdf" class="document">`
+    ? `<embed src="${attachmentUrl}" type="application/pdf" class="document">`
     : `<div class="fallback">
         <p>This file type may not print directly in the browser.</p>
-        <a href="${attachment.dataUrl}" download="${escapeHtml(attachment.name)}">Download ${escapeHtml(attachment.name)}</a>
+        <a href="${attachmentUrl}" download="${escapeHtml(attachment.name)}">Download ${escapeHtml(attachment.name)}</a>
       </div>`
 
   printWindow.document.open()
@@ -342,7 +344,7 @@ export function canPrintAttachment(attachment?: MessageAttachment) {
 
 export function getMessageAttachmentData(message: Message) {
   if (!message.attachment) return undefined
-  if (message.attachment.dataUrl) return message.attachment
+  if (message.attachment.dataUrl || message.attachment.accessUrl) return message.attachment
   return messageAttachmentCache.get(message.id)
 }
 

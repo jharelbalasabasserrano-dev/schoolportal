@@ -115,7 +115,7 @@ export function NotificationsDropdown({ notifications, onMarkAllRead }: { notifi
       </div>
       <div className="max-h-[calc(100vh-160px)] overflow-auto sm:max-h-[520px]">
         {notifications.map((item) => (
-          <div key={item.title} className="flex gap-3 border-b border-[#eee9e4] p-4 last:border-b-0">
+          <div key={item.id} className="flex gap-3 border-b border-[#eee9e4] p-4 last:border-b-0">
             <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${item.tone}`}><item.icon size={20} /></span>
             <div className="min-w-0 flex-1">
               <h4 className="font-bold">{item.title}</h4>

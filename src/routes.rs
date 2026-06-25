@@ -29,6 +29,7 @@ pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Val
 
 fn request_message_from_row(row: PgRow) -> RequestMessage {
     let attachment_data_url: Option<String> = row.get("attachment_data_url");
+    let attachment_storage_path: Option<String> = row.get("attachment_storage_path");
     let attachment_name: Option<String> = row.get("attachment_name");
     let attachment_size: Option<i32> = row.get("attachment_size");
     let attachment_type: Option<String> = row.get("attachment_type");
@@ -44,16 +45,22 @@ fn request_message_from_row(row: PgRow) -> RequestMessage {
         read_by: row.get("read_by"),
         attachment: match (
             attachment_data_url,
+            attachment_storage_path,
             attachment_name,
             attachment_size,
             attachment_type,
         ) {
-            (Some(data_url), Some(name), Some(size), Some(file_type)) if !data_url.is_empty() => {
+            (data_url, storage_path, Some(name), Some(size), Some(file_type))
+                if !data_url.as_deref().unwrap_or("").is_empty()
+                    || !storage_path.as_deref().unwrap_or("").is_empty() =>
+            {
                 Some(crate::models::MessageAttachment {
-                    data_url,
+                    data_url: data_url.unwrap_or_default(),
                     name,
                     size,
                     file_type,
+                    storage_path,
+                    access_url: None,
                 })
             }
             _ => None,
@@ -150,6 +157,7 @@ pub async fn get_bootstrap_data(
             status,
             read_by,
             attachment_data_url,
+            attachment_storage_path,
             attachment_name,
             attachment_size,
             attachment_type
@@ -511,15 +519,15 @@ pub async fn sync_bootstrap_data(
         let sql = r#"
             INSERT INTO request_messages (
                 id, request_id, sender_id, sender_name, body, sent_at,
-                attachment_data_url, attachment_name, attachment_size, attachment_type,
+                attachment_data_url, attachment_storage_path, attachment_name, attachment_size, attachment_type,
                 status, read_by
             )
             VALUES (
                 $1, $2,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
-                $4, $5, COALESCE(NULLIF($6, '')::timestamptz, NOW()), NULLIF($7, ''), NULLIF($8, ''), $9, NULLIF($10, ''),
-                CASE WHEN $11 = 'Read' THEN 'Read' ELSE 'Delivered' END,
-                $12
+                $4, $5, COALESCE(NULLIF($6, '')::timestamptz, NOW()), NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''), $10, NULLIF($11, ''),
+                CASE WHEN $12 = 'Read' THEN 'Read' ELSE 'Delivered' END,
+                $13
             )
             "#;
         let attachment = message.attachment.as_ref();
@@ -536,6 +544,7 @@ pub async fn sync_bootstrap_data(
                 "name": file.name,
                 "size": file.size,
                 "type": file.file_type,
+                "storagePath": file.storage_path,
                 "hasDataUrl": !file.data_url.is_empty(),
             })),
         });
@@ -548,6 +557,7 @@ pub async fn sync_bootstrap_data(
             .bind(&message.body)
             .bind(&message.sent_at)
             .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
+            .bind(attachment.and_then(|file| file.storage_path.as_deref()).unwrap_or(""))
             .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
             .bind(attachment.map(|file| file.size))
             .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
@@ -652,15 +662,15 @@ pub async fn create_message(
     let sql = r#"
         INSERT INTO request_messages (
             id, request_id, sender_id, sender_name, body, sent_at,
-            attachment_data_url, attachment_name, attachment_size, attachment_type,
+            attachment_data_url, attachment_storage_path, attachment_name, attachment_size, attachment_type,
             status, read_by
         )
         VALUES (
             $1, $2,
             CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
             $4, $5, COALESCE(NULLIF($6, '')::timestamptz, NOW()),
-            NULLIF($7, ''), NULLIF($8, ''), $9, NULLIF($10, ''),
-            $11, $12
+            NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''), $10, NULLIF($11, ''),
+            $12, $13
         )
         ON CONFLICT (id) DO NOTHING
         RETURNING
@@ -673,6 +683,7 @@ pub async fn create_message(
             status,
             read_by,
             attachment_data_url,
+            attachment_storage_path,
             attachment_name,
             attachment_size,
             attachment_type
@@ -686,6 +697,7 @@ pub async fn create_message(
         "sent_at": message.sent_at,
         "status": status,
         "read_by": read_by,
+        "attachment_storage_path": attachment.and_then(|file| file.storage_path.as_deref()),
     });
     log_db_query("request_messages", sql, params.clone());
     let inserted = sqlx::query(sql)
@@ -696,6 +708,7 @@ pub async fn create_message(
         .bind(&message.body)
         .bind(&message.sent_at)
         .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
+        .bind(attachment.and_then(|file| file.storage_path.as_deref()).unwrap_or(""))
         .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
         .bind(attachment.map(|file| file.size))
         .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
@@ -738,6 +751,7 @@ pub async fn mark_message_read(
             status,
             read_by,
             attachment_data_url,
+            attachment_storage_path,
             attachment_name,
             attachment_size,
             attachment_type
