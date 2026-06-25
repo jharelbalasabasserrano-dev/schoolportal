@@ -45,7 +45,7 @@ import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
-import { isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, supabase, uploadMessageAttachment } from './portalSupabase'
+import { createAttachmentAccessUrl, isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, supabase, uploadMessageAttachment } from './portalSupabase'
 
 type ActiveModal =
   | { type: 'viewRequest'; request: PortalRequest }
@@ -541,8 +541,9 @@ export function Dashboard() {
       readBy: [user.id],
       attachment: storedAttachment,
     }
+    const messageForServer = stripAttachmentDataForStorage(newMessage)
     setMessageList((current) => [...current, newMessage])
-    createMessage(newMessage)
+    createMessage(messageForServer)
       .then((saved) => refreshMessageAttachmentUrl(saved))
       .then((saved) => setMessageList((current) => mergeMessages(current, [saved])))
       .catch((error) => console.warn(error))
@@ -1732,12 +1733,50 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
     onMarkRead(selected.id)
   }, [onMarkRead, selected, thread.length])
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!selected) return
-    onSend(selected.id, body, attachment)
+    await onSend(selected.id, body, attachment)
     setBody('')
     setAttachment(undefined)
+  }
+
+  const getFreshAttachmentUrl = async (attachmentData: MessageAttachment) => {
+    if (attachmentData.storagePath) return createAttachmentAccessUrl(attachmentData.storagePath)
+    return attachmentData.dataUrl || attachmentData.accessUrl
+  }
+
+  const downloadAttachment = async (message: Message) => {
+    const attachmentData = getMessageAttachmentData(message)
+    if (!attachmentData) return
+
+    const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+    if (!attachmentUrl) {
+      window.alert('The attachment link could not be refreshed. Please try again.')
+      return
+    }
+
+    const link = document.createElement('a')
+    link.href = attachmentUrl
+    link.download = attachmentData.name
+    link.target = '_blank'
+    link.rel = 'noreferrer'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
+
+  const printAttachment = async (message: Message) => {
+    const attachmentData = getMessageAttachmentData(message)
+    if (!attachmentData) return
+
+    const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+    if (!attachmentUrl) {
+      window.alert('The attachment link could not be refreshed. Please try again.')
+      return
+    }
+
+    printMessageAttachment({ ...attachmentData, accessUrl: attachmentUrl, dataUrl: attachmentData.dataUrl || '' })
   }
 
   const uploadAttachment = (file?: File) => {
@@ -1799,6 +1838,8 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
             <div className="flex-1 space-y-5 overflow-auto p-7">
               {thread.map((message) => {
                 const mine = message.senderId === currentUser.id
+                const attachmentData = getMessageAttachmentData(message)
+                const canOpenAttachment = Boolean(attachmentData?.dataUrl || attachmentData?.storagePath || attachmentData?.accessUrl)
                 return (
                   <div key={message.id} className={mine ? 'flex justify-end' : ''}>
                     <div className={`max-w-[760px] rounded-lg border border-[#e7e1db] px-6 py-4 ${mine ? 'bg-[#228b22] text-white' : 'bg-stone-50'}`}>
@@ -1815,13 +1856,13 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
                               <p className={mine ? 'text-sm text-white/70' : 'text-sm text-slate-500'}>{formatFileSize(message.attachment.size)}</p>
                             </div>
                             <div className="flex gap-2">
-                              {getMessageAttachmentData(message) ? (
-                                <a href={getMessageAttachmentData(message)!.dataUrl || getMessageAttachmentData(message)!.accessUrl} download={message.attachment.name} target="_blank" rel="noreferrer" className={`rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-stone-100 text-slate-700 hover:bg-stone-200'}`}>Open</a>
+                              {canOpenAttachment ? (
+                                <button type="button" onClick={() => downloadAttachment(message)} className={`rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-stone-100 text-slate-700 hover:bg-stone-200'}`}>Download</button>
                               ) : (
                                 <span className={`rounded-md px-4 py-2 text-sm font-semibold ${mine ? 'bg-white/10 text-white/75' : 'bg-stone-100 text-slate-500'}`}>File unavailable after refresh</span>
                               )}
-                              {canPrintAttachment(getMessageAttachmentData(message)) && (
-                                <button type="button" onClick={() => printMessageAttachment(getMessageAttachmentData(message)!)} className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white text-[#228b22]' : 'bg-[#228b22] text-white'}`}>
+                              {canPrintAttachment(attachmentData) && (
+                                <button type="button" onClick={() => printAttachment(message)} className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold ${mine ? 'bg-white text-[#228b22]' : 'bg-[#228b22] text-white'}`}>
                                   <Printer size={16} />
                                   Print
                                 </button>

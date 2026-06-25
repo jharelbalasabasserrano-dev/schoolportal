@@ -103,11 +103,20 @@ function toApiStockMovement(movement: StockMovement): StockMovement {
 }
 
 function toApiMessage(message: Message): Message {
+  const attachment = message.attachment?.storagePath
+    ? {
+        ...message.attachment,
+        accessUrl: undefined,
+        dataUrl: '',
+      }
+    : undefined
+
   return {
     ...message,
     sentAt: toApiTimestamp(message.sentAt),
     status: message.status ?? 'Delivered',
     readBy: message.readBy ?? [],
+    attachment,
   }
 }
 

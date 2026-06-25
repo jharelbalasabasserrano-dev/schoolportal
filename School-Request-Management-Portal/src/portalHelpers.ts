@@ -344,7 +344,7 @@ export function canPrintAttachment(attachment?: MessageAttachment) {
 
 export function getMessageAttachmentData(message: Message) {
   if (!message.attachment) return undefined
-  if (message.attachment.dataUrl || message.attachment.accessUrl) return message.attachment
+  if (message.attachment.dataUrl || message.attachment.storagePath || message.attachment.accessUrl) return message.attachment
   return messageAttachmentCache.get(message.id)
 }
 
@@ -354,6 +354,7 @@ export function stripAttachmentDataForStorage(message: Message) {
     ...message,
     attachment: {
       ...message.attachment,
+      accessUrl: undefined,
       dataUrl: '',
     },
   }

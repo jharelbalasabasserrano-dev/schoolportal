@@ -20,6 +20,7 @@ type RequestMessageRow = {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 const messageAttachmentBucket = (import.meta.env.VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET as string | undefined) ?? 'message-attachments'
+const maxMessageAttachmentSize = 50 * 1024 * 1024
 
 export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
@@ -35,7 +36,16 @@ export async function messageFromRealtimePayload(payload: { new: Partial<Request
 
 export async function messageFromRequestMessageRow(row: Partial<RequestMessageRow>): Promise<Message | null> {
   if (!row.id || !row.request_id || !row.sender_name || !row.sent_at) return null
-  const accessUrl = row.attachment_storage_path ? await createAttachmentAccessUrl(row.attachment_storage_path) : undefined
+  const attachment = row.attachment_storage_path && row.attachment_name && row.attachment_size !== null && row.attachment_size !== undefined && row.attachment_type
+    ? {
+        dataUrl: '',
+        name: row.attachment_name,
+        size: row.attachment_size,
+        type: row.attachment_type,
+        storagePath: row.attachment_storage_path,
+        accessUrl: await createAttachmentAccessUrl(row.attachment_storage_path),
+      }
+    : undefined
 
   return {
     id: row.id,
@@ -46,16 +56,7 @@ export async function messageFromRequestMessageRow(row: Partial<RequestMessageRo
     sentAt: row.sent_at,
     status: row.status ?? 'Delivered',
     readBy: row.read_by ?? [],
-    attachment: (row.attachment_data_url || row.attachment_storage_path) && row.attachment_name && row.attachment_size && row.attachment_type
-      ? {
-          dataUrl: row.attachment_data_url ?? '',
-          name: row.attachment_name,
-          size: row.attachment_size,
-          type: row.attachment_type,
-          storagePath: row.attachment_storage_path ?? undefined,
-          accessUrl,
-        }
-      : undefined,
+    attachment,
   }
 }
 
@@ -70,10 +71,14 @@ export async function refreshMessageAttachmentUrls(messages: Message[]) {
 }
 
 export async function uploadMessageAttachment(requestId: string, messageId: string, attachment: MessageAttachment) {
-  if (!supabase || !attachment.dataUrl) return attachment
+  if (!supabase) throw new Error('Supabase Storage is not configured for message attachments.')
+  if (!attachment.dataUrl) return attachment
+  if (attachment.size > maxMessageAttachmentSize) throw new Error('Message attachments must be 50 MB or smaller.')
 
   const response = await fetch(attachment.dataUrl)
   const blob = await response.blob()
+  if (blob.size > maxMessageAttachmentSize) throw new Error('Message attachments must be 50 MB or smaller.')
+
   const safeName = attachment.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment'
   const storagePath = `${requestId}/${messageId}/${Date.now()}-${safeName}`
   const { error } = await supabase.storage
@@ -93,15 +98,14 @@ export async function uploadMessageAttachment(requestId: string, messageId: stri
   }
 }
 
-async function createAttachmentAccessUrl(storagePath: string) {
+export async function createAttachmentAccessUrl(storagePath: string) {
   if (!supabase) return undefined
   const { data, error } = await supabase.storage
     .from(messageAttachmentBucket)
     .createSignedUrl(storagePath, 60 * 60)
   if (!error && data?.signedUrl) return data.signedUrl
-
-  const publicData = supabase.storage.from(messageAttachmentBucket).getPublicUrl(storagePath)
-  return publicData.data.publicUrl
+  console.warn(error)
+  return undefined
 }
 
 export async function loadReadNotificationIds(userId: string) {

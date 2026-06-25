@@ -8,9 +8,9 @@ use sqlx::{PgPool, Row, postgres::PgRow};
 use uuid::Uuid;
 
 use crate::models::{
-    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage,
-    ReadMessagePayload, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory,
-    SupplyItem, UserAccount,
+    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, ReadMessagePayload,
+    RequestMessage, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem,
+    UserAccount,
 };
 
 #[derive(Clone)]
@@ -28,11 +28,12 @@ pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Val
 }
 
 fn request_message_from_row(row: PgRow) -> RequestMessage {
-    let attachment_data_url: Option<String> = row.get("attachment_data_url");
     let attachment_storage_path: Option<String> = row.get("attachment_storage_path");
     let attachment_name: Option<String> = row.get("attachment_name");
     let attachment_size: Option<i32> = row.get("attachment_size");
     let attachment_type: Option<String> = row.get("attachment_type");
+    let attachment_storage_path =
+        attachment_storage_path.filter(|storage_path| !storage_path.trim().is_empty());
 
     RequestMessage {
         id: row.get("id"),
@@ -44,22 +45,18 @@ fn request_message_from_row(row: PgRow) -> RequestMessage {
         status: row.get("status"),
         read_by: row.get("read_by"),
         attachment: match (
-            attachment_data_url,
             attachment_storage_path,
             attachment_name,
             attachment_size,
             attachment_type,
         ) {
-            (data_url, storage_path, Some(name), Some(size), Some(file_type))
-                if !data_url.as_deref().unwrap_or("").is_empty()
-                    || !storage_path.as_deref().unwrap_or("").is_empty() =>
-            {
+            (Some(storage_path), Some(name), Some(size), Some(file_type)) => {
                 Some(crate::models::MessageAttachment {
-                    data_url: data_url.unwrap_or_default(),
+                    data_url: String::new(),
                     name,
                     size,
                     file_type,
-                    storage_path,
+                    storage_path: Some(storage_path),
                     access_url: None,
                 })
             }
@@ -556,8 +553,12 @@ pub async fn sync_bootstrap_data(
             .bind(&message.sender_name)
             .bind(&message.body)
             .bind(&message.sent_at)
-            .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
-            .bind(attachment.and_then(|file| file.storage_path.as_deref()).unwrap_or(""))
+            .bind("")
+            .bind(
+                attachment
+                    .and_then(|file| file.storage_path.as_deref())
+                    .unwrap_or(""),
+            )
             .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
             .bind(attachment.map(|file| file.size))
             .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
@@ -707,8 +708,12 @@ pub async fn create_message(
         .bind(&message.sender_name)
         .bind(&message.body)
         .bind(&message.sent_at)
-        .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
-        .bind(attachment.and_then(|file| file.storage_path.as_deref()).unwrap_or(""))
+        .bind("")
+        .bind(
+            attachment
+                .and_then(|file| file.storage_path.as_deref())
+                .unwrap_or(""),
+        )
         .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
         .bind(attachment.map(|file| file.size))
         .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
