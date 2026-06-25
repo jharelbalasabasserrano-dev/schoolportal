@@ -75,7 +75,7 @@ pub struct PortalRequest {
     pub updated_by: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestMessage {
     pub id: String,
@@ -84,6 +84,18 @@ pub struct RequestMessage {
     pub sender_name: String,
     pub body: String,
     pub sent_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<MessageAttachment>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageAttachment {
+    pub data_url: String,
+    pub name: String,
+    pub size: i32,
+    #[serde(rename = "type")]
+    pub file_type: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]

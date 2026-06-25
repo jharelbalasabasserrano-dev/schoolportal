@@ -1,11 +1,11 @@
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{NaiveDate, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::models::{
-    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage, StockMovement,
-    SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem, UserAccount,
+    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage,
+    StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem, UserAccount,
 };
 
 #[derive(Clone)]
@@ -99,7 +99,7 @@ pub async fn get_bootstrap_data(
     .await
     .map_err(api_error)?;
 
-    let messages = sqlx::query_as::<_, RequestMessage>(
+    let message_rows = sqlx::query(
         r#"
         SELECT
             id,
@@ -107,7 +107,11 @@ pub async fn get_bootstrap_data(
             COALESCE(sender_id, '') AS sender_id,
             sender_name,
             body,
-            to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at
+            to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at,
+            attachment_data_url,
+            attachment_name,
+            attachment_size,
+            attachment_type
         FROM request_messages
         ORDER BY sent_at
         "#,
@@ -115,6 +119,42 @@ pub async fn get_bootstrap_data(
     .fetch_all(&state.db)
     .await
     .map_err(api_error)?;
+    let messages = message_rows
+        .into_iter()
+        .map(|row| {
+            let attachment_data_url: Option<String> = row.get("attachment_data_url");
+            let attachment_name: Option<String> = row.get("attachment_name");
+            let attachment_size: Option<i32> = row.get("attachment_size");
+            let attachment_type: Option<String> = row.get("attachment_type");
+
+            RequestMessage {
+                id: row.get("id"),
+                request_id: row.get("request_id"),
+                sender_id: row.get("sender_id"),
+                sender_name: row.get("sender_name"),
+                body: row.get("body"),
+                sent_at: row.get("sent_at"),
+                attachment: match (
+                    attachment_data_url,
+                    attachment_name,
+                    attachment_size,
+                    attachment_type,
+                ) {
+                    (Some(data_url), Some(name), Some(size), Some(file_type))
+                        if !data_url.is_empty() =>
+                    {
+                        Some(crate::models::MessageAttachment {
+                            data_url,
+                            name,
+                            size,
+                            file_type,
+                        })
+                    }
+                    _ => None,
+                },
+            }
+        })
+        .collect();
 
     let inventory = sqlx::query_as::<_, SupplyItem>(
         r#"
@@ -283,16 +323,16 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("app_users", sql, params.clone());
         sqlx::query(sql)
-        .bind(&account.id)
-        .bind(&account.name)
-        .bind(&account.email)
-        .bind(&account.password)
-        .bind(&account.role)
-        .bind(&account.department)
-        .bind(&account.avatar_url)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+            .bind(&account.id)
+            .bind(&account.name)
+            .bind(&account.email)
+            .bind(&account.password)
+            .bind(&account.role)
+            .bind(&account.department)
+            .bind(&account.avatar_url)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("app_users", sql, params, error))?;
     }
 
     for category in &payload.categories {
@@ -307,12 +347,12 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("supply_categories", sql, params.clone());
         sqlx::query(sql)
-        .bind(&category.id)
-        .bind(&category.name)
-        .bind(&category.color)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("supply_categories", sql, params, error))?;
+            .bind(&category.id)
+            .bind(&category.name)
+            .bind(&category.color)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("supply_categories", sql, params, error))?;
     }
 
     for supplier in &payload.suppliers {
@@ -329,14 +369,14 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("suppliers", sql, params.clone());
         sqlx::query(sql)
-        .bind(&supplier.id)
-        .bind(&supplier.name)
-        .bind(&supplier.contact)
-        .bind(&supplier.email)
-        .bind(supplier.lead_time)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("suppliers", sql, params, error))?;
+            .bind(&supplier.id)
+            .bind(&supplier.name)
+            .bind(&supplier.contact)
+            .bind(&supplier.email)
+            .bind(supplier.lead_time)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("suppliers", sql, params, error))?;
     }
 
     for item in &payload.inventory {
@@ -361,20 +401,20 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("supply_items", sql, params.clone());
         sqlx::query(sql)
-        .bind(&item.id)
-        .bind(&item.name)
-        .bind(item.quantity)
-        .bind(&item.unit)
-        .bind(item.min_threshold)
-        .bind(&item.location)
-        .bind(&item.category)
-        .bind(item.cost)
-        .bind(&item.supplier)
-        .bind(item.expiry_date.as_deref().unwrap_or(""))
-        .bind(&item.sku)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("supply_items", sql, params, error))?;
+            .bind(&item.id)
+            .bind(&item.name)
+            .bind(item.quantity)
+            .bind(&item.unit)
+            .bind(item.min_threshold)
+            .bind(&item.location)
+            .bind(&item.category)
+            .bind(item.cost)
+            .bind(&item.supplier)
+            .bind(item.expiry_date.as_deref().unwrap_or(""))
+            .bind(&item.sku)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("supply_items", sql, params, error))?;
     }
 
     for request in &payload.requests {
@@ -408,65 +448,69 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("portal_requests", sql, params.clone());
         sqlx::query(sql)
-        .bind(&request.id)
-        .bind(&request.title)
-        .bind(&request.kind)
-        .bind(&request.owner_id)
-        .bind(&request.owner)
-        .bind(&request.office)
-        .bind(&request.status)
-        .bind(&request.date)
-        .bind(&request.time)
-        .bind(&request.remarks)
-        .bind(&request.facility)
-        .bind(request.attendees)
-        .bind(&request.purpose)
-        .bind(&request.facility_remarks)
-        .bind(&request.student_id)
-        .bind(&request.year_level)
-        .bind(&request.semester)
-        .bind(&request.school_year)
-        .bind(&request.program)
-        .bind(&request.major)
-        .bind(&request.transfer_reason)
-        .bind(&request.requested_docs)
-        .bind(&request.claim_release_date)
-        .bind(&request.received_by)
-        .bind(&request.released_by)
-        .bind(&request.position)
-        .bind(&request.salary)
-        .bind(request.working_days)
-        .bind(&request.inclusive_dates)
-        .bind(&request.communication)
-        .bind(&request.leave_detail)
-        .bind(filing_date)
-        .bind(leave_start_date)
-        .bind(leave_end_date)
-        .bind(&request.vacation_leave_earned)
-        .bind(&request.vacation_leave_less)
-        .bind(&request.vacation_leave_balance)
-        .bind(&request.sick_leave_earned)
-        .bind(&request.sick_leave_less)
-        .bind(&request.sick_leave_balance)
-        .bind(&request.hr_recommendation)
-        .bind(&request.approved_for)
-        .bind(&request.disapproved_due_to)
-        .bind(&request.hr_remarks)
-        .bind(&request.updated_by)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
+            .bind(&request.id)
+            .bind(&request.title)
+            .bind(&request.kind)
+            .bind(&request.owner_id)
+            .bind(&request.owner)
+            .bind(&request.office)
+            .bind(&request.status)
+            .bind(&request.date)
+            .bind(&request.time)
+            .bind(&request.remarks)
+            .bind(&request.facility)
+            .bind(request.attendees)
+            .bind(&request.purpose)
+            .bind(&request.facility_remarks)
+            .bind(&request.student_id)
+            .bind(&request.year_level)
+            .bind(&request.semester)
+            .bind(&request.school_year)
+            .bind(&request.program)
+            .bind(&request.major)
+            .bind(&request.transfer_reason)
+            .bind(&request.requested_docs)
+            .bind(&request.claim_release_date)
+            .bind(&request.received_by)
+            .bind(&request.released_by)
+            .bind(&request.position)
+            .bind(&request.salary)
+            .bind(request.working_days)
+            .bind(&request.inclusive_dates)
+            .bind(&request.communication)
+            .bind(&request.leave_detail)
+            .bind(filing_date)
+            .bind(leave_start_date)
+            .bind(leave_end_date)
+            .bind(&request.vacation_leave_earned)
+            .bind(&request.vacation_leave_less)
+            .bind(&request.vacation_leave_balance)
+            .bind(&request.sick_leave_earned)
+            .bind(&request.sick_leave_less)
+            .bind(&request.sick_leave_balance)
+            .bind(&request.hr_recommendation)
+            .bind(&request.approved_for)
+            .bind(&request.disapproved_due_to)
+            .bind(&request.hr_remarks)
+            .bind(&request.updated_by)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
     }
 
     for message in &payload.messages {
         let sql = r#"
-            INSERT INTO request_messages (id, request_id, sender_id, sender_name, body, sent_at)
+            INSERT INTO request_messages (
+                id, request_id, sender_id, sender_name, body, sent_at,
+                attachment_data_url, attachment_name, attachment_size, attachment_type
+            )
             VALUES (
                 $1, $2,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
-                $4, $5, NOW()
+                $4, $5, NOW(), NULLIF($6, ''), NULLIF($7, ''), $8, NULLIF($9, '')
             )
             "#;
+        let attachment = message.attachment.as_ref();
         let params = serde_json::json!({
             "id": message.id,
             "request_id": message.request_id,
@@ -474,17 +518,27 @@ pub async fn sync_bootstrap_data(
             "sender_name": message.sender_name,
             "body": message.body,
             "sent_at": "NOW()",
+            "attachment": attachment.map(|file| serde_json::json!({
+                "name": file.name,
+                "size": file.size,
+                "type": file.file_type,
+                "hasDataUrl": !file.data_url.is_empty(),
+            })),
         });
         log_db_query("request_messages", sql, params.clone());
         sqlx::query(sql)
-        .bind(&message.id)
-        .bind(&message.request_id)
-        .bind(&message.sender_id)
-        .bind(&message.sender_name)
-        .bind(&message.body)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("request_messages", sql, params, error))?;
+            .bind(&message.id)
+            .bind(&message.request_id)
+            .bind(&message.sender_id)
+            .bind(&message.sender_name)
+            .bind(&message.body)
+            .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
+            .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
+            .bind(attachment.map(|file| file.size))
+            .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("request_messages", sql, params, error))?;
     }
 
     for announcement in &payload.announcements {
@@ -508,17 +562,17 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("announcements", sql, params.clone());
         sqlx::query(sql)
-        .bind(&announcement.id)
-        .bind(&announcement.title)
-        .bind(&announcement.body)
-        .bind(announcement.audience.as_deref().unwrap_or(""))
-        .bind(&announcement.author_id)
-        .bind(&announcement.author_name)
-        .bind(&announcement.author_role)
-        .bind(&announcement.created_at)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("announcements", sql, params, error))?;
+            .bind(&announcement.id)
+            .bind(&announcement.title)
+            .bind(&announcement.body)
+            .bind(announcement.audience.as_deref().unwrap_or(""))
+            .bind(&announcement.author_id)
+            .bind(&announcement.author_name)
+            .bind(&announcement.author_role)
+            .bind(&announcement.created_at)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("announcements", sql, params, error))?;
     }
 
     for movement in &payload.stock_movements {
@@ -543,19 +597,19 @@ pub async fn sync_bootstrap_data(
         });
         log_db_query("stock_movements", sql, params.clone());
         sqlx::query(sql)
-        .bind(&movement.id)
-        .bind(&movement.item_id)
-        .bind(&movement.item_name)
-        .bind(&movement.movement_type)
-        .bind(movement.quantity)
-        .bind(&movement.reason)
-        .bind(&movement.performed_by)
-        .bind(&movement.date)
-        .bind(movement.previous_qty)
-        .bind(movement.new_qty)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("stock_movements", sql, params, error))?;
+            .bind(&movement.id)
+            .bind(&movement.item_id)
+            .bind(&movement.item_name)
+            .bind(&movement.movement_type)
+            .bind(movement.quantity)
+            .bind(&movement.reason)
+            .bind(&movement.performed_by)
+            .bind(&movement.date)
+            .bind(movement.previous_qty)
+            .bind(movement.new_qty)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| api_query_error("stock_movements", sql, params, error))?;
     }
 
     tx.commit().await.map_err(api_error)?;

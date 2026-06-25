@@ -273,7 +273,7 @@ export function Dashboard() {
       senderName: user.name,
       body: body.trim(),
       sentAt: new Date().toLocaleString(),
-      attachment: attachment ? { ...attachment, dataUrl: '' } : undefined,
+      attachment,
     }
     setMessageList((current) => [...current, newMessage])
     if ('BroadcastChannel' in window) {
