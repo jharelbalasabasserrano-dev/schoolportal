@@ -1,11 +1,16 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 use chrono::{NaiveDate, Utc};
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Row, postgres::PgRow};
 use uuid::Uuid;
 
 use crate::models::{
     Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, RequestMessage,
-    StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem, UserAccount,
+    ReadMessagePayload, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory,
+    SupplyItem, UserAccount,
 };
 
 #[derive(Clone)]
@@ -20,6 +25,40 @@ pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Val
         "status": "running",
         "database": state.db_status,
     }))
+}
+
+fn request_message_from_row(row: PgRow) -> RequestMessage {
+    let attachment_data_url: Option<String> = row.get("attachment_data_url");
+    let attachment_name: Option<String> = row.get("attachment_name");
+    let attachment_size: Option<i32> = row.get("attachment_size");
+    let attachment_type: Option<String> = row.get("attachment_type");
+
+    RequestMessage {
+        id: row.get("id"),
+        request_id: row.get("request_id"),
+        sender_id: row.get("sender_id"),
+        sender_name: row.get("sender_name"),
+        body: row.get("body"),
+        sent_at: row.get("sent_at"),
+        status: row.get("status"),
+        read_by: row.get("read_by"),
+        attachment: match (
+            attachment_data_url,
+            attachment_name,
+            attachment_size,
+            attachment_type,
+        ) {
+            (Some(data_url), Some(name), Some(size), Some(file_type)) if !data_url.is_empty() => {
+                Some(crate::models::MessageAttachment {
+                    data_url,
+                    name,
+                    size,
+                    file_type,
+                })
+            }
+            _ => None,
+        },
+    }
 }
 
 pub async fn get_bootstrap_data(
@@ -107,7 +146,7 @@ pub async fn get_bootstrap_data(
             COALESCE(sender_id, '') AS sender_id,
             sender_name,
             body,
-            to_char(sent_at, 'Mon DD, HH12:MI AM') AS sent_at,
+            sent_at::text AS sent_at,
             status,
             read_by,
             attachment_data_url,
@@ -123,41 +162,7 @@ pub async fn get_bootstrap_data(
     .map_err(api_error)?;
     let messages = message_rows
         .into_iter()
-        .map(|row| {
-            let attachment_data_url: Option<String> = row.get("attachment_data_url");
-            let attachment_name: Option<String> = row.get("attachment_name");
-            let attachment_size: Option<i32> = row.get("attachment_size");
-            let attachment_type: Option<String> = row.get("attachment_type");
-
-            RequestMessage {
-                id: row.get("id"),
-                request_id: row.get("request_id"),
-                sender_id: row.get("sender_id"),
-                sender_name: row.get("sender_name"),
-                body: row.get("body"),
-                sent_at: row.get("sent_at"),
-                status: row.get("status"),
-                read_by: row.get("read_by"),
-                attachment: match (
-                    attachment_data_url,
-                    attachment_name,
-                    attachment_size,
-                    attachment_type,
-                ) {
-                    (Some(data_url), Some(name), Some(size), Some(file_type))
-                        if !data_url.is_empty() =>
-                    {
-                        Some(crate::models::MessageAttachment {
-                            data_url,
-                            name,
-                            size,
-                            file_type,
-                        })
-                    }
-                    _ => None,
-                },
-            }
-        })
+        .map(request_message_from_row)
         .collect();
 
     let inventory = sqlx::query_as::<_, SupplyItem>(
@@ -627,6 +632,135 @@ pub async fn sync_bootstrap_data(
     tx.commit().await.map_err(api_error)?;
 
     Ok(Json(serde_json::json!({ "status": "synced" })))
+}
+
+pub async fn create_message(
+    State(state): State<AppState>,
+    Json(message): Json<RequestMessage>,
+) -> Result<Json<RequestMessage>, (StatusCode, Json<serde_json::Value>)> {
+    let attachment = message.attachment.as_ref();
+    let status = if message.status == "Read" {
+        "Read"
+    } else {
+        "Delivered"
+    };
+    let read_by = if message.read_by.is_empty() {
+        vec![message.sender_id.clone()]
+    } else {
+        message.read_by.clone()
+    };
+    let sql = r#"
+        INSERT INTO request_messages (
+            id, request_id, sender_id, sender_name, body, sent_at,
+            attachment_data_url, attachment_name, attachment_size, attachment_type,
+            status, read_by
+        )
+        VALUES (
+            $1, $2,
+            CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $3) THEN $3 ELSE NULL END,
+            $4, $5, COALESCE(NULLIF($6, '')::timestamptz, NOW()),
+            NULLIF($7, ''), NULLIF($8, ''), $9, NULLIF($10, ''),
+            $11, $12
+        )
+        ON CONFLICT (id) DO NOTHING
+        RETURNING
+            id,
+            request_id,
+            COALESCE(sender_id, '') AS sender_id,
+            sender_name,
+            body,
+            sent_at::text AS sent_at,
+            status,
+            read_by,
+            attachment_data_url,
+            attachment_name,
+            attachment_size,
+            attachment_type
+        "#;
+    let params = serde_json::json!({
+        "id": message.id,
+        "request_id": message.request_id,
+        "sender_id": message.sender_id,
+        "sender_name": message.sender_name,
+        "body": message.body,
+        "sent_at": message.sent_at,
+        "status": status,
+        "read_by": read_by,
+    });
+    log_db_query("request_messages", sql, params.clone());
+    let inserted = sqlx::query(sql)
+        .bind(&message.id)
+        .bind(&message.request_id)
+        .bind(&message.sender_id)
+        .bind(&message.sender_name)
+        .bind(&message.body)
+        .bind(&message.sent_at)
+        .bind(attachment.map(|file| file.data_url.as_str()).unwrap_or(""))
+        .bind(attachment.map(|file| file.name.as_str()).unwrap_or(""))
+        .bind(attachment.map(|file| file.size))
+        .bind(attachment.map(|file| file.file_type.as_str()).unwrap_or(""))
+        .bind(status)
+        .bind(&read_by)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("request_messages", sql, params, error))?;
+
+    match inserted {
+        Some(row) => Ok(Json(request_message_from_row(row))),
+        None => Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({ "error": "Message already exists" })),
+        )),
+    }
+}
+
+pub async fn mark_message_read(
+    State(state): State<AppState>,
+    Path(message_id): Path<String>,
+    Json(payload): Json<ReadMessagePayload>,
+) -> Result<Json<RequestMessage>, (StatusCode, Json<serde_json::Value>)> {
+    let sql = r#"
+        UPDATE request_messages
+        SET
+            read_by = CASE
+                WHEN $2 = ANY(read_by) THEN read_by
+                ELSE array_append(read_by, $2)
+            END,
+            status = 'Read'
+        WHERE id = $1
+        RETURNING
+            id,
+            request_id,
+            COALESCE(sender_id, '') AS sender_id,
+            sender_name,
+            body,
+            sent_at::text AS sent_at,
+            status,
+            read_by,
+            attachment_data_url,
+            attachment_name,
+            attachment_size,
+            attachment_type
+        "#;
+    let params = serde_json::json!({
+        "id": message_id,
+        "user_id": payload.user_id,
+    });
+    log_db_query("request_messages", sql, params.clone());
+    let updated = sqlx::query(sql)
+        .bind(&message_id)
+        .bind(&payload.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("request_messages", sql, params, error))?;
+
+    match updated {
+        Some(row) => Ok(Json(request_message_from_row(row))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "Message not found" })),
+        )),
+    }
 }
 
 fn parse_optional_date(value: Option<&str>) -> Option<NaiveDate> {

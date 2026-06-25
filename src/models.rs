@@ -96,6 +96,12 @@ pub struct RequestMessage {
     pub attachment: Option<MessageAttachment>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadMessagePayload {
+    pub user_id: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageAttachment {

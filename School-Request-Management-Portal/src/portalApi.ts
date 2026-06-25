@@ -215,3 +215,33 @@ export async function syncBootstrapData(data: BootstrapData) {
   })
   if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to sync database data (${response.status})`))
 }
+
+export async function createMessage(message: Message) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(toApiMessage(message)),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to send message (${response.status})`))
+  return response.json() as Promise<Message>
+}
+
+export async function markMessageRead(messageId: string, userId: string) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/messages/${encodeURIComponent(messageId)}/read`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to mark message read (${response.status})`))
+  return response.json() as Promise<Message>
+}

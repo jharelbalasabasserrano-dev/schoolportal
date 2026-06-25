@@ -3,10 +3,15 @@ mod limiter;
 mod models;
 mod routes;
 
-use axum::{Router, middleware::from_fn_with_state, routing::get, routing::post};
+use axum::{
+    Router,
+    middleware::from_fn_with_state,
+    routing::{get, patch, post},
+};
 use limiter::{ConcurrencyLimiter, enforce_concurrency};
 use routes::{
-    AppState, get_bootstrap_data, health_check, submit_exit_clearance, sync_bootstrap_data,
+    AppState, create_message, get_bootstrap_data, health_check, mark_message_read,
+    submit_exit_clearance, sync_bootstrap_data,
 };
 use std::{io::ErrorKind, net::SocketAddr, path::PathBuf};
 use tower_http::cors::CorsLayer;
@@ -27,6 +32,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(health_check))
         .route("/api/exit-clearance", post(submit_exit_clearance))
+        .route("/api/messages", post(create_message))
+        .route("/api/messages/{id}/read", patch(mark_message_read))
         .route(
             "/api/bootstrap",
             get(get_bootstrap_data).put(sync_bootstrap_data),
