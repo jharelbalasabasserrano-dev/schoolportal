@@ -2,6 +2,22 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Message Attachment Storage
+
+The messaging attachment uploader uses Supabase Storage directly from the Vite frontend. These variables are required when running `npm run dev` and when building production bundles:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET=message-attachments
+```
+
+For local development, put them in `School-Request-Management-Portal/.env` and restart Vite after editing the file.
+
+For Render, add the same `VITE_*` variables to the frontend/static site service environment and redeploy. Vite embeds these values during build, so setting them only on the backend API service will not configure browser uploads.
+
+The `message-attachments` bucket must exist in Supabase Storage with a 50 MB file limit and policies that allow the frontend role to insert objects and create signed URLs.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

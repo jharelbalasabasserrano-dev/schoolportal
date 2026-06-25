@@ -17,10 +17,11 @@ type RequestMessageRow = {
   status: Message['status'] | null
 }
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-const messageAttachmentBucket = (import.meta.env.VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET as string | undefined) ?? 'message-attachments'
+const supabaseUrl = normalizeEnvValue(import.meta.env.VITE_SUPABASE_URL as string | undefined)
+const supabaseAnonKey = normalizeEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
+const messageAttachmentBucket = normalizeEnvValue(import.meta.env.VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET as string | undefined) ?? 'message-attachments'
 const maxMessageAttachmentSize = 50 * 1024 * 1024
+const supabaseConfigIssues = getSupabaseConfigIssues()
 
 type AttachmentUploadContext = {
   bucket: string
@@ -32,9 +33,22 @@ type AttachmentUploadContext = {
   storagePath?: string
 }
 
-export const supabase = supabaseUrl && supabaseAnonKey
+export const supabase = supabaseConfigIssues.length === 0 && supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
+
+export function logSupabaseStartupConfiguration() {
+  const details = getSupabaseConfigDetails()
+  if (supabaseConfigIssues.length > 0) {
+    console.error('[supabase config] Frontend Supabase Storage is not configured correctly', {
+      ...details,
+      issues: supabaseConfigIssues,
+    })
+    return
+  }
+
+  console.info('[supabase config] Frontend Supabase Storage configuration loaded', details)
+}
 
 export function isSupabaseRealtimeEnabled() {
   return Boolean(supabase)
@@ -92,7 +106,7 @@ export async function uploadMessageAttachment(requestId: string, messageId: stri
   logAttachmentEvent('upload requested', context)
 
   if (!supabase) {
-    throwAttachmentError('Supabase Storage is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment, then restart Vite.', context)
+    throwAttachmentError(getSupabaseConfigurationErrorMessage(), context)
   }
   if (!attachment.dataUrl) {
     if (!attachment.storagePath) {
@@ -196,6 +210,53 @@ async function logStoragePreflight(context: AttachmentUploadContext) {
 
 function cleanPathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown'
+}
+
+function normalizeEnvValue(value: string | undefined) {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function getSupabaseConfigIssues() {
+  const issues: string[] = []
+  if (!supabaseUrl) issues.push('Missing VITE_SUPABASE_URL.')
+  else if (!isValidSupabaseProjectUrl(supabaseUrl)) issues.push('VITE_SUPABASE_URL must be a valid Supabase project URL such as https://project-ref.supabase.co.')
+
+  if (!supabaseAnonKey) issues.push('Missing VITE_SUPABASE_ANON_KEY.')
+  else if (supabaseAnonKey.length < 80) issues.push('VITE_SUPABASE_ANON_KEY is unexpectedly short; check that the full anon key was pasted.')
+
+  if (!messageAttachmentBucket) issues.push('Missing VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET.')
+  return issues
+}
+
+function isValidSupabaseProjectUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname.endsWith('.supabase.co')
+  } catch {
+    return false
+  }
+}
+
+function getSupabaseConfigDetails() {
+  return {
+    mode: import.meta.env.MODE,
+    isDev: import.meta.env.DEV,
+    supabaseUrl: supabaseUrl ?? '(missing)',
+    anonKeyPresent: Boolean(supabaseAnonKey),
+    anonKeyLength: supabaseAnonKey?.length ?? 0,
+    bucket: messageAttachmentBucket,
+    maxAttachmentBytes: maxMessageAttachmentSize,
+  }
+}
+
+function getSupabaseConfigurationErrorMessage() {
+  return [
+    'Supabase Storage is not configured for the frontend.',
+    ...supabaseConfigIssues,
+    'Set VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET in School-Request-Management-Portal/.env for local dev.',
+    'For Render production builds, add the same VITE_* variables to the frontend service environment and redeploy.',
+  ].join(' ')
 }
 
 function throwAttachmentError(message: string, context: AttachmentUploadContext, cause?: unknown): never {

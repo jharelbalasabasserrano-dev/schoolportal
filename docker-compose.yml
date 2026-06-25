@@ -37,6 +37,11 @@ services:
     build:
       context: ./School-Request-Management-Portal
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET: ${VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET:-message-attachments}
     container_name: ccd-exit-clearance-web
     depends_on:
       - api
