@@ -45,7 +45,7 @@ import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
-import { createAttachmentAccessUrl, isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, supabase, uploadMessageAttachment } from './portalSupabase'
+import { getAttachmentErrorMessage, isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, requireAttachmentAccessUrl, supabase, uploadMessageAttachment } from './portalSupabase'
 
 type ActiveModal =
   | { type: 'viewRequest'; request: PortalRequest }
@@ -526,9 +526,13 @@ export function Dashboard() {
     try {
       storedAttachment = attachment ? await uploadMessageAttachment(requestId, messageId, attachment) : undefined
     } catch (error) {
-      console.warn(error)
-      window.alert('The attachment could not be uploaded. Please try again.')
-      return
+      console.error('[message attachment] Upload failed before message creation', {
+        requestId,
+        messageId,
+        attachment: attachment ? { name: attachment.name, size: attachment.size, type: attachment.type } : undefined,
+        error,
+      })
+      throw error
     }
     const newMessage: Message = {
       id: messageId,
@@ -542,11 +546,18 @@ export function Dashboard() {
       attachment: storedAttachment,
     }
     const messageForServer = stripAttachmentDataForStorage(newMessage)
-    setMessageList((current) => [...current, newMessage])
-    createMessage(messageForServer)
-      .then((saved) => refreshMessageAttachmentUrl(saved))
-      .then((saved) => setMessageList((current) => mergeMessages(current, [saved])))
-      .catch((error) => console.warn(error))
+    try {
+      const saved = await createMessage(messageForServer).then((message) => refreshMessageAttachmentUrl(message))
+      setMessageList((current) => mergeMessages([...current, newMessage], [saved]))
+    } catch (error) {
+      console.error('[message attachment] Message database insert failed after successful upload', {
+        requestId,
+        messageId,
+        storagePath: storedAttachment?.storagePath,
+        error,
+      })
+      throw error
+    }
   }
 
   const addAnnouncement = (title: string, body: string, audience: Announcement['audience'] = 'all') => {
@@ -1713,6 +1724,7 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? '')
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<MessageAttachment | undefined>()
+  const [composerError, setComposerError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selected = conversations.find((request) => request.id === selectedId) ?? conversations[0]
   const thread = selected ? messages.filter((message) => message.requestId === selected.id) : []
@@ -1736,25 +1748,41 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!selected) return
-    await onSend(selected.id, body, attachment)
-    setBody('')
-    setAttachment(undefined)
+    setComposerError('')
+    try {
+      await onSend(selected.id, body, attachment)
+      setBody('')
+      setAttachment(undefined)
+    } catch (error) {
+      const message = getAttachmentErrorMessage(error)
+      console.error('[message attachment] Send failed in composer', { error })
+      setComposerError(message)
+    }
   }
 
   const getFreshAttachmentUrl = async (attachmentData: MessageAttachment) => {
-    if (attachmentData.storagePath) return createAttachmentAccessUrl(attachmentData.storagePath)
-    return attachmentData.dataUrl || attachmentData.accessUrl
+    if (attachmentData.storagePath) return requireAttachmentAccessUrl(attachmentData.storagePath)
+    return attachmentData.dataUrl || attachmentData.accessUrl || ''
   }
 
   const downloadAttachment = async (message: Message) => {
     const attachmentData = getMessageAttachmentData(message)
     if (!attachmentData) return
 
-    const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
-    if (!attachmentUrl) {
-      window.alert('The attachment link could not be refreshed. Please try again.')
+    let attachmentUrl = ''
+    try {
+      attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+    } catch (error) {
+      const errorMessage = getAttachmentErrorMessage(error)
+      console.error('[message attachment] Download failed', {
+        messageId: message.id,
+        storagePath: attachmentData.storagePath,
+        error,
+      })
+      setComposerError(errorMessage)
       return
     }
+    if (!attachmentUrl) return
 
     const link = document.createElement('a')
     link.href = attachmentUrl
@@ -1770,19 +1798,34 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
     const attachmentData = getMessageAttachmentData(message)
     if (!attachmentData) return
 
-    const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
-    if (!attachmentUrl) {
-      window.alert('The attachment link could not be refreshed. Please try again.')
+    let attachmentUrl = ''
+    try {
+      attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+    } catch (error) {
+      const errorMessage = getAttachmentErrorMessage(error)
+      console.error('[message attachment] Print failed', {
+        messageId: message.id,
+        storagePath: attachmentData.storagePath,
+        error,
+      })
+      setComposerError(errorMessage)
       return
     }
+    if (!attachmentUrl) return
 
     printMessageAttachment({ ...attachmentData, accessUrl: attachmentUrl, dataUrl: attachmentData.dataUrl || '' })
   }
 
   const uploadAttachment = (file?: File) => {
     if (!file) return
+    setComposerError('')
+    console.info('[message attachment] file selected', {
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+    })
     if (file.size > 50 * 1024 * 1024) {
-      window.alert('Please upload a file smaller than 50 MB.')
+      setComposerError(`Please upload a file smaller than 50 MB. Selected file is ${formatFileSize(file.size)}.`)
       return
     }
     const reader = new FileReader()
@@ -1794,6 +1837,11 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
         size: file.size,
         type: file.type || 'application/octet-stream',
       })
+    }
+    reader.onerror = () => {
+      const message = reader.error?.message ?? 'The selected file could not be read by the browser.'
+      console.error('[message attachment] FileReader failed', { file: { name: file.name, size: file.size, type: file.type }, error: reader.error })
+      setComposerError(message)
     }
     reader.readAsDataURL(file)
   }
@@ -1887,6 +1935,11 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
                   <button type="button" onClick={() => setAttachment(undefined)} className="rounded-md p-1 text-slate-500 hover:bg-stone-200" aria-label="Remove attachment">
                     <X size={18} />
                   </button>
+                </div>
+              )}
+              {composerError && (
+                <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                  {composerError}
                 </div>
               )}
               <form onSubmit={submit} className="flex gap-3">

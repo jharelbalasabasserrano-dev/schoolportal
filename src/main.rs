@@ -3,6 +3,8 @@ mod limiter;
 mod models;
 mod routes;
 
+const EMBEDDED_MIGRATIONS_VERSION: &str = "20260627000000";
+
 use axum::{
     Router,
     middleware::from_fn_with_state,
@@ -98,6 +100,7 @@ async fn build_app_state() -> Result<AppState, String> {
 }
 
 async fn connect_configured_database() -> Result<sqlx::PgPool, String> {
+    let _ = EMBEDDED_MIGRATIONS_VERSION;
     let database_url = std::env::var("DATABASE_URL").map_err(|_| {
         "DATABASE_URL not set. Create a .env file using .env.example as a guide.".to_string()
     })?;

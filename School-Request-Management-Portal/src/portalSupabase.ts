@@ -22,6 +22,16 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 const messageAttachmentBucket = (import.meta.env.VITE_SUPABASE_MESSAGE_ATTACHMENTS_BUCKET as string | undefined) ?? 'message-attachments'
 const maxMessageAttachmentSize = 50 * 1024 * 1024
 
+type AttachmentUploadContext = {
+  bucket: string
+  fileName: string
+  fileSize: number
+  fileType: string
+  messageId: string
+  requestId: string
+  storagePath?: string
+}
+
 export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
@@ -71,16 +81,42 @@ export async function refreshMessageAttachmentUrls(messages: Message[]) {
 }
 
 export async function uploadMessageAttachment(requestId: string, messageId: string, attachment: MessageAttachment) {
-  if (!supabase) throw new Error('Supabase Storage is not configured for message attachments.')
-  if (!attachment.dataUrl) return attachment
-  if (attachment.size > maxMessageAttachmentSize) throw new Error('Message attachments must be 50 MB or smaller.')
+  const context: AttachmentUploadContext = {
+    bucket: messageAttachmentBucket,
+    fileName: attachment.name,
+    fileSize: attachment.size,
+    fileType: attachment.type || 'application/octet-stream',
+    messageId,
+    requestId,
+  }
+  logAttachmentEvent('upload requested', context)
+
+  if (!supabase) {
+    throwAttachmentError('Supabase Storage is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment, then restart Vite.', context)
+  }
+  if (!attachment.dataUrl) {
+    if (!attachment.storagePath) {
+      throwAttachmentError('Attachment has no browser file data or Supabase Storage path to send.', context)
+    }
+    logAttachmentEvent('upload skipped because attachment already has a storage path', { ...context, storagePath: attachment.storagePath })
+    return attachment
+  }
+  if (attachment.size > maxMessageAttachmentSize) {
+    throwAttachmentError(`Message attachments must be 50 MB or smaller. Selected file is ${formatBytes(attachment.size)}.`, context)
+  }
 
   const response = await fetch(attachment.dataUrl)
   const blob = await response.blob()
-  if (blob.size > maxMessageAttachmentSize) throw new Error('Message attachments must be 50 MB or smaller.')
+  if (blob.size > maxMessageAttachmentSize) {
+    throwAttachmentError(`Message attachments must be 50 MB or smaller. Encoded file is ${formatBytes(blob.size)}.`, context)
+  }
 
   const safeName = attachment.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment'
-  const storagePath = `${requestId}/${messageId}/${Date.now()}-${safeName}`
+  const storagePath = `${cleanPathSegment(requestId)}/${cleanPathSegment(messageId)}/${Date.now()}-${safeName}`
+  context.storagePath = storagePath
+  await logStoragePreflight(context)
+  logAttachmentEvent('upload started', { ...context, blobSize: blob.size })
+
   const { error } = await supabase.storage
     .from(messageAttachmentBucket)
     .upload(storagePath, blob, {
@@ -88,8 +124,16 @@ export async function uploadMessageAttachment(requestId: string, messageId: stri
       upsert: true,
     })
 
-  if (error) throw error
+  if (error) {
+    console.error('[message attachment] Supabase Storage upload failed', {
+      ...context,
+      error: serializeError(error),
+    })
+    throwAttachmentError(`Supabase Storage upload failed: ${formatUnknownError(error)}`, context, error)
+  }
+
   const accessUrl = await createAttachmentAccessUrl(storagePath)
+  logAttachmentEvent('upload completed', { ...context, hasAccessUrl: Boolean(accessUrl) })
   return {
     ...attachment,
     dataUrl: '',
@@ -104,8 +148,105 @@ export async function createAttachmentAccessUrl(storagePath: string) {
     .from(messageAttachmentBucket)
     .createSignedUrl(storagePath, 60 * 60)
   if (!error && data?.signedUrl) return data.signedUrl
-  console.warn(error)
+  logAttachmentPermissionError('Failed to create signed URL', { bucket: messageAttachmentBucket, storagePath }, error)
   return undefined
+}
+
+export function getAttachmentErrorMessage(error: unknown) {
+  return formatUnknownError(error)
+}
+
+export async function requireAttachmentAccessUrl(storagePath: string) {
+  const accessUrl = await createAttachmentAccessUrl(storagePath)
+  if (accessUrl) return accessUrl
+  const message = `Supabase Storage signed URL failed for bucket "${messageAttachmentBucket}" and path "${storagePath}". Check bucket existence, SELECT policy on storage.objects, and object path.`
+  console.error('[message attachment] Signed URL required but unavailable', {
+    bucket: messageAttachmentBucket,
+    storagePath,
+    message,
+  })
+  throw new Error(message)
+}
+
+async function logStoragePreflight(context: AttachmentUploadContext) {
+  if (!supabase) return
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  logAttachmentEvent('auth preflight', {
+    ...context,
+    authMode: sessionData.session ? 'supabase-authenticated' : 'anon-or-custom-portal-auth',
+    sessionError: sessionError ? serializeError(sessionError) : undefined,
+  })
+
+  const { data, error } = await supabase.storage.getBucket(context.bucket)
+  if (error) {
+    logAttachmentPermissionError('Storage bucket preflight failed. The bucket may be missing or the anon key may not be allowed to read bucket metadata.', {
+      ...context,
+      note: 'Upload will still be attempted so the UI can show the exact Storage/RLS error.',
+    }, error)
+    return
+  }
+
+  logAttachmentEvent('bucket preflight', {
+    ...context,
+    bucketPublic: data.public,
+    bucketFileSizeLimit: data.file_size_limit,
+    bucketAllowedMimeTypes: data.allowed_mime_types,
+  })
+}
+
+function cleanPathSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown'
+}
+
+function throwAttachmentError(message: string, context: AttachmentUploadContext, cause?: unknown): never {
+  const error = new Error(`${message} Bucket: ${context.bucket}. Path: ${context.storagePath ?? '(not created yet)'}. File: ${context.fileName} (${formatBytes(context.fileSize)}, ${context.fileType}).`)
+  console.error('[message attachment] Upload blocked', {
+    ...context,
+    message,
+    cause: cause ? serializeError(cause) : undefined,
+  })
+  throw error
+}
+
+function logAttachmentPermissionError(message: string, details: Record<string, unknown>, error: unknown) {
+  const serialized = serializeError(error)
+  console.warn('[message attachment] Storage permission or configuration error', {
+    ...details,
+    message,
+    error: serialized,
+  })
+}
+
+function logAttachmentEvent(event: string, details: Record<string, unknown>) {
+  console.info(`[message attachment] ${event}`, details)
+}
+
+function formatUnknownError(error: unknown) {
+  if (!error) return 'Unknown error'
+  if (error instanceof Error) return error.message
+  if (typeof error === 'object') {
+    const data = error as { error?: string; message?: string; name?: string; status?: number | string; statusCode?: number | string }
+    return [
+      data.name,
+      data.status ?? data.statusCode,
+      data.error,
+      data.message,
+    ].filter(Boolean).join(': ') || JSON.stringify(error)
+  }
+  return String(error)
+}
+
+function serializeError(error: unknown) {
+  if (!error) return undefined
+  if (error instanceof Error) return { name: error.name, message: error.message, stack: error.stack }
+  if (typeof error === 'object') return { ...error }
+  return { message: String(error) }
+}
+
+function formatBytes(size: number) {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export async function loadReadNotificationIds(userId: string) {
