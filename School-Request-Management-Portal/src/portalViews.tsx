@@ -42,7 +42,7 @@ import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
 import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
-import { createInitialBootstrapData, createMessage, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
+import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 import { getAttachmentErrorMessage, isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, requireAttachmentAccessUrl, supabase, uploadMessageAttachment } from './portalSupabase'
@@ -200,6 +200,8 @@ export function Dashboard() {
   const [databaseReady, setDatabaseReady] = useState(false)
   const seenMessageIdsRef = useRef<Set<string>>(new Set(messageList.map((message) => message.id)))
   const messagesPrimedRef = useRef(false)
+  const pendingRequestSavesRef = useRef<Map<string, Promise<void>>>(new Map())
+  const pendingRequestSaveErrorsRef = useRef<Map<string, unknown>>(new Map())
 
   useEffect(() => {
     localStorage.setItem(storageKeys.requests, JSON.stringify(requestList))
@@ -506,6 +508,24 @@ export function Dashboard() {
   const addRequest = (request: PortalRequest) => {
     setRequestList((current) => [request, ...current])
     setActiveView(request.kind === 'Facility Reservation' ? 'My Requests' : 'My Requests')
+    pendingRequestSaveErrorsRef.current.delete(request.id)
+    const save = createPortalRequest(request)
+      .then((saved) => {
+        setRequestList((current) => current.map((item) => item.id === saved.id ? saved : item))
+      })
+      .catch((error) => {
+        pendingRequestSaveErrorsRef.current.set(request.id, error)
+        console.error('[portal request] Request database save failed', {
+          requestId: request.id,
+          ownerId: request.ownerId,
+          kind: request.kind,
+          error,
+        })
+      })
+      .finally(() => {
+        pendingRequestSavesRef.current.delete(request.id)
+      })
+    pendingRequestSavesRef.current.set(request.id, save)
   }
 
   const updateRequestStatus = (requestId: string, status: Status, remarks: string, updates: Partial<PortalRequest> = {}) => {
@@ -521,6 +541,10 @@ export function Dashboard() {
   const sendMessage = async (requestId: string, body: string, attachment?: MessageAttachment) => {
     if (!body.trim() && !attachment) return
     const messageId = `MSG-${Date.now()}`
+    const pendingRequestSave = pendingRequestSavesRef.current.get(requestId)
+    if (pendingRequestSave) await pendingRequestSave
+    const requestSaveError = pendingRequestSaveErrorsRef.current.get(requestId)
+    if (requestSaveError) throw requestSaveError
     if (attachment) messageAttachmentCache.set(messageId, attachment)
     let storedAttachment: MessageAttachment | undefined
     try {

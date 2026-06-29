@@ -225,6 +225,21 @@ export async function syncBootstrapData(data: BootstrapData) {
   if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to sync database data (${response.status})`))
 }
 
+export async function createPortalRequest(request: PortalRequest) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(toApiRequest(request)),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to save request (${response.status})`))
+  return fromApiRequest(await response.json() as ApiPortalRequest)
+}
+
 export async function createMessage(message: Message) {
   const response = await fetchWithTimeout(`${apiBaseUrl}/api/messages`, {
     method: 'POST',

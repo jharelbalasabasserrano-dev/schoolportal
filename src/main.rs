@@ -12,8 +12,8 @@ use axum::{
 };
 use limiter::{ConcurrencyLimiter, enforce_concurrency};
 use routes::{
-    AppState, create_message, get_bootstrap_data, health_check, mark_message_read,
-    submit_exit_clearance, sync_bootstrap_data,
+    AppState, create_message, create_portal_request, get_bootstrap_data, health_check,
+    mark_message_read, submit_exit_clearance, sync_bootstrap_data,
 };
 use std::{io::ErrorKind, net::SocketAddr, path::PathBuf};
 use tower_http::cors::CorsLayer;
@@ -34,6 +34,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(health_check))
         .route("/api/exit-clearance", post(submit_exit_clearance))
+        .route("/api/requests", post(create_portal_request))
         .route("/api/messages", post(create_message))
         .route("/api/messages/{id}/read", patch(mark_message_read))
         .route(

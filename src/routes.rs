@@ -645,6 +645,184 @@ pub async fn sync_bootstrap_data(
     Ok(Json(serde_json::json!({ "status": "synced" })))
 }
 
+pub async fn create_portal_request(
+    State(state): State<AppState>,
+    Json(request): Json<PortalRequest>,
+) -> Result<Json<PortalRequest>, (StatusCode, Json<serde_json::Value>)> {
+    let filing_date = parse_optional_date(request.filing_date.as_deref());
+    let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
+    let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
+    let sql = r#"
+        INSERT INTO portal_requests (
+            id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
+            facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
+            program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
+            position, salary, working_days, inclusive_dates, communication, leave_detail,
+            filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
+            vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
+            hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
+        )
+        VALUES (
+            $1, $2, $3,
+            CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
+            $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+            $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
+            $31, $32, $33,
+            $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            kind = EXCLUDED.kind,
+            owner_id = EXCLUDED.owner_id,
+            owner = EXCLUDED.owner,
+            office = EXCLUDED.office,
+            status = EXCLUDED.status,
+            request_date = EXCLUDED.request_date,
+            request_time = EXCLUDED.request_time,
+            remarks = EXCLUDED.remarks,
+            facility = EXCLUDED.facility,
+            attendees = EXCLUDED.attendees,
+            purpose = EXCLUDED.purpose,
+            facility_remarks = EXCLUDED.facility_remarks,
+            student_id = EXCLUDED.student_id,
+            year_level = EXCLUDED.year_level,
+            semester = EXCLUDED.semester,
+            school_year = EXCLUDED.school_year,
+            program = EXCLUDED.program,
+            major = EXCLUDED.major,
+            transfer_reason = EXCLUDED.transfer_reason,
+            requested_docs = EXCLUDED.requested_docs,
+            claim_release_date = EXCLUDED.claim_release_date,
+            received_by = EXCLUDED.received_by,
+            released_by = EXCLUDED.released_by,
+            position = EXCLUDED.position,
+            salary = EXCLUDED.salary,
+            working_days = EXCLUDED.working_days,
+            inclusive_dates = EXCLUDED.inclusive_dates,
+            communication = EXCLUDED.communication,
+            leave_detail = EXCLUDED.leave_detail,
+            filing_date = EXCLUDED.filing_date,
+            leave_start_date = EXCLUDED.leave_start_date,
+            leave_end_date = EXCLUDED.leave_end_date,
+            vacation_leave_earned = EXCLUDED.vacation_leave_earned,
+            vacation_leave_less = EXCLUDED.vacation_leave_less,
+            vacation_leave_balance = EXCLUDED.vacation_leave_balance,
+            sick_leave_earned = EXCLUDED.sick_leave_earned,
+            sick_leave_less = EXCLUDED.sick_leave_less,
+            sick_leave_balance = EXCLUDED.sick_leave_balance,
+            hr_recommendation = EXCLUDED.hr_recommendation,
+            approved_for = EXCLUDED.approved_for,
+            disapproved_due_to = EXCLUDED.disapproved_due_to,
+            hr_remarks = EXCLUDED.hr_remarks,
+            updated_by = EXCLUDED.updated_by,
+            updated_at = NOW()
+        RETURNING
+            id,
+            title,
+            kind,
+            COALESCE(owner_id, '') AS owner_id,
+            owner,
+            office,
+            status,
+            request_date::text AS date,
+            request_time AS time,
+            remarks,
+            facility,
+            attendees,
+            purpose,
+            facility_remarks,
+            student_id,
+            year_level,
+            semester,
+            school_year,
+            program,
+            major,
+            transfer_reason,
+            requested_docs,
+            claim_release_date,
+            received_by,
+            released_by,
+            position,
+            salary,
+            working_days,
+            inclusive_dates,
+            communication,
+            leave_detail,
+            filing_date::text AS filing_date,
+            leave_start_date::text AS leave_start_date,
+            leave_end_date::text AS leave_end_date,
+            vacation_leave_earned,
+            vacation_leave_less,
+            vacation_leave_balance,
+            sick_leave_earned,
+            sick_leave_less,
+            sick_leave_balance,
+            hr_recommendation,
+            approved_for,
+            disapproved_due_to,
+            hr_remarks,
+            updated_by
+        "#;
+    let params = serde_json::to_value(&request).unwrap_or_else(|_| {
+        serde_json::json!({
+            "id": request.id,
+            "error": "failed to serialize request parameters"
+        })
+    });
+    log_db_query("portal_requests", sql, params.clone());
+    let saved = sqlx::query_as::<_, PortalRequest>(sql)
+        .bind(&request.id)
+        .bind(&request.title)
+        .bind(&request.kind)
+        .bind(&request.owner_id)
+        .bind(&request.owner)
+        .bind(&request.office)
+        .bind(&request.status)
+        .bind(&request.date)
+        .bind(&request.time)
+        .bind(&request.remarks)
+        .bind(&request.facility)
+        .bind(request.attendees)
+        .bind(&request.purpose)
+        .bind(&request.facility_remarks)
+        .bind(&request.student_id)
+        .bind(&request.year_level)
+        .bind(&request.semester)
+        .bind(&request.school_year)
+        .bind(&request.program)
+        .bind(&request.major)
+        .bind(&request.transfer_reason)
+        .bind(&request.requested_docs)
+        .bind(&request.claim_release_date)
+        .bind(&request.received_by)
+        .bind(&request.released_by)
+        .bind(&request.position)
+        .bind(&request.salary)
+        .bind(request.working_days)
+        .bind(&request.inclusive_dates)
+        .bind(&request.communication)
+        .bind(&request.leave_detail)
+        .bind(filing_date)
+        .bind(leave_start_date)
+        .bind(leave_end_date)
+        .bind(&request.vacation_leave_earned)
+        .bind(&request.vacation_leave_less)
+        .bind(&request.vacation_leave_balance)
+        .bind(&request.sick_leave_earned)
+        .bind(&request.sick_leave_less)
+        .bind(&request.sick_leave_balance)
+        .bind(&request.hr_recommendation)
+        .bind(&request.approved_for)
+        .bind(&request.disapproved_due_to)
+        .bind(&request.hr_remarks)
+        .bind(&request.updated_by)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
+
+    Ok(Json(saved))
+}
+
 pub async fn create_message(
     State(state): State<AppState>,
     Json(message): Json<RequestMessage>,
