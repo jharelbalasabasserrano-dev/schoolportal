@@ -128,10 +128,10 @@ export async function uploadMessageAttachment(requestId: string, messageId: stri
   const safeName = attachment.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment'
   const storagePath = `${cleanPathSegment(requestId)}/${cleanPathSegment(messageId)}/${Date.now()}-${safeName}`
   context.storagePath = storagePath
-  await logStoragePreflight(context)
+  await logStorageAccessPreflight(context)
   logAttachmentEvent('upload started', { ...context, blobSize: blob.size })
 
-  const { error } = await supabase.storage
+  const { data, error } = await supabase.storage
     .from(messageAttachmentBucket)
     .upload(storagePath, blob, {
       contentType: attachment.type || 'application/octet-stream',
@@ -146,8 +146,8 @@ export async function uploadMessageAttachment(requestId: string, messageId: stri
     throwAttachmentError(`Supabase Storage upload failed: ${formatUnknownError(error)}`, context, error)
   }
 
-  const accessUrl = await createAttachmentAccessUrl(storagePath)
-  logAttachmentEvent('upload completed', { ...context, hasAccessUrl: Boolean(accessUrl) })
+  const accessUrl = await requireAttachmentAccessUrl(storagePath)
+  logAttachmentEvent('upload completed', { ...context, uploadedPath: data?.path, hasAccessUrl: true })
   return {
     ...attachment,
     dataUrl: '',
@@ -182,7 +182,7 @@ export async function requireAttachmentAccessUrl(storagePath: string) {
   throw new Error(message)
 }
 
-async function logStoragePreflight(context: AttachmentUploadContext) {
+async function logStorageAccessPreflight(context: AttachmentUploadContext) {
   if (!supabase) return
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   logAttachmentEvent('auth preflight', {
@@ -191,20 +191,22 @@ async function logStoragePreflight(context: AttachmentUploadContext) {
     sessionError: sessionError ? serializeError(sessionError) : undefined,
   })
 
-  const { data, error } = await supabase.storage.getBucket(context.bucket)
+  const rootPrefix = cleanPathSegment(context.requestId)
+  const { data, error } = await supabase.storage
+    .from(context.bucket)
+    .list(rootPrefix, { limit: 1 })
   if (error) {
-    logAttachmentPermissionError('Storage bucket preflight failed. The bucket may be missing or the anon key may not be allowed to read bucket metadata.', {
+    logAttachmentPermissionError('Storage object access preflight failed. Upload will still be attempted so the exact Storage/RLS error can surface.', {
       ...context,
-      note: 'Upload will still be attempted so the UI can show the exact Storage/RLS error.',
+      checkedPrefix: rootPrefix,
     }, error)
     return
   }
 
-  logAttachmentEvent('bucket preflight', {
+  logAttachmentEvent('object access preflight', {
     ...context,
-    bucketPublic: data.public,
-    bucketFileSizeLimit: data.file_size_limit,
-    bucketAllowedMimeTypes: data.allowed_mime_types,
+    checkedPrefix: rootPrefix,
+    visibleObjects: data.length,
   })
 }
 
