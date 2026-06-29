@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { loadBootstrapData } from './portalApi'
+import { createAccount as createAccountInDatabase, deleteAccount as deleteAccountInDatabase, loadBootstrapData, updateAccount as updateAccountInDatabase } from './portalApi'
 import { initialUsers, storageKeys, type User } from './portalData'
 
 type AuthContextValue = {
@@ -70,14 +70,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
     addAccount: (account) => {
-      setAccounts((current) => [...current, { ...account, id: `${account.role}-${Date.now()}` }])
+      const next = { ...account, id: `${account.role}-${Date.now()}` }
+      setAccounts((current) => [...current, next])
+      createAccountInDatabase(next)
+        .then((saved) => {
+          setAccounts((current) => current.map((item) => item.id === next.id ? saved : item))
+        })
+        .catch((error) => {
+          console.error('[admin users] User database create failed', { userId: next.id, email: next.email, error })
+        })
     },
     deleteAccount: (id) => {
       setAccounts((current) => current.filter((account) => account.id !== id || account.role === 'admin'))
+      deleteAccountInDatabase(id).catch((error) => {
+        console.error('[admin users] User database delete failed', { userId: id, error })
+      })
     },
     updateAccount: (id, updates) => {
       setAccounts((current) => current.map((account) => account.id === id ? { ...account, ...updates } : account))
       setUser((current) => current?.id === id ? { ...current, ...updates } : current)
+      updateAccountInDatabase(id, updates).catch((error) => {
+        console.error('[admin users] User database update failed', { userId: id, email: updates.email, error })
+      })
     },
     user,
     login: (email, password, remember) => {

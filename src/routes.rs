@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::models::{
     Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, ReadMessagePayload,
     RequestMessage, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem,
-    UserAccount,
+    UpdateUserAccount, UserAccount,
 };
 
 #[derive(Clone)]
@@ -643,6 +643,134 @@ pub async fn sync_bootstrap_data(
     tx.commit().await.map_err(api_error)?;
 
     Ok(Json(serde_json::json!({ "status": "synced" })))
+}
+
+pub async fn create_account(
+    State(state): State<AppState>,
+    Json(account): Json<UserAccount>,
+) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    let sql = r#"
+        INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            email = EXCLUDED.email,
+            password_hash = EXCLUDED.password_hash,
+            role = EXCLUDED.role,
+            department = EXCLUDED.department,
+            avatar_url = EXCLUDED.avatar_url,
+            updated_at = NOW()
+        RETURNING
+            id,
+            name,
+            email,
+            COALESCE(password_hash, '') AS password,
+            role,
+            department,
+            avatar_url
+        "#;
+    let params = serde_json::json!({
+        "id": account.id,
+        "name": account.name,
+        "email": account.email,
+        "password_hash": "[redacted]",
+        "role": account.role,
+        "department": account.department,
+        "avatar_url": account.avatar_url,
+    });
+    log_db_query("app_users", sql, params.clone());
+    let saved = sqlx::query_as::<_, UserAccount>(sql)
+        .bind(&account.id)
+        .bind(&account.name)
+        .bind(&account.email)
+        .bind(&account.password)
+        .bind(&account.role)
+        .bind(&account.department)
+        .bind(&account.avatar_url)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    Ok(Json(saved))
+}
+
+pub async fn update_account(
+    State(state): State<AppState>,
+    Path(account_id): Path<String>,
+    Json(account): Json<UpdateUserAccount>,
+) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    let sql = r#"
+        UPDATE app_users
+        SET
+            name = $2,
+            email = $3,
+            role = $4,
+            department = $5,
+            avatar_url = $6,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING
+            id,
+            name,
+            email,
+            COALESCE(password_hash, '') AS password,
+            role,
+            department,
+            avatar_url
+        "#;
+    let params = serde_json::json!({
+        "id": account_id,
+        "name": account.name,
+        "email": account.email,
+        "role": account.role,
+        "department": account.department,
+        "avatar_url": account.avatar_url,
+    });
+    log_db_query("app_users", sql, params.clone());
+    let saved = sqlx::query_as::<_, UserAccount>(sql)
+        .bind(&account_id)
+        .bind(&account.name)
+        .bind(&account.email)
+        .bind(&account.role)
+        .bind(&account.department)
+        .bind(&account.avatar_url)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    match saved {
+        Some(row) => Ok(Json(row)),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "User not found" })),
+        )),
+    }
+}
+
+pub async fn delete_account(
+    State(state): State<AppState>,
+    Path(account_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let sql = r#"
+        DELETE FROM app_users
+        WHERE id = $1 AND role <> 'admin'
+        RETURNING id
+        "#;
+    let params = serde_json::json!({ "id": account_id });
+    log_db_query("app_users", sql, params.clone());
+    let deleted = sqlx::query(sql)
+        .bind(&account_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    match deleted {
+        Some(_) => Ok(Json(serde_json::json!({ "status": "deleted" }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "User not found" })),
+        )),
+    }
 }
 
 pub async fn create_portal_request(

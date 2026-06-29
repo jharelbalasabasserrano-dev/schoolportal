@@ -29,6 +29,16 @@ pub struct UserAccount {
     pub avatar_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateUserAccount {
+    pub name: String,
+    pub email: String,
+    pub role: String,
+    pub department: String,
+    pub avatar_url: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct PortalRequest {

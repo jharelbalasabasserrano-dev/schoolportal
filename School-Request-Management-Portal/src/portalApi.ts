@@ -225,6 +225,48 @@ export async function syncBootstrapData(data: BootstrapData) {
   if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to sync database data (${response.status})`))
 }
 
+export async function createAccount(account: User) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(account),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to create user (${response.status})`))
+  return response.json() as Promise<User>
+}
+
+export async function updateAccount(id: string, updates: Omit<User, 'id' | 'password'>) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/accounts/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to update user (${response.status})`))
+  return response.json() as Promise<User>
+}
+
+export async function deleteAccount(id: string) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to delete user (${response.status})`))
+}
+
 export async function createPortalRequest(request: PortalRequest) {
   const response = await fetchWithTimeout(`${apiBaseUrl}/api/requests`, {
     method: 'POST',

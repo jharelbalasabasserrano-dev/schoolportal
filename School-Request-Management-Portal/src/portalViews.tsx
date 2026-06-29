@@ -404,27 +404,6 @@ export function Dashboard() {
     }
   }, [messageList, requestList, user])
 
-  useEffect(() => {
-    if (!databaseReady) return undefined
-
-    const timeoutId = window.setTimeout(() => {
-      syncBootstrapData({
-        accounts,
-        requests: requestList,
-        messages: messageList,
-        announcements,
-        inventory,
-        categories,
-        suppliers,
-        stockMovements,
-      }).catch((error) => {
-        console.warn(error)
-      })
-    }, 500)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [accounts, announcements, categories, databaseReady, inventory, messageList, requestList, stockMovements, suppliers])
-
   const markMessagesRead = useCallback((requestId?: string, messageId?: string) => {
     if (!user) return
     const changed = messageList
