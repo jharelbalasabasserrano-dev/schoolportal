@@ -566,15 +566,16 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .logo { position: absolute; left: calc(45% - 190px); top: 0; width: 56px; height: 56px; object-fit: contain; border-radius: 999px; }
     h1 { margin: 10px 0 11px; text-align: center; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; }
     .office { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 5px 0; font-weight: 800; }
-    .top-fields { display: grid; grid-template-columns: 1fr 185px; gap: 16px; align-items: start; margin-top: 8px; }
-    .received-wrap { break-inside: avoid; }
-    .received-box { border: 1px solid #0f172a; padding: 7px; }
-    .received-org { text-align: center; font-size: 9px; font-weight: 900; letter-spacing: .4px; }
-    .received-title { margin-top: 2px; text-align: center; font-size: 15px; font-weight: 900; }
-    .received-box .row { margin-bottom: 3px; font-size: 10px; }
-    .received-box .label { min-width: 34px; }
-    .reference-row { margin-top: 6px; }
-    .reference-row .label { min-width: 92px; }
+    .top-fields { display: grid; grid-template-columns: 1fr 150px; gap: 13px; align-items: start; margin-top: 8px; }
+    .received-wrap { break-inside: avoid; justify-self: end; width: 150px; }
+    .received-box { border: 1px solid #0f172a; padding: 5px 7px 7px; min-height: 96px; }
+    .received-org { text-align: center; font-size: 7.5px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
+    .received-title { margin-top: 3px; text-align: center; font-size: 14px; font-weight: 900; letter-spacing: 1.6px; }
+    .stamp-lines { margin-top: 8px; }
+    .stamp-line { display: grid; grid-template-columns: 25px 1fr; align-items: end; gap: 4px; margin-top: 4px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+    .stamp-value { min-height: 11px; border-bottom: 1px solid #64748b; font-size: 9px; font-weight: 400; text-transform: none; }
+    .reference-row { margin-top: 5px; font-size: 9px; }
+    .reference-row .label { min-width: 72px; }
     .reference-row .line { font-family: monospace; font-weight: 800; letter-spacing: .3px; }
     .row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 11px; }
     .label { min-width: 160px; font-weight: 700; }
@@ -615,9 +616,11 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="received-box">
           <div class="received-org">CITY COLLEGE OF DAVAO</div>
           <div class="received-title">RECEIVED</div>
-          ${printRow('Date', request.receivedDate ? formatDate(request.receivedDate) : '')}
-          ${printRow('Time', request.receivedTime ?? '')}
-          ${printRow('By', request.receivedBy ?? '')}
+          <div class="stamp-lines">
+            <div class="stamp-line"><span>Date:</span><span class="stamp-value">${escapeHtml(request.receivedDate ? formatDate(request.receivedDate) : '')}</span></div>
+            <div class="stamp-line"><span>Time:</span><span class="stamp-value">${escapeHtml(request.receivedTime ?? '')}</span></div>
+            <div class="stamp-line"><span>By:</span><span class="stamp-value">${escapeHtml(request.receivedBy ?? '')}</span></div>
+          </div>
         </div>
         <div class="reference-row">${printRow('Reference Number', getLeaveReferenceNumber(request))}</div>
       </div>

@@ -2556,7 +2556,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
       <h3 className="my-3 text-center text-xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h3>
       <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
       <div className="space-y-2 pt-3 text-xs">
-        <div className="grid gap-4 md:grid-cols-[1fr_230px]">
+        <div className="grid gap-4 md:grid-cols-[1fr_170px]">
           <div className="space-y-2">
             <PrintLine label="2. Name" value={request.owner} />
             <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
@@ -2596,17 +2596,29 @@ function LeaveApplicationHeader() {
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="space-y-2">
-      <div className="border border-slate-700 bg-white p-2">
-        <p className="text-center text-[10px] font-extrabold tracking-wide">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-1 text-center text-base font-extrabold">RECEIVED</p>
+    <div className="w-[170px] space-y-1 justify-self-end">
+      <div className="min-h-28 border border-slate-800 bg-white px-2 py-1.5">
+        <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-1 text-center text-sm font-extrabold tracking-[.16em]">RECEIVED</p>
         <div className="mt-3 space-y-1">
-          <PrintLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
-          <PrintLine label="Time" value={request.receivedTime ?? ''} />
-          <PrintLine label="By" value={request.receivedBy ?? ''} />
+          <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
+          <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
+          <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
         </div>
       </div>
-      <PrintLine label="Reference Number" value={getLeaveReferenceNumber(request)} />
+      <div className="flex items-baseline gap-1 text-[10px]">
+        <span className="font-semibold">Reference No.</span>
+        <span className="min-h-4 flex-1 border-b border-slate-500 px-1 font-mono font-bold">{getLeaveReferenceNumber(request)}</span>
+      </div>
+    </div>
+  )
+}
+
+function ReceivedStampLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[28px_1fr] items-end gap-1 text-[9px] font-bold uppercase">
+      <span>{label}:</span>
+      <span className="min-h-4 border-b border-slate-500 px-1 text-[10px] font-normal normal-case">{value}</span>
     </div>
   )
 }
@@ -3115,15 +3127,15 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
                 <span className="mb-2 block font-medium">5. Salary</span>
                 <input value={salary} onChange={(event) => setSalary(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
               </label>
-              <div className="sm:col-span-2 grid gap-4 rounded-md border border-[#d9d3cc] bg-stone-50 p-4 lg:grid-cols-[1fr_280px]">
+              <div className="sm:col-span-2 grid gap-4 rounded-md border border-[#d9d3cc] bg-stone-50 p-4 lg:grid-cols-[1fr_230px]">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Office Use Only</p>
                   <p className="mt-1 text-sm text-slate-600">Applicants cannot edit received details. HR may fill these after the application is received.</p>
                   <p className="mt-3 font-mono text-sm font-bold text-[#1e3a3a]">Reference No. {getLeaveReferenceNumber(editedRequest)}</p>
                 </div>
-                <div className="rounded-md border border-slate-400 bg-white p-3">
-                  <p className="text-center text-xs font-extrabold tracking-wide">CITY COLLEGE OF DAVAO</p>
-                  <p className="mt-1 text-center text-lg font-extrabold">RECEIVED</p>
+                <div className="rounded-sm border border-slate-700 bg-white p-3">
+                  <p className="text-center text-[10px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+                  <p className="mt-1 text-center text-base font-extrabold tracking-[.16em]">RECEIVED</p>
                   <div className="mt-3 space-y-2">
                     <label className="block">
                       <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Date</span>
