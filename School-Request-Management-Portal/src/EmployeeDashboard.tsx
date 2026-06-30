@@ -1,7 +1,7 @@
 import { Building2, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers3, PackageCheck, Plus, Printer, Send, XCircle } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { facilities, leaveKinds, type Announcement, type PortalRequest, type RequestKind, type User } from './portalData'
-import { formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
+import { createLeaveReferenceNumber, formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
 import { AnnouncementsPanel, MetricCard, StatusPill } from './portalComponents'
 import { RoomAvailabilityView } from './portalViews'
 
@@ -82,8 +82,10 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!reason.trim() || (kind === 'Other Leave' && !customLeaveTypeValue)) return
+    const referenceNumber = createLeaveReferenceNumber()
     onSubmit({
-      id: `LV-2026-${Date.now().toString().slice(-3)}`,
+      id: referenceNumber,
+      referenceNumber,
       title,
       kind,
       ownerId: user.id,
