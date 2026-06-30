@@ -191,7 +191,11 @@ export function getLeaveReferenceNumber(request: PortalRequest) {
 
 export function createLeaveReferenceNumber(date = new Date()) {
   const year = date.getFullYear()
-  const sequence = String(date.getTime() % 1000000).padStart(6, '0')
+  const randomValues = new Uint32Array(1)
+  const randomNumber = globalThis.crypto?.getRandomValues
+    ? globalThis.crypto.getRandomValues(randomValues)[0]
+    : Math.floor(Math.random() * 0xffffffff)
+  const sequence = `${date.getTime().toString(36)}${randomNumber.toString(36)}`.toUpperCase()
   return `LV-${year}-${sequence}`
 }
 
