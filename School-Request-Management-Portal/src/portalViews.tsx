@@ -2554,10 +2554,10 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
     <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 font-serif text-sm text-slate-950 shadow-sm">
       <LeaveApplicationHeader />
       <h3 className="my-3 text-center text-xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h3>
-      <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
       <div className="space-y-2 pt-3 text-xs">
-        <div className="grid gap-4 md:grid-cols-[1fr_170px]">
-          <div className="space-y-2">
+        <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_170px]">
+          <div className="min-w-0 space-y-2">
+            <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
             <PrintLine label="2. Name" value={request.owner} />
             <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
             <PrintLine label="4. Position" value={request.position ?? ''} />

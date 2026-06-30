@@ -565,8 +565,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .letterhead { position: relative; text-align: center; border-bottom: 1.5px solid #8b5a2b; padding: 0 105px 7px; }
     .logo { position: absolute; left: calc(45% - 190px); top: 0; width: 56px; height: 56px; object-fit: contain; border-radius: 999px; }
     h1 { margin: 10px 0 11px; text-align: center; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; }
-    .office { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 5px 0; font-weight: 800; }
-    .top-fields { display: grid; grid-template-columns: 1fr 150px; gap: 13px; align-items: start; margin-top: 8px; }
+    .office { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 5px 0; font-weight: 800; margin-bottom: 6px; }
+    .top-fields { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 13px; align-items: start; margin-top: 8px; }
+    .employee-fields { min-width: 0; }
     .received-wrap { break-inside: avoid; justify-self: end; width: 150px; }
     .received-box { border: 1px solid #0f172a; padding: 5px 7px 7px; min-height: 96px; }
     .received-org { text-align: center; font-size: 7.5px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
@@ -590,6 +591,10 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     th { background: #f1f5f9; font-weight: 800; }
     .president { margin-top: 9px; text-align: center; }
     .sig { width: 55%; margin: 16px auto 5px; border-bottom: 1px solid #0f172a; }
+    @media screen and (max-width: 640px) {
+      .top-fields { grid-template-columns: 1fr; }
+      .received-wrap { justify-self: start; }
+    }
     @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; } }
   </style>
 </head>
@@ -604,9 +609,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <div style="font-weight:700;">DAVAO CITY</div>
     </header>
     <h1>APPLICATION FOR LEAVE</h1>
-    <div class="office">1. OFFICE/DEPARTMENT: ${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
     <div class="top-fields">
-      <div>
+      <div class="employee-fields">
+        <div class="office">1. OFFICE/DEPARTMENT: ${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
         ${printRow('2. Name', request.owner)}
         ${printRow('3. Date of Filing', formatDate(request.filedDate ?? request.date))}
         ${printRow('4. Position', request.position ?? '')}
