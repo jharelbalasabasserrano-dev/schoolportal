@@ -71,34 +71,44 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
   const [salary, setSalary] = useState('')
   const [communication, setCommunication] = useState('Not Requested')
   const [leaveDetail, setLeaveDetail] = useState('')
+  const [customLeaveType, setCustomLeaveType] = useState('')
+  const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>('Full Day')
+  const [leaveTime, setLeaveTime] = useState('Morning (AM)')
   const [reason, setReason] = useState('')
-  const duration = getDateDuration(startDate, endDate)
+  const effectiveEndDate = leaveDuration === 'Half Day' ? startDate : endDate
+  const duration = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
+  const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
+  const title = getLeaveTypeLabel(kind, customLeaveTypeValue)
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!reason.trim()) return
+    if (!reason.trim() || (kind === 'Other Leave' && !customLeaveTypeValue)) return
     onSubmit({
       id: `LV-2026-${Date.now().toString().slice(-3)}`,
-      title: getLeaveTypeLabel(kind),
+      title,
       kind,
       ownerId: user.id,
       owner: user.name,
       office: 'HR Office',
       status: 'Pending',
       date: startDate,
-      time: endDate,
+      time: effectiveEndDate,
       remarks: reason.trim(),
       filedDate,
       officeDepartment: officeDepartment.trim(),
       position: position.trim(),
       salary: salary.trim(),
       workingDays: duration,
-      inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
+      inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
+      customLeaveType: customLeaveTypeValue || undefined,
+      leaveDuration,
+      leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
     })
     setReason('')
     setLeaveDetail('')
+    setCustomLeaveType('')
   }
 
   return (
@@ -135,7 +145,7 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
           </div>
           <div className="rounded-lg border border-[#e7e1db] bg-white px-4 py-2 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[.12em] text-slate-500">Selected</p>
-            <p className="mt-1 font-bold text-[#228b22]">{getLeaveTypeLabel(kind)}</p>
+            <p className="mt-1 font-bold text-[#228b22]">{title}</p>
           </div>
         </div>
         <div className="leave-type-scroll flex gap-3 overflow-x-auto pb-2">
@@ -152,6 +162,12 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
           })}
         </div>
       </div>
+      {kind === 'Other Leave' && (
+        <label className="mt-5 block">
+          <span className="mb-2 block font-medium">Specify leave type</span>
+          <input required value={customLeaveType} onChange={(event) => setCustomLeaveType(event.target.value)} placeholder="Enter custom leave type" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+      )}
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         <label>
           <span className="mb-2 block font-medium">4. Position</span>
@@ -166,9 +182,26 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
           <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <label>
-          <span className="mb-2 block font-medium">Inclusive dates - End</span>
-          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          <span className="mb-2 block font-medium">Leave Duration</span>
+          <select value={leaveDuration} onChange={(event) => setLeaveDuration(event.target.value as 'Full Day' | 'Half Day')} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <option>Full Day</option>
+            <option>Half Day</option>
+          </select>
         </label>
+        {leaveDuration === 'Full Day' ? (
+          <label>
+            <span className="mb-2 block font-medium">Inclusive dates - End</span>
+            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+        ) : (
+          <label>
+            <span className="mb-2 block font-medium">Time</span>
+            <select value={leaveTime} onChange={(event) => setLeaveTime(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              <option>Morning (AM)</option>
+              <option>Afternoon (PM)</option>
+            </select>
+          </label>
+        )}
       </div>
       <p className="mt-4 text-slate-600">6.C Number of working days applied for: <span className="font-semibold">{duration} day(s)</span></p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">

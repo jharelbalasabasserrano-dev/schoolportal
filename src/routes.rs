@@ -120,6 +120,9 @@ pub async fn get_bootstrap_data(
             inclusive_dates,
             communication,
             leave_detail,
+            custom_leave_type,
+            leave_duration,
+            leave_time,
             filing_date::text AS filing_date,
             leave_start_date::text AS leave_start_date,
             leave_end_date::text AS leave_end_date,
@@ -441,6 +444,7 @@ pub async fn sync_bootstrap_data(
                 facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
                 program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
                 position, salary, working_days, inclusive_dates, communication, leave_detail,
+                custom_leave_type, leave_duration, leave_time,
                 filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
                 vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
                 hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
@@ -450,8 +454,8 @@ pub async fn sync_bootstrap_data(
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33,
-                $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
+                $31, $32, $33, $34, $35, $36,
+                $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48
             )
             "#;
         let params = serde_json::to_value(request).unwrap_or_else(|_| {
@@ -493,6 +497,9 @@ pub async fn sync_bootstrap_data(
             .bind(&request.inclusive_dates)
             .bind(&request.communication)
             .bind(&request.leave_detail)
+            .bind(&request.custom_leave_type)
+            .bind(&request.leave_duration)
+            .bind(&request.leave_time)
             .bind(filing_date)
             .bind(leave_start_date)
             .bind(leave_end_date)
@@ -786,6 +793,7 @@ pub async fn create_portal_request(
             facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
             program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
             position, salary, working_days, inclusive_dates, communication, leave_detail,
+            custom_leave_type, leave_duration, leave_time,
             filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
             vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
             hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
@@ -795,8 +803,8 @@ pub async fn create_portal_request(
             CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
             $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
             $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32, $33,
-            $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
+            $31, $32, $33, $34, $35, $36,
+            $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48
         )
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -829,6 +837,9 @@ pub async fn create_portal_request(
             inclusive_dates = EXCLUDED.inclusive_dates,
             communication = EXCLUDED.communication,
             leave_detail = EXCLUDED.leave_detail,
+            custom_leave_type = EXCLUDED.custom_leave_type,
+            leave_duration = EXCLUDED.leave_duration,
+            leave_time = EXCLUDED.leave_time,
             filing_date = EXCLUDED.filing_date,
             leave_start_date = EXCLUDED.leave_start_date,
             leave_end_date = EXCLUDED.leave_end_date,
@@ -876,6 +887,9 @@ pub async fn create_portal_request(
             inclusive_dates,
             communication,
             leave_detail,
+            custom_leave_type,
+            leave_duration,
+            leave_time,
             filing_date::text AS filing_date,
             leave_start_date::text AS leave_start_date,
             leave_end_date::text AS leave_end_date,
@@ -930,6 +944,9 @@ pub async fn create_portal_request(
         .bind(&request.inclusive_dates)
         .bind(&request.communication)
         .bind(&request.leave_detail)
+        .bind(&request.custom_leave_type)
+        .bind(&request.leave_duration)
+        .bind(&request.leave_time)
         .bind(filing_date)
         .bind(leave_start_date)
         .bind(leave_end_date)

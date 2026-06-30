@@ -40,7 +40,7 @@ import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
-import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
+import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
@@ -1124,7 +1124,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
     const byStatus = statusFilter === 'All' || request.status === statusFilter
-    const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind)}`.toLowerCase().includes(query.toLowerCase())
+    const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
   const counts = getCounts(leaveApplications)
@@ -1149,7 +1149,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
                 <button key={request.id} onClick={() => onReview(request)} className="grid w-full grid-cols-[1fr_auto] items-center gap-4 rounded-md border border-[#e7e1db] p-4 text-left hover:bg-stone-50">
                   <div className="min-w-0">
                     <p className="font-semibold"><span className="font-mono font-normal">{request.id}</span> {request.owner}</p>
-                    <p className="text-slate-600">{getLeaveTypeLabel(request.kind)} - {getLeaveDateRange(request)}</p>
+                    <p className="text-slate-600">{getLeaveTypeLabel(request.kind, request.customLeaveType)} - {getLeaveDateRange(request)}</p>
                   </div>
                   <StatusPill status={request.status} />
                 </button>
@@ -1240,7 +1240,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
             <tr key={request.id}>
               <td className="px-7 py-5 font-mono">{request.id}</td>
               <td className="px-7 py-5 text-xl font-semibold">{request.owner}</td>
-              <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind)}</span></td>
+              <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind, request.customLeaveType)}</span></td>
               <td className="px-7 py-5 text-slate-600">{getLeaveDateRange(request)}</td>
               <td className="max-w-[420px] truncate px-7 py-5 text-xl text-slate-600">{request.remarks}</td>
               <td className="px-7 py-5"><StatusPill status={request.status} /></td>
@@ -2523,9 +2523,11 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
         <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
           <p className="mb-2 font-bold">6. Details of Application</p>
           <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
+          {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <PrintLine label="Other leave type" value={request.customLeaveType.trim()} />}
           <PrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
           <PrintLine label="6.C Working days applied for" value={String(request.workingDays ?? getDateDuration(request.date, request.time))} />
           <PrintLine label="Inclusive dates" value={request.inclusiveDates ?? getLeaveDateRange(request)} />
+          {request.leaveDuration && <PrintLine label="Leave Duration" value={getLeaveDurationText(request)} />}
           <PrintCheckGroup title="6.D Communication" options={['Not Requested', 'Requested']} selected={request.communication ?? 'Not Requested'} />
           <SignatureLine label="Signature of Applicant" value={request.owner} />
         </div>
@@ -2927,6 +2929,9 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [endDate, setEndDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(request.time) ? request.time : request.date)
   const [communication, setCommunication] = useState(request.communication ?? 'Not Requested')
   const [leaveDetail, setLeaveDetail] = useState(request.leaveDetail ?? '')
+  const [customLeaveType, setCustomLeaveType] = useState(request.customLeaveType ?? '')
+  const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>(request.leaveDuration ?? 'Full Day')
+  const [leaveTime, setLeaveTime] = useState(request.leaveTime ?? 'Morning (AM)')
   const [reason, setReason] = useState(request.remarks)
   const [hrRemarks, setHrRemarks] = useState(request.hrRemarks ?? '')
   const [vacationLeaveTotalEarned, setVacationLeaveTotalEarned] = useState(request.vacationLeaveTotalEarned ?? '')
@@ -2935,22 +2940,28 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [sickLeaveTotalEarned, setSickLeaveTotalEarned] = useState(request.sickLeaveTotalEarned ?? '')
   const [sickLeaveLess, setSickLeaveLess] = useState(request.sickLeaveLess ?? '')
   const [sickLeaveBalance, setSickLeaveBalance] = useState(request.sickLeaveBalance ?? '')
-  const workingDays = getDateDuration(startDate, endDate)
+  const effectiveEndDate = leaveDuration === 'Half Day' ? startDate : endDate
+  const workingDays = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
+  const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
+  const leaveTitle = getLeaveTypeLabel(kind, customLeaveTypeValue)
   const editedRequest: PortalRequest = {
     ...request,
-    title: getLeaveTypeLabel(kind),
+    title: leaveTitle,
     kind,
     date: startDate,
-    time: endDate,
+    time: effectiveEndDate,
     remarks: reason,
     officeDepartment,
     filedDate,
     position,
     salary,
     workingDays,
-    inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
+    inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
     communication,
     leaveDetail,
+    customLeaveType: customLeaveTypeValue || undefined,
+    leaveDuration,
+    leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
     vacationLeaveTotalEarned,
     vacationLeaveLess,
     vacationLeaveBalance,
@@ -2962,19 +2973,22 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
 
   const submitDecision = (status: Status, fallbackRemarks: string) => {
     onSubmit(request.id, status, hrRemarks.trim() || fallbackRemarks, {
-      title: getLeaveTypeLabel(kind),
+      title: leaveTitle,
       kind,
       date: startDate,
-      time: endDate,
+      time: effectiveEndDate,
       remarks: reason.trim(),
       officeDepartment: officeDepartment.trim(),
       filedDate,
       position: position.trim(),
       salary: salary.trim(),
       workingDays,
-      inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
+      inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
+      customLeaveType: customLeaveTypeValue || undefined,
+      leaveDuration,
+      leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
       vacationLeaveTotalEarned: vacationLeaveTotalEarned.trim(),
       vacationLeaveLess: vacationLeaveLess.trim(),
       vacationLeaveBalance: vacationLeaveBalance.trim(),
@@ -2990,7 +3004,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
         <div className="space-y-4">
           <div className="rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
             <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{request.id}</p>
-            <h3 className="mt-2 text-2xl font-bold">{getLeaveTypeLabel(kind)} - {request.owner}</h3>
+            <h3 className="mt-2 text-2xl font-bold">{leaveTitle} - {request.owner}</h3>
             <p className="mt-2 text-slate-600">{reason}</p>
           </div>
           <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
@@ -3005,6 +3019,12 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
                   {leaveKinds.map((item) => <option key={item} value={item}>{getLeaveTypeLabel(item)}</option>)}
                 </select>
               </label>
+              {kind === 'Other Leave' && (
+                <label className="sm:col-span-2">
+                  <span className="mb-2 block font-medium">Specify leave type</span>
+                  <input required value={customLeaveType} onChange={(event) => setCustomLeaveType(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                </label>
+              )}
               <label>
                 <span className="mb-2 block font-medium">1. Office/Department</span>
                 <input value={officeDepartment} onChange={(event) => setOfficeDepartment(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
@@ -3027,8 +3047,24 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               </label>
               <label>
                 <span className="mb-2 block font-medium">Inclusive dates - End</span>
-                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} disabled={leaveDuration === 'Half Day'} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22] disabled:bg-stone-100 disabled:text-slate-500" />
               </label>
+              <label>
+                <span className="mb-2 block font-medium">Leave Duration</span>
+                <select value={leaveDuration} onChange={(event) => setLeaveDuration(event.target.value as 'Full Day' | 'Half Day')} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                  <option>Full Day</option>
+                  <option>Half Day</option>
+                </select>
+              </label>
+              {leaveDuration === 'Half Day' && (
+                <label>
+                  <span className="mb-2 block font-medium">Time</span>
+                  <select value={leaveTime} onChange={(event) => setLeaveTime(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                    <option>Morning (AM)</option>
+                    <option>Afternoon (PM)</option>
+                  </select>
+                </label>
+              )}
               <label>
                 <span className="mb-2 block font-medium">6.D Communication</span>
                 <select value={communication} onChange={(event) => setCommunication(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
@@ -3100,7 +3136,8 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Employee', request.owner],
-              ['Leave type', getLeaveTypeLabel(kind)],
+              ['Leave type', leaveTitle],
+              ['Duration', getLeaveDurationText(editedRequest)],
               ['Dates', getLeaveDateRange(editedRequest)],
               ['Reason', reason],
               ['Current Status', request.status],
@@ -3120,11 +3157,11 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-5">
           <h3 className="mb-4 text-xl font-bold">Decision</h3>
           <div className="space-y-3">
-            <button disabled={request.status === 'Approved'} onClick={() => submitDecision('Approved', 'Leave application approved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Approved' || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Approved', 'Leave application approved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={request.status === 'Rejected'} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Rejected' || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
               Reject
             </button>

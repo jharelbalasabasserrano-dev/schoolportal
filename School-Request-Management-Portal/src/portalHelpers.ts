@@ -532,6 +532,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const leaveTypes = getCivilServiceLeaveTypes()
   const check = (selected: string, option: string) => `<span class="box">${selected === option ? 'x' : ''}</span>`
   const leaveType = getCivilServiceLeaveLabel(request.kind)
+  const otherLeaveDetail = request.kind === 'Other Leave' && request.customLeaveType?.trim()
+    ? printRow('Other leave type', request.customLeaveType.trim())
+    : ''
   const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
   const leaveCreditRows = [
     ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
@@ -592,9 +595,11 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <p class="section-title">6. Details of Application</p>
       <p class="section-title">6.A Type of Leave to be Availed Of</p>
       <div class="leave-grid">${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)} ${escapeHtml(type)}</div>`).join('')}</div>
+      ${otherLeaveDetail}
       ${printRow('6.B Details of Leave', request.leaveDetail ?? '')}
       ${printRow('6.C Number of Working Days Applied For', String(request.workingDays ?? getDateDuration(request.date, request.time)))}
       ${printRow('Inclusive Dates', request.inclusiveDates ?? getLeaveDateRange(request))}
+      ${request.leaveDuration ? printRow('Leave Duration', getLeaveDurationText(request)) : ''}
       <p class="section-title">6.D Communication</p>
       <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')} Not Requested</div>
       <div class="item">${check(request.communication ?? '', 'Requested')} Requested</div>
@@ -627,6 +632,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
 export function getCivilServiceLeaveLabel(kind: RequestKind) {
   const leaveType = getCivilServiceLeaveTypes().find((type) => type.startsWith(kind))
   if (leaveType) return leaveType
+  if (kind === 'Wellness Leave') return 'Wellness Leave'
   if (kind === 'Other Leave') return 'Others'
   if (kind === 'Personal Leave') return 'Special Privilege Leave (Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)'
   if (kind === 'Official Leave') return 'Study Leave (Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)'
@@ -648,6 +654,7 @@ export function getCivilServiceLeaveTypes() {
     'Special Leave Benefits for Women (R.A. No. 9710 / CSC MC No. 25, s. 2010)',
     'Special Emergency (Calamity) Leave (CSC MC No. 2, s. 2012, as amended)',
     'Adoption Leave (R.A. No. 8552)',
+    'Wellness Leave',
     'Others',
   ]
 }
@@ -765,7 +772,8 @@ export function isLeaveApplication(request: PortalRequest) {
   return allLeaveKinds.includes(request.kind) && request.id.startsWith('LV-')
 }
 
-export function getLeaveTypeLabel(kind: RequestKind) {
+export function getLeaveTypeLabel(kind: RequestKind, customLeaveType?: string) {
+  if (kind === 'Other Leave' && customLeaveType?.trim()) return customLeaveType.trim()
   if (kind === 'Vacation Leave') return 'Vacation'
   if (kind === 'Mandatory/Forced Leave') return 'Mandatory/Forced'
   if (kind === 'Sick Leave') return 'Sick'
@@ -779,6 +787,7 @@ export function getLeaveTypeLabel(kind: RequestKind) {
   if (kind === 'Special Leave Benefits for Women') return 'Special Leave for Women'
   if (kind === 'Special Emergency (Calamity) Leave') return 'Calamity'
   if (kind === 'Adoption Leave') return 'Adoption'
+  if (kind === 'Wellness Leave') return 'Wellness'
   if (kind === 'Other Leave') return 'Other'
   return 'Leave'
 }
@@ -787,14 +796,21 @@ export function getLeaveTypeIcon(kind: RequestKind) {
   if (kind === 'Sick Leave' || kind === 'Rehabilitation Privilege') return Info
   if (kind === 'Maternity Leave' || kind === 'Paternity Leave' || kind === 'Solo Parent Leave' || kind === 'Adoption Leave') return UsersRound
   if (kind === 'Special Privilege Leave' || kind === '10-Day VAWC Leave' || kind === 'Special Leave Benefits for Women') return UserIcon
-  if (kind === 'Study Leave' || kind === 'Official Leave') return PackageCheck
+  if (kind === 'Study Leave' || kind === 'Official Leave' || kind === 'Wellness Leave') return PackageCheck
   return CalendarClock
+}
+
+export function getLeaveDurationText(request: PortalRequest) {
+  const duration = request.leaveDuration ?? 'Full Day'
+  if (duration !== 'Half Day') return duration
+  return request.leaveTime?.trim() ? `${duration} - ${request.leaveTime.trim()}` : duration
 }
 
 export function getLeaveDateRange(request: PortalRequest) {
   const start = formatShortDate(request.date)
   const end = /^\d{4}-\d{2}-\d{2}$/.test(request.time) ? formatShortDate(request.time) : start
-  return start === end ? start : `${start} - ${end}`
+  const range = start === end ? start : `${start} - ${end}`
+  return request.leaveDuration ? `${range} (${getLeaveDurationText(request)})` : range
 }
 
 export function getLeaveTypeRows(requests: PortalRequest[]) {
@@ -812,6 +828,7 @@ export function getLeaveTypeRows(requests: PortalRequest[]) {
     'Special Leave for Women': 'bg-fuchsia-600',
     Calamity: 'bg-orange-600',
     Adoption: 'bg-violet-600',
+    Wellness: 'bg-emerald-600',
   }
   const rows = new Map<string, { color: string; count: number; label: string }>()
   allLeaveKinds.forEach((kind) => {
@@ -849,7 +866,7 @@ export function getEmployeeTypeTone(request: PortalRequest) {
 
 export function getEmployeeRequestTitle(request: PortalRequest) {
   if (request.kind === 'Facility Reservation') return request.facility ?? request.title
-  if (allLeaveKinds.includes(request.kind)) return request.kind
+  if (allLeaveKinds.includes(request.kind)) return getLeaveTypeLabel(request.kind, request.customLeaveType)
   if (['Supply Request', 'Inventory Request'].includes(request.kind)) return `${getSupplyItems(request).length} item(s)`
   return request.title
 }

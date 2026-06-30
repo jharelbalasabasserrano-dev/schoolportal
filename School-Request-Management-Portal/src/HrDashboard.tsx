@@ -4,7 +4,7 @@ import type { PortalRequest, RequestKind, Status } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
-const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Other Leave']
+const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Wellness Leave', 'Other Leave']
 const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
 const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
 
@@ -16,7 +16,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
     const byStatus = statusFilter === 'All' || request.status === statusFilter
-    const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind)}`.toLowerCase().includes(query.toLowerCase())
+    const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
   const counts = getCounts(leaveApplications)
@@ -41,7 +41,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
                 <button key={request.id} onClick={() => onReview(request)} className="grid w-full grid-cols-[1fr_auto] items-center gap-4 rounded-md border border-[#e7e1db] p-4 text-left hover:bg-stone-50">
                   <div className="min-w-0">
                     <p className="font-semibold"><span className="font-mono font-normal">{request.id}</span> {request.owner}</p>
-                    <p className="text-slate-600">{getLeaveTypeLabel(request.kind)} - {getLeaveDateRange(request)}</p>
+                    <p className="text-slate-600">{getLeaveTypeLabel(request.kind, request.customLeaveType)} - {getLeaveDateRange(request)}</p>
                   </div>
                   <StatusPill status={request.status} />
                 </button>
@@ -150,7 +150,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
             <tr key={request.id}>
               <td className="px-7 py-5 font-mono">{request.id}</td>
               <td className="px-7 py-5 text-xl font-semibold">{request.owner}</td>
-              <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind)}</span></td>
+              <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind, request.customLeaveType)}</span></td>
               <td className="px-7 py-5 text-slate-600">{getLeaveDateRange(request)}</td>
               <td className="max-w-[420px] truncate px-7 py-5 text-xl text-slate-600">{request.remarks}</td>
               <td className="px-7 py-5"><StatusPill status={request.status} /></td>
@@ -294,14 +294,20 @@ function isLeaveApplication(request: PortalRequest) {
   return allLeaveKinds.includes(request.kind)
 }
 
-function getLeaveTypeLabel(kind: RequestKind) {
+function getLeaveTypeLabel(kind: RequestKind, customLeaveType?: string) {
+  if (kind === 'Other Leave' && customLeaveType?.trim()) return customLeaveType.trim()
   return kind
 }
 
 function getLeaveDateRange(request: PortalRequest) {
-  if (request.inclusiveDates) return request.inclusiveDates
-  if (request.date && request.time && /^\d{4}-\d{2}-\d{2}$/.test(request.time)) return `${formatShortDate(request.date)} - ${formatShortDate(request.time)}`
-  return formatShortDate(request.date)
+  const range = request.inclusiveDates
+    ? request.inclusiveDates
+    : request.date && request.time && /^\d{4}-\d{2}-\d{2}$/.test(request.time)
+      ? `${formatShortDate(request.date)} - ${formatShortDate(request.time)}`
+      : formatShortDate(request.date)
+  if (!request.leaveDuration) return range
+  const duration = request.leaveDuration === 'Half Day' && request.leaveTime ? `${request.leaveDuration} - ${request.leaveTime}` : request.leaveDuration
+  return `${range} (${duration})`
 }
 
 function formatShortDate(value: string) {
