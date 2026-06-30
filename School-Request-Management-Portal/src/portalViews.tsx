@@ -2552,18 +2552,37 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   return (
     <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 font-serif text-sm text-slate-950 shadow-sm">
-      <LeaveApplicationHeader />
-      <h3 className="my-3 text-center text-xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h3>
-      <div className="space-y-2 pt-3 text-xs">
-        <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_170px]">
-          <div className="min-w-0 space-y-2">
-            <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
-            <PrintLine label="2. Name" value={request.owner} />
-            <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
-            <PrintLine label="4. Position" value={request.position ?? ''} />
-            <PrintLine label="5. Salary" value={request.salary ?? ''} />
-          </div>
+      <div className="relative min-h-[132px] pr-[180px] max-sm:min-h-0 max-sm:pr-0">
+        <LeaveApplicationHeader />
+        <h3 className="mt-2 text-center text-xl font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
+        <div className="absolute right-0 top-0 max-sm:static max-sm:mt-3 max-sm:flex max-sm:justify-end">
           <LeaveReceivedReferenceBlock request={request} />
+        </div>
+      </div>
+      <div className="space-y-2 pt-3 text-xs">
+        <div className="border-l border-t border-slate-500">
+          <div className="grid border-b border-slate-500 md:grid-cols-[38%_62%]">
+            <div className="min-h-11 border-r border-slate-500 px-2 py-1">
+              <p className="font-extrabold uppercase">1. Office/Department</p>
+              <p className="mt-1 border-b border-slate-500 px-2 text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
+            </div>
+            <div className="min-h-11 border-r border-slate-500 px-2 py-1">
+              <div className="flex items-baseline gap-2">
+                <span className="font-extrabold uppercase">2. Name:</span>
+                <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{request.owner}</span>
+              </div>
+              <div className="mt-1 grid grid-cols-3 gap-2 text-center text-[10px]">
+                <span className="border-t border-slate-500">(Last)</span>
+                <span className="border-t border-slate-500">(First)</span>
+                <span className="border-t border-slate-500">(Middle)</span>
+              </div>
+            </div>
+          </div>
+          <div className="grid border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
+            <OfficialInfoCell label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
+            <OfficialInfoCell label="4. Position" value={request.position ?? ''} />
+            <OfficialInfoCell label="5. Salary" value={request.salary ?? ''} />
+          </div>
         </div>
         <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
           <p className="mb-2 font-bold">6. Details of Application</p>
@@ -2578,6 +2597,15 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
         </div>
         <LeaveActionSection request={request} />
       </div>
+    </div>
+  )
+}
+
+function OfficialInfoCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-9 items-baseline gap-2 border-r border-slate-500 px-2 py-1">
+      <span className="font-extrabold uppercase">{label}</span>
+      <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{value}</span>
     </div>
   )
 }

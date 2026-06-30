@@ -562,13 +562,11 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     * { box-sizing: border-box; }
     body { margin: 0; background: #e2e8f0; padding: 10px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; }
     .sheet { max-width: 8.5in; min-height: 0; margin: 0 auto; background: white; padding: 14px 18px; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .letterhead { position: relative; text-align: center; border-bottom: 1.5px solid #8b5a2b; padding: 0 105px 7px; }
+    .form-heading { position: relative; min-height: 111px; padding-right: 160px; }
+    .letterhead { position: relative; text-align: center; padding: 0 105px 4px; }
     .logo { position: absolute; left: calc(45% - 190px); top: 0; width: 56px; height: 56px; object-fit: contain; border-radius: 999px; }
-    h1 { margin: 10px 0 11px; text-align: center; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; }
-    .office { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 5px 0; font-weight: 800; margin-bottom: 6px; }
-    .top-fields { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 13px; align-items: start; margin-top: 8px; }
-    .employee-fields { min-width: 0; }
-    .received-wrap { break-inside: avoid; justify-self: end; width: 150px; }
+    h1 { margin: 5px 0 0; text-align: center; font-size: 17px; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .received-wrap { position: absolute; right: 0; top: 0; width: 150px; break-inside: avoid; }
     .received-box { border: 1px solid #0f172a; padding: 5px 7px 7px; min-height: 96px; }
     .received-org { text-align: center; font-size: 7.5px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
     .received-title { margin-top: 3px; text-align: center; font-size: 14px; font-weight: 900; letter-spacing: 1.6px; }
@@ -578,6 +576,16 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .reference-row { margin-top: 5px; font-size: 9px; }
     .reference-row .label { min-width: 72px; }
     .reference-row .line { font-family: monospace; font-weight: 800; letter-spacing: .3px; }
+    .employee-table { margin-top: 3px; border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
+    .employee-row { display: grid; border-bottom: 1px solid #64748b; }
+    .employee-row-top { grid-template-columns: 38% 62%; }
+    .employee-row-bottom { grid-template-columns: 37% 38% 25%; }
+    .employee-cell { min-height: 31px; border-right: 1px solid #64748b; padding: 3px 6px; }
+    .employee-cell-inline { display: flex; align-items: baseline; gap: 8px; }
+    .employee-label { font-weight: 800; text-transform: uppercase; }
+    .employee-value { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; text-align: center; }
+    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 1px; text-align: center; font-size: 9px; }
+    .name-part { border-top: 1px solid #64748b; padding-top: 1px; }
     .row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 11px; }
     .label { min-width: 160px; font-weight: 700; }
     .line { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; }
@@ -592,31 +600,24 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .president { margin-top: 9px; text-align: center; }
     .sig { width: 55%; margin: 16px auto 5px; border-bottom: 1px solid #0f172a; }
     @media screen and (max-width: 640px) {
-      .top-fields { grid-template-columns: 1fr; }
-      .received-wrap { justify-self: start; }
+      .form-heading { min-height: 0; padding-right: 0; }
+      .received-wrap { position: static; margin: 8px 0 0 auto; }
+      .employee-row-top, .employee-row-bottom { grid-template-columns: 1fr; }
     }
     @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; } }
   </style>
 </head>
 <body>
   <main class="sheet">
-    <header class="letterhead">
-      <img class="logo" src="${davaoCitySeal}" alt="Davao City seal">
-      <div style="font-weight:800;">Civil Service Form No. 6</div>
-      <div style="font-size:12px;">Revised 2020</div>
-      <div style="margin-top:12px; font-weight:700; letter-spacing:1px;">Republic of the Philippines</div>
-      <div style="font-size:20px; font-weight:900;">CITY GOVERNMENT OF DAVAO</div>
-      <div style="font-weight:700;">DAVAO CITY</div>
-    </header>
-    <h1>APPLICATION FOR LEAVE</h1>
-    <div class="top-fields">
-      <div class="employee-fields">
-        <div class="office">1. OFFICE/DEPARTMENT: ${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
-        ${printRow('2. Name', request.owner)}
-        ${printRow('3. Date of Filing', formatDate(request.filedDate ?? request.date))}
-        ${printRow('4. Position', request.position ?? '')}
-        ${printRow('5. Salary', request.salary ?? '')}
-      </div>
+    <div class="form-heading">
+      <header class="letterhead">
+        <img class="logo" src="${davaoCitySeal}" alt="Davao City seal">
+        <div style="position:absolute; left:0; top:0; text-align:left; font-weight:800;">Civil Service Form No. 6<br><span style="font-weight:700;">Revised 2020</span></div>
+        <div style="margin-top:18px; font-weight:700; letter-spacing:1px;">Republic of the Philippines</div>
+        <div style="font-size:20px; font-weight:900;">CITY GOVERNMENT OF DAVAO</div>
+        <div style="font-weight:700;">DAVAO CITY</div>
+      </header>
+      <h1>APPLICATION FOR LEAVE</h1>
       <div class="received-wrap">
         <div class="received-box">
           <div class="received-org">CITY COLLEGE OF DAVAO</div>
@@ -628,6 +629,23 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
           </div>
         </div>
         <div class="reference-row">${printRow('Reference Number', getLeaveReferenceNumber(request))}</div>
+      </div>
+    </div>
+    <div class="employee-table">
+      <div class="employee-row employee-row-top">
+        <div class="employee-cell">
+          <span class="employee-label">1. Office/Department</span>
+          <div class="employee-value">${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
+        </div>
+        <div class="employee-cell">
+          <div class="employee-cell-inline"><span class="employee-label">2. Name:</span><span class="employee-value">${escapeHtml(request.owner)}</span></div>
+          <div class="name-parts"><span class="name-part">(Last)</span><span class="name-part">(First)</span><span class="name-part">(Middle)</span></div>
+        </div>
+      </div>
+      <div class="employee-row employee-row-bottom">
+        <div class="employee-cell employee-cell-inline"><span class="employee-label">3. Date of Filing</span><span class="employee-value">${escapeHtml(formatDate(request.filedDate ?? request.date))}</span></div>
+        <div class="employee-cell employee-cell-inline"><span class="employee-label">4. Position</span><span class="employee-value">${escapeHtml(request.position ?? '')}</span></div>
+        <div class="employee-cell employee-cell-inline"><span class="employee-label">5. Salary</span><span class="employee-value">${escapeHtml(request.salary ?? '')}</span></div>
       </div>
     </div>
     <section class="section">
