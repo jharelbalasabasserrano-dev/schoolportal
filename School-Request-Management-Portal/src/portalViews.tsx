@@ -40,7 +40,7 @@ import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
 import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
-import { canPrintAttachment, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
+import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
@@ -485,35 +485,53 @@ export function Dashboard() {
   }
 
   const addRequest = (request: PortalRequest) => {
-    setRequestList((current) => [request, ...current])
+    const requestToSave = isLeaveApplication(request) && !request.referenceNumber
+      ? { ...request, referenceNumber: createLeaveReferenceNumber() }
+      : request
+    setRequestList((current) => [requestToSave, ...current])
     setActiveView(request.kind === 'Facility Reservation' ? 'My Requests' : 'My Requests')
-    pendingRequestSaveErrorsRef.current.delete(request.id)
-    const save = createPortalRequest(request)
+    pendingRequestSaveErrorsRef.current.delete(requestToSave.id)
+    const save = createPortalRequest(requestToSave)
       .then((saved) => {
         setRequestList((current) => current.map((item) => item.id === saved.id ? saved : item))
       })
       .catch((error) => {
-        pendingRequestSaveErrorsRef.current.set(request.id, error)
+        pendingRequestSaveErrorsRef.current.set(requestToSave.id, error)
         console.error('[portal request] Request database save failed', {
-          requestId: request.id,
-          ownerId: request.ownerId,
-          kind: request.kind,
+          requestId: requestToSave.id,
+          ownerId: requestToSave.ownerId,
+          kind: requestToSave.kind,
           error,
         })
       })
       .finally(() => {
-        pendingRequestSavesRef.current.delete(request.id)
+        pendingRequestSavesRef.current.delete(requestToSave.id)
       })
-    pendingRequestSavesRef.current.set(request.id, save)
+    pendingRequestSavesRef.current.set(requestToSave.id, save)
   }
 
   const updateRequestStatus = (requestId: string, status: Status, remarks: string, updates: Partial<PortalRequest> = {}) => {
+    const currentRequest = requestList.find((request) => request.id === requestId)
+    const requestToSave = currentRequest?.kind === 'Facility Reservation'
+      ? { ...currentRequest, status, facilityRemarks: remarks, updatedBy: user.name }
+      : currentRequest && isLeaveApplication(currentRequest)
+        ? { ...currentRequest, ...updates, status, hrRemarks: remarks, updatedBy: user.name }
+        : currentRequest
+          ? { ...currentRequest, status, remarks, updatedBy: user.name }
+          : undefined
     setRequestList((current) => current.map((request) => {
       if (request.id !== requestId) return request
-      if (request.kind === 'Facility Reservation') return { ...request, status, facilityRemarks: remarks, updatedBy: user.name }
-      if (isLeaveApplication(request)) return { ...request, ...updates, status, hrRemarks: remarks, updatedBy: user.name }
-      return { ...request, status, remarks, updatedBy: user.name }
+      return requestToSave ?? request
     }))
+    if (requestToSave) {
+      createPortalRequest(requestToSave).catch((error) => {
+        console.error('[portal request] Request database update failed', {
+          requestId,
+          status,
+          error,
+        })
+      })
+    }
     setModal(null)
   }
 
@@ -1227,6 +1245,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
         <thead className="bg-stone-50 text-sm uppercase tracking-[.12em] text-slate-600">
           <tr>
             <th className="px-7 py-5">ID</th>
+            <th className="px-7 py-5">Reference No.</th>
             <th className="px-7 py-5">Employee</th>
             <th className="px-7 py-5">Type</th>
             <th className="px-7 py-5">Dates</th>
@@ -1239,6 +1258,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
           {requests.map((request) => (
             <tr key={request.id}>
               <td className="px-7 py-5 font-mono">{request.id}</td>
+              <td className="px-7 py-5 font-mono text-sm">{getLeaveReferenceNumber(request)}</td>
               <td className="px-7 py-5 text-xl font-semibold">{request.owner}</td>
               <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind, request.customLeaveType)}</span></td>
               <td className="px-7 py-5 text-slate-600">{getLeaveDateRange(request)}</td>
@@ -1251,7 +1271,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
           ))}
           {requests.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-7 py-10 text-center text-slate-500">No leave applications match this view.</td>
+              <td colSpan={8} className="px-7 py-10 text-center text-slate-500">No leave applications match this view.</td>
             </tr>
           )}
         </tbody>
@@ -2364,12 +2384,14 @@ function RequestsWorkspace({ canApprove, onDecision, onView, requests }: { canAp
 function RequestDetailsModal({ onClose, request }: { onClose: () => void; request: PortalRequest }) {
   const isFacilityReservation = request.kind === 'Facility Reservation'
   const isDocumentRequest = documentKinds.includes(request.kind)
+  const isLeaveRequest = isLeaveApplication(request)
 
   return (
-    <Modal title="Request Details" onClose={onClose} wide={isFacilityReservation || isDocumentRequest}>
+    <Modal title="Request Details" onClose={onClose} wide={isFacilityReservation || isDocumentRequest || isLeaveRequest}>
       <div className="space-y-3">
         {[
           ['Request ID', request.id],
+          ['Reference Number', isLeaveRequest ? getLeaveReferenceNumber(request) : 'Not applicable'],
           ['Title', request.title],
           ['Type', request.kind],
           ['Requester', request.owner],
@@ -2381,6 +2403,9 @@ function RequestDetailsModal({ onClose, request }: { onClose: () => void; reques
           ['Updated By', request.updatedBy ?? 'No office action yet'],
           [isFacilityReservation ? 'Purpose' : 'Remarks', request.remarks],
           ['Facility Remarks', isFacilityReservation ? request.facilityRemarks ?? 'No facility remarks yet' : 'Not applicable'],
+          ['Received Date', isLeaveRequest ? request.receivedDate ? formatDate(request.receivedDate) : 'Not received yet' : 'Not applicable'],
+          ['Received Time', isLeaveRequest ? request.receivedTime ?? 'Not received yet' : 'Not applicable'],
+          ['Received By', isLeaveRequest ? request.receivedBy ?? 'Not received yet' : 'Not applicable'],
         ].map(([label, value]) => (
           <div key={label} className="grid grid-cols-[130px_1fr] gap-3 rounded-md bg-stone-50 px-4 py-3">
             <span className="font-medium text-slate-600">{label}</span>
@@ -2416,6 +2441,21 @@ function RequestDetailsModal({ onClose, request }: { onClose: () => void; reques
             </button>
           </div>
           {request.kind === 'Exit Clearance' ? <ExitClearancePrintForm request={request} /> : <RegistrarRequestPrintForm request={request} />}
+        </div>
+      )}
+      {isLeaveRequest && (
+        <div className="mt-6 border-t border-[#e7e1db] pt-6">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xl font-bold">Printable leave application</h3>
+              <p className="text-slate-500">Use this copy for leave application filing.</p>
+            </div>
+            <button type="button" onClick={() => printLeaveApplicationForm(request)} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
+              <Printer size={17} />
+              Print form
+            </button>
+          </div>
+          <LeaveApplicationPrintForm request={request} />
         </div>
       )}
     </Modal>
@@ -2512,14 +2552,19 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   return (
     <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 font-serif text-sm text-slate-950 shadow-sm">
-      <LeaveApplicationHeader request={request} />
+      <LeaveApplicationHeader />
       <h3 className="my-3 text-center text-xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h3>
       <div className="border-y border-slate-300 py-2 font-semibold">1. OFFICE/DEPARTMENT: {request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</div>
       <div className="space-y-2 pt-3 text-xs">
-        <PrintLine label="2. Name" value={request.owner} />
-        <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
-        <PrintLine label="4. Position" value={request.position ?? ''} />
-        <PrintLine label="5. Salary" value={request.salary ?? ''} />
+        <div className="grid gap-4 md:grid-cols-[1fr_230px]">
+          <div className="space-y-2">
+            <PrintLine label="2. Name" value={request.owner} />
+            <PrintLine label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
+            <PrintLine label="4. Position" value={request.position ?? ''} />
+            <PrintLine label="5. Salary" value={request.salary ?? ''} />
+          </div>
+          <LeaveReceivedReferenceBlock request={request} />
+        </div>
         <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
           <p className="mb-2 font-bold">6. Details of Application</p>
           <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
@@ -2537,9 +2582,9 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   )
 }
 
-function LeaveApplicationHeader({ request }: { request: PortalRequest }) {
+function LeaveApplicationHeader() {
   return (
-    <PrintPreviewHeader logo={davaoCitySeal} logoAlt="Davao City seal" referenceNumber={getLeaveReferenceNumber(request)}>
+    <PrintPreviewHeader logo={davaoCitySeal} logoAlt="Davao City seal">
       <p className="font-bold">Civil Service Form No. 6</p>
       <p className="text-xs">Revised 2020</p>
       <p className="mt-3 text-sm font-semibold tracking-wide">Republic of the Philippines</p>
@@ -2549,13 +2594,32 @@ function LeaveApplicationHeader({ request }: { request: PortalRequest }) {
   )
 }
 
-function PrintPreviewHeader({ children, logo = ccdLogo, logoAlt = 'City College of Davao seal', referenceNumber }: { children: ReactNode; logo?: string; logoAlt?: string; referenceNumber: string }) {
+function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
+  return (
+    <div className="space-y-2">
+      <div className="border border-slate-700 bg-white p-2">
+        <p className="text-center text-[10px] font-extrabold tracking-wide">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-1 text-center text-base font-extrabold">RECEIVED</p>
+        <div className="mt-3 space-y-1">
+          <PrintLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
+          <PrintLine label="Time" value={request.receivedTime ?? ''} />
+          <PrintLine label="By" value={request.receivedBy ?? ''} />
+        </div>
+      </div>
+      <PrintLine label="Reference Number" value={getLeaveReferenceNumber(request)} />
+    </div>
+  )
+}
+
+function PrintPreviewHeader({ children, logo = ccdLogo, logoAlt = 'City College of Davao seal', referenceNumber }: { children: ReactNode; logo?: string; logoAlt?: string; referenceNumber?: string }) {
   return (
     <div className="relative border-b-2 border-[#8b5a2b] pb-4 pr-36 text-center">
-      <div className="absolute right-0 top-0 text-right text-xs">
-        <p className="font-semibold uppercase text-[#1e6f5c]">Reference Number</p>
-        <p className="mt-1 font-mono text-sm font-bold tracking-wide text-[#1e3a3a]">{referenceNumber}</p>
-      </div>
+      {referenceNumber && (
+        <div className="absolute right-0 top-0 text-right text-xs">
+          <p className="font-semibold uppercase text-[#1e6f5c]">Reference Number</p>
+          <p className="mt-1 font-mono text-sm font-bold tracking-wide text-[#1e3a3a]">{referenceNumber}</p>
+        </div>
+      )}
       <img src={logo} alt={logoAlt} style={{ left: 'calc(50% - 16rem)' }} className="absolute top-0 h-20 w-20 rounded-full object-contain" />
       {children}
     </div>
@@ -2932,6 +2996,9 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [customLeaveType, setCustomLeaveType] = useState(request.customLeaveType ?? '')
   const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>(request.leaveDuration ?? 'Full Day')
   const [leaveTime, setLeaveTime] = useState(request.leaveTime ?? 'Morning (AM)')
+  const [receivedDate, setReceivedDate] = useState(request.receivedDate ?? '')
+  const [receivedTime, setReceivedTime] = useState(request.receivedTime ?? '')
+  const [receivedBy, setReceivedBy] = useState(request.receivedBy ?? '')
   const [reason, setReason] = useState(request.remarks)
   const [hrRemarks, setHrRemarks] = useState(request.hrRemarks ?? '')
   const [vacationLeaveTotalEarned, setVacationLeaveTotalEarned] = useState(request.vacationLeaveTotalEarned ?? '')
@@ -2961,6 +3028,10 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
     customLeaveType: customLeaveTypeValue || undefined,
     leaveDuration,
     leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
+    referenceNumber: request.referenceNumber ?? getLeaveReferenceNumber(request),
+    receivedDate: receivedDate || undefined,
+    receivedTime: receivedTime.trim() || undefined,
+    receivedBy: receivedBy.trim() || undefined,
     vacationLeaveTotalEarned,
     vacationLeaveLess,
     vacationLeaveBalance,
@@ -2988,6 +3059,10 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
       customLeaveType: customLeaveTypeValue || undefined,
       leaveDuration,
       leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
+      referenceNumber: request.referenceNumber ?? getLeaveReferenceNumber(request),
+      receivedDate: receivedDate || undefined,
+      receivedTime: receivedTime.trim() || undefined,
+      receivedBy: receivedBy.trim() || undefined,
       vacationLeaveTotalEarned: vacationLeaveTotalEarned.trim(),
       vacationLeaveLess: vacationLeaveLess.trim(),
       vacationLeaveBalance: vacationLeaveBalance.trim(),
@@ -3040,6 +3115,31 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
                 <span className="mb-2 block font-medium">5. Salary</span>
                 <input value={salary} onChange={(event) => setSalary(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
               </label>
+              <div className="sm:col-span-2 grid gap-4 rounded-md border border-[#d9d3cc] bg-stone-50 p-4 lg:grid-cols-[1fr_280px]">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Office Use Only</p>
+                  <p className="mt-1 text-sm text-slate-600">Applicants cannot edit received details. HR may fill these after the application is received.</p>
+                  <p className="mt-3 font-mono text-sm font-bold text-[#1e3a3a]">Reference No. {getLeaveReferenceNumber(editedRequest)}</p>
+                </div>
+                <div className="rounded-md border border-slate-400 bg-white p-3">
+                  <p className="text-center text-xs font-extrabold tracking-wide">CITY COLLEGE OF DAVAO</p>
+                  <p className="mt-1 text-center text-lg font-extrabold">RECEIVED</p>
+                  <div className="mt-3 space-y-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Date</span>
+                      <input type="date" value={receivedDate} onChange={(event) => setReceivedDate(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Time</span>
+                      <input type="time" value={receivedTime} onChange={(event) => setReceivedTime(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">By</span>
+                      <input value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                  </div>
+                </div>
+              </div>
               <label>
                 <span className="mb-2 block font-medium">Inclusive dates - Start</span>
                 <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />

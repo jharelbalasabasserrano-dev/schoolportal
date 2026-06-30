@@ -66,6 +66,9 @@ export type PortalRequest = {
   transferReason?: string
   requestedDocs?: string[]
   claimReleaseDate?: string
+  referenceNumber?: string
+  receivedDate?: string
+  receivedTime?: string
   receivedBy?: string
   releasedBy?: string
   position?: string

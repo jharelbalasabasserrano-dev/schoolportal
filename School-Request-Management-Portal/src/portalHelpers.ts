@@ -186,7 +186,13 @@ export function getExitClearanceReferenceNumber(request: PortalRequest) {
 }
 
 export function getLeaveReferenceNumber(request: PortalRequest) {
-  return `LEAVE-${request.date.replaceAll('-', '')}-${request.id.replace(/\D/g, '').slice(-4).padStart(4, '0')}`
+  return request.referenceNumber?.trim() || `LV-${request.date.slice(0, 4)}-${request.id.replace(/\D/g, '').slice(-6).padStart(6, '0')}`
+}
+
+export function createLeaveReferenceNumber(date = new Date()) {
+  const year = date.getFullYear()
+  const sequence = String(date.getTime() % 1000000).padStart(6, '0')
+  return `LV-${year}-${sequence}`
 }
 
 export function getRegistrarRequestLabel(kind: RequestKind) {
@@ -553,11 +559,19 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     body { margin: 0; background: #e2e8f0; padding: 10px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; }
     .sheet { max-width: 8.5in; min-height: 0; margin: 0 auto; background: white; padding: 14px 18px; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
     .letterhead { position: relative; text-align: center; border-bottom: 1.5px solid #8b5a2b; padding: 0 105px 7px; }
-    .ref { position: absolute; right: 0; top: 0; text-align: right; font-size: 8px; color: #1e6f5c; font-weight: 700; text-transform: uppercase; }
-    .ref strong { display: block; margin-top: 2px; color: #1e3a3a; font-family: monospace; font-size: 10px; letter-spacing: .4px; }
     .logo { position: absolute; left: calc(45% - 190px); top: 0; width: 56px; height: 56px; object-fit: contain; border-radius: 999px; }
     h1 { margin: 10px 0 11px; text-align: center; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; }
     .office { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 5px 0; font-weight: 800; }
+    .top-fields { display: grid; grid-template-columns: 1fr 185px; gap: 16px; align-items: start; margin-top: 8px; }
+    .received-wrap { break-inside: avoid; }
+    .received-box { border: 1px solid #0f172a; padding: 7px; }
+    .received-org { text-align: center; font-size: 9px; font-weight: 900; letter-spacing: .4px; }
+    .received-title { margin-top: 2px; text-align: center; font-size: 15px; font-weight: 900; }
+    .received-box .row { margin-bottom: 3px; font-size: 10px; }
+    .received-box .label { min-width: 34px; }
+    .reference-row { margin-top: 6px; }
+    .reference-row .label { min-width: 92px; }
+    .reference-row .line { font-family: monospace; font-weight: 800; letter-spacing: .3px; }
     .row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 11px; }
     .label { min-width: 160px; font-weight: 700; }
     .line { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; }
@@ -577,7 +591,6 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
 <body>
   <main class="sheet">
     <header class="letterhead">
-      <div class="ref">Reference Number<strong>${escapeHtml(getLeaveReferenceNumber(request))}</strong></div>
       <img class="logo" src="${davaoCitySeal}" alt="Davao City seal">
       <div style="font-weight:800;">Civil Service Form No. 6</div>
       <div style="font-size:12px;">Revised 2020</div>
@@ -587,10 +600,24 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     </header>
     <h1>APPLICATION FOR LEAVE</h1>
     <div class="office">1. OFFICE/DEPARTMENT: ${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
-    ${printRow('2. Name', request.owner)}
-    ${printRow('3. Date of Filing', formatDate(request.filedDate ?? request.date))}
-    ${printRow('4. Position', request.position ?? '')}
-    ${printRow('5. Salary', request.salary ?? '')}
+    <div class="top-fields">
+      <div>
+        ${printRow('2. Name', request.owner)}
+        ${printRow('3. Date of Filing', formatDate(request.filedDate ?? request.date))}
+        ${printRow('4. Position', request.position ?? '')}
+        ${printRow('5. Salary', request.salary ?? '')}
+      </div>
+      <div class="received-wrap">
+        <div class="received-box">
+          <div class="received-org">CITY COLLEGE OF DAVAO</div>
+          <div class="received-title">RECEIVED</div>
+          ${printRow('Date', request.receivedDate ? formatDate(request.receivedDate) : '')}
+          ${printRow('Time', request.receivedTime ?? '')}
+          ${printRow('By', request.receivedBy ?? '')}
+        </div>
+        <div class="reference-row">${printRow('Reference Number', getLeaveReferenceNumber(request))}</div>
+      </div>
+    </div>
     <section class="section">
       <p class="section-title">6. Details of Application</p>
       <p class="section-title">6.A Type of Leave to be Availed Of</p>

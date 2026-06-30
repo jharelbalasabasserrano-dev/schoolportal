@@ -112,6 +112,9 @@ pub async fn get_bootstrap_data(
             transfer_reason,
             requested_docs,
             claim_release_date,
+            reference_number,
+            received_date::text AS received_date,
+            received_time,
             received_by,
             released_by,
             position,
@@ -438,11 +441,13 @@ pub async fn sync_bootstrap_data(
         let filing_date = parse_optional_date(request.filing_date.as_deref());
         let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
         let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
+        let received_date = parse_optional_date(request.received_date.as_deref());
         let sql = r#"
             INSERT INTO portal_requests (
                 id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
                 facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
-                program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
+                program, major, transfer_reason, requested_docs, claim_release_date,
+                reference_number, received_date, received_time, received_by, released_by,
                 position, salary, working_days, inclusive_dates, communication, leave_detail,
                 custom_leave_type, leave_duration, leave_time,
                 filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
@@ -453,9 +458,9 @@ pub async fn sync_bootstrap_data(
                 $1, $2, $3,
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33, $34, $35, $36,
-                $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48
+                $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
+                $30, $31, $32, $33, $34, $35, $36, $37,
+                $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
             )
             "#;
         let params = serde_json::to_value(request).unwrap_or_else(|_| {
@@ -489,6 +494,9 @@ pub async fn sync_bootstrap_data(
             .bind(&request.transfer_reason)
             .bind(&request.requested_docs)
             .bind(&request.claim_release_date)
+            .bind(&request.reference_number)
+            .bind(received_date)
+            .bind(&request.received_time)
             .bind(&request.received_by)
             .bind(&request.released_by)
             .bind(&request.position)
@@ -787,11 +795,13 @@ pub async fn create_portal_request(
     let filing_date = parse_optional_date(request.filing_date.as_deref());
     let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
     let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
+    let received_date = parse_optional_date(request.received_date.as_deref());
     let sql = r#"
         INSERT INTO portal_requests (
             id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
             facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
-            program, major, transfer_reason, requested_docs, claim_release_date, received_by, released_by,
+            program, major, transfer_reason, requested_docs, claim_release_date,
+            reference_number, received_date, received_time, received_by, released_by,
             position, salary, working_days, inclusive_dates, communication, leave_detail,
             custom_leave_type, leave_duration, leave_time,
             filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
@@ -802,9 +812,9 @@ pub async fn create_portal_request(
             $1, $2, $3,
             CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
             $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-            $19, $20, $21, $22::text[], $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32, $33, $34, $35, $36,
-            $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48
+            $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
+            $30, $31, $32, $33, $34, $35, $36, $37,
+            $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
         )
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -829,6 +839,9 @@ pub async fn create_portal_request(
             transfer_reason = EXCLUDED.transfer_reason,
             requested_docs = EXCLUDED.requested_docs,
             claim_release_date = EXCLUDED.claim_release_date,
+            reference_number = EXCLUDED.reference_number,
+            received_date = EXCLUDED.received_date,
+            received_time = EXCLUDED.received_time,
             received_by = EXCLUDED.received_by,
             released_by = EXCLUDED.released_by,
             position = EXCLUDED.position,
@@ -879,6 +892,9 @@ pub async fn create_portal_request(
             transfer_reason,
             requested_docs,
             claim_release_date,
+            reference_number,
+            received_date::text AS received_date,
+            received_time,
             received_by,
             released_by,
             position,
@@ -936,6 +952,9 @@ pub async fn create_portal_request(
         .bind(&request.transfer_reason)
         .bind(&request.requested_docs)
         .bind(&request.claim_release_date)
+        .bind(&request.reference_number)
+        .bind(received_date)
+        .bind(&request.received_time)
         .bind(&request.received_by)
         .bind(&request.released_by)
         .bind(&request.position)
