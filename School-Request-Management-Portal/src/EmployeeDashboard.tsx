@@ -75,7 +75,6 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
   const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>('Full Day')
   const [leaveTime, setLeaveTime] = useState('Morning (AM)')
   const [reason, setReason] = useState('')
-  const effectiveEndDate = leaveDuration === 'Half Day' ? startDate : endDate
   const duration = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
   const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
   const title = getLeaveTypeLabel(kind, customLeaveTypeValue)
@@ -92,14 +91,14 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
       office: 'HR Office',
       status: 'Pending',
       date: startDate,
-      time: effectiveEndDate,
+      time: endDate,
       remarks: reason.trim(),
       filedDate,
       officeDepartment: officeDepartment.trim(),
       position: position.trim(),
       salary: salary.trim(),
       workingDays: duration,
-      inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
+      inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
       customLeaveType: customLeaveTypeValue || undefined,
@@ -188,12 +187,11 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
             <option>Half Day</option>
           </select>
         </label>
-        {leaveDuration === 'Full Day' ? (
-          <label>
-            <span className="mb-2 block font-medium">Inclusive dates - End</span>
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
-          </label>
-        ) : (
+        <label>
+          <span className="mb-2 block font-medium">Inclusive dates - End</span>
+          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+        {leaveDuration === 'Half Day' && (
           <label>
             <span className="mb-2 block font-medium">Time</span>
             <select value={leaveTime} onChange={(event) => setLeaveTime(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">

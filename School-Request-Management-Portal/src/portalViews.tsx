@@ -2940,7 +2940,6 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [sickLeaveTotalEarned, setSickLeaveTotalEarned] = useState(request.sickLeaveTotalEarned ?? '')
   const [sickLeaveLess, setSickLeaveLess] = useState(request.sickLeaveLess ?? '')
   const [sickLeaveBalance, setSickLeaveBalance] = useState(request.sickLeaveBalance ?? '')
-  const effectiveEndDate = leaveDuration === 'Half Day' ? startDate : endDate
   const workingDays = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
   const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
   const leaveTitle = getLeaveTypeLabel(kind, customLeaveTypeValue)
@@ -2949,14 +2948,14 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
     title: leaveTitle,
     kind,
     date: startDate,
-    time: effectiveEndDate,
+    time: endDate,
     remarks: reason,
     officeDepartment,
     filedDate,
     position,
     salary,
     workingDays,
-    inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
+    inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
     communication,
     leaveDetail,
     customLeaveType: customLeaveTypeValue || undefined,
@@ -2976,14 +2975,14 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
       title: leaveTitle,
       kind,
       date: startDate,
-      time: effectiveEndDate,
+      time: endDate,
       remarks: reason.trim(),
       officeDepartment: officeDepartment.trim(),
       filedDate,
       position: position.trim(),
       salary: salary.trim(),
       workingDays,
-      inclusiveDates: leaveDuration === 'Half Day' ? formatDate(startDate) : `${formatDate(startDate)} - ${formatDate(effectiveEndDate)}`,
+      inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
       customLeaveType: customLeaveTypeValue || undefined,
@@ -3047,7 +3046,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               </label>
               <label>
                 <span className="mb-2 block font-medium">Inclusive dates - End</span>
-                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} disabled={leaveDuration === 'Half Day'} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22] disabled:bg-stone-100 disabled:text-slate-500" />
+                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
               </label>
               <label>
                 <span className="mb-2 block font-medium">Leave Duration</span>
