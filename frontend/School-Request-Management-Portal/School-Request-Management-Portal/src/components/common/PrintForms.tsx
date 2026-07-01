@@ -210,10 +210,10 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
       <PrintLine label="7.C Approved for" value={request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : ''} />
       <PrintLine label="7.D Disapproved due to" value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
       <div className="mx-auto mt-10 w-2/3 text-center">
-        <div className="mx-auto h-6 border-b border-slate-700" />
-        <p className="mt-1 font-semibold">(Authorized Official)</p>
-        <p className="mt-4 font-bold">Wenefredo E. Cagape, EdD, PhD</p>
+        <p className="font-bold">Wenefredo E. Cagape, EdD, PhD</p>
         <p>College President</p>
+        <div className="mx-auto mt-2 border-b border-slate-700" />
+        <p className="mt-1 font-semibold">(Authorized Official)</p>
       </div>
     </div>
   );
