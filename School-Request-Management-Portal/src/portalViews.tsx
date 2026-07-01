@@ -2602,8 +2602,8 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   ]
 
   return (
-    <div className="mx-auto h-[277mm] w-[190mm] overflow-hidden bg-white p-0 font-serif text-[9.5px] leading-[1.08] text-black shadow-sm print:h-[277mm] print:w-[190mm] print:shadow-none">
-      <div className="relative h-[36mm] border-b border-black px-[2mm] pt-[2mm]">
+    <div className="mx-auto h-[277mm] w-[190mm] overflow-hidden bg-white p-0 font-serif text-[9px] leading-[1.05] text-black shadow-sm print:h-[277mm] print:w-[190mm] print:shadow-none">
+      <div className="relative h-[32mm] border-b border-black px-[2mm] pt-[2mm]">
         <div className="absolute left-[2mm] top-[3mm] text-left text-[10px] font-bold leading-tight">
           <p>Civil Service Form No. 6</p>
           <p>Revised 2020</p>
@@ -2648,7 +2648,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">6. DETAILS OF APPLICATION</p>
-          <div className="grid h-[106mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[96mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="mb-[1mm] font-bold">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
               <div className="space-y-[.85mm]">
@@ -2678,7 +2678,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <OfficialCheck checked={/terminal/i.test(leaveDetail)} label="Terminal Leave" />
             </div>
           </div>
-          <div className="grid h-[33mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[28mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
               <OfficialLine value={`${workingDays} day(s)`} />
@@ -2700,7 +2700,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">7. DETAILS OF ACTION ON APPLICATION</p>
-          <div className="grid h-[52mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[43mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.A CERTIFICATION OF LEAVE CREDITS</p>
               <table className="mt-[1.5mm] w-full border-collapse text-center text-[9px]">
@@ -2727,7 +2727,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               </div>
             </div>
           </div>
-          <div className="grid h-[31mm] grid-cols-2">
+          <div className="grid h-[24mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.C APPROVED FOR:</p>
               <OfficialLine label="days with pay" value={request.status === 'Approved' ? workingDays : ''} tight />
@@ -2737,11 +2737,13 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
             <div className="px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.D DISAPPROVED DUE TO:</p>
               <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
-              <div className="mt-[6mm] text-center">
-                <p className="border-b border-black px-[2mm] font-bold">Wenefredo E. Cagape, EdD, PhD</p>
-                <p className="mt-[1mm] text-[8.5px]">College President</p>
-              </div>
             </div>
+          </div>
+          <div className="mx-auto h-[16mm] w-[86mm] px-[2mm] pt-[2mm] text-center">
+            <div className="mx-auto mb-[1mm] w-[70mm] border-b border-black">&nbsp;</div>
+            <p className="font-bold">Wenefredo E. Cagape, EdD, PhD</p>
+            <p className="mt-[.5mm]">College President</p>
+            <p className="mt-[.5mm]">(Authorized Official)</p>
           </div>
         </div>
       </div>

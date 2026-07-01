@@ -567,9 +567,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; }
-    body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #000; font-size: 9.5px; line-height: 1.08; }
+    body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #000; font-size: 9px; line-height: 1.05; }
     .sheet { width: 190mm; height: 277mm; margin: 0 auto; overflow: hidden; background: white; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .form-heading { position: relative; height: 36mm; border-bottom: 1px solid #000; padding: 2mm 2mm 0; }
+    .form-heading { position: relative; height: 32mm; border-bottom: 1px solid #000; padding: 2mm 2mm 0; }
     .form-label { position: absolute; left: 2mm; top: 3mm; text-align: left; font-size: 10px; font-weight: 800; line-height: 1.15; }
     .logo { position: absolute; left: calc(50% - 48mm); top: 3mm; width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
     .title-block { position: absolute; left: 50%; top: 3mm; width: 92mm; transform: translateX(-50%); text-align: center; }
@@ -601,11 +601,13 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1mm 0 0 20mm; text-align: center; font-size: 8px; }
     .section { margin-top: 1.5mm; }
     .section-title { margin: 0; border-bottom: 1px solid #000; padding: 1mm 0; text-align: center; font-size: 10px; font-weight: 900; }
-    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: 106mm; border-bottom: 1px solid #000; }
+    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: 96mm; border-bottom: 1px solid #000; }
     .application-bottom, .action-top, .action-bottom { display: grid; grid-template-columns: 1fr 1fr; }
-    .application-bottom { height: 33mm; }
-    .action-top { height: 52mm; border-bottom: 1px solid #000; }
-    .action-bottom { height: 31mm; }
+    .application-bottom { height: 28mm; }
+    .action-top { height: 43mm; border-bottom: 1px solid #000; }
+    .action-bottom { height: 24mm; border-bottom: 1px solid #000; }
+    .president-block { width: 86mm; height: 16mm; margin: 0 auto; padding: 2mm 2mm 0; text-align: center; }
+    .president-signature-line { width: 70mm; margin: 0 auto 1mm; border-bottom: 1px solid #000; }
     .cell { padding: 1.5mm 2mm; }
     .cell-left { border-right: 1px solid #000; }
     .subhead { margin: 0 0 1mm; font-weight: 900; }
@@ -616,7 +618,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .line-row-full { grid-template-columns: 1fr; margin-top: 2mm; }
     .line { min-height: 4mm; border-bottom: 1px solid #000; padding: 0 1mm; text-align: center; }
     .signature { margin-top: 8mm; text-align: center; }
-    .signature .line, .president-line { display: block; border-bottom: 1px solid #000; font-weight: 700; }
+    .signature .line { display: block; border-bottom: 1px solid #000; font-weight: 700; }
     table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; font-size: 9px; text-align: center; }
     th, td { border: 1px solid #000; padding: 1mm; }
     @media print { body { background: white; padding: 0; } .sheet { box-shadow: none; } }
@@ -739,8 +741,13 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="cell">
           <p class="subhead">7.D DISAPPROVED DUE TO:</p>
           ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
-          <div style="margin-top:6mm;text-align:center;"><span class="president-line">Wenefredo E. Cagape, EdD, PhD</span><p>College President</p></div>
         </div>
+      </div>
+      <div class="president-block">
+        <div class="president-signature-line">&nbsp;</div>
+        <p style="margin:.5mm 0 0;font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
+        <p style="margin:.5mm 0 0;">College President</p>
+        <p style="margin:.5mm 0 0;">(Authorized Official)</p>
       </div>
     </section>
     </div>
