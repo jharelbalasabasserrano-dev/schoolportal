@@ -557,55 +557,58 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: A4 portrait; margin: 6mm; }
+    @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 9.5px; line-height: 1.08; }
-    .sheet { width: 210mm; max-width: 210mm; min-height: 0; margin: 0 auto; background: white; padding: 8mm; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; overflow: hidden; }
-    .form-heading { position: relative; min-height: 112px; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
-    .letterhead { display: grid; grid-template-columns: 138px 56px minmax(235px, 1fr) 194px; gap: 8px; min-height: 95px; padding-right: 194px; text-align: center; }
-    .form-label { padding-top: 2px; text-align: left; font-size: 10.5px; font-weight: 800; line-height: 1.12; }
+    body { margin: 0; background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; line-height: 1.15; }
+    .sheet { display: flex; flex-direction: column; width: 190mm; max-width: 190mm; min-height: 277mm; margin: 0 auto; background: white; padding: 0; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; overflow: hidden; }
+    .form-heading { position: relative; min-height: 38mm; border-bottom: 2px solid #0f172a; padding: 1.5mm 2mm; }
+    .letterhead { display: grid; grid-template-columns: 36mm 16mm minmax(62mm, 1fr) 52mm; gap: 2mm; min-height: 32mm; padding-right: 52mm; text-align: center; }
+    .form-label { padding-top: 1mm; text-align: left; font-size: 11px; font-weight: 800; line-height: 1.15; }
     .form-label span { font-weight: 800; }
-    .logo { width: 54px; height: 54px; object-fit: contain; border-radius: 999px; }
+    .logo { width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
     .title-block { text-align: center; }
-    .republic { font-size: 11px; font-weight: 900; letter-spacing: 1.7px; }
-    .government { margin-top: 2px; white-space: nowrap; font-size: 20px; font-weight: 900; line-height: 1.05; letter-spacing: .7px; }
-    .city { font-size: 12px; font-weight: 900; letter-spacing: .6px; }
-    h1 { margin: 10px 0 0; white-space: nowrap; text-align: center; font-size: 20px; font-weight: 900; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
-    .received-wrap { position: absolute; right: 0; top: 0; width: 188px; break-inside: avoid; }
-    .received-box { border: 2px solid #0f172a; padding: 6px 10px; min-height: 84px; background: white; }
-    .received-org { text-align: center; font-size: 9px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
-    .received-title { margin-top: 4px; text-align: center; font-size: 15px; font-weight: 900; line-height: 1; letter-spacing: 4.2px; }
-    .stamp-lines { margin-top: 10px; }
-    .stamp-line { display: grid; grid-template-columns: 34px 1fr; align-items: end; gap: 6px; margin-top: 6px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; }
-    .stamp-value { min-height: 10px; border-bottom: 1px solid #334155; font-size: 8.5px; font-weight: 400; text-transform: none; }
-    .reference-row { display: flex; align-items: end; gap: 6px; width: 188px; margin-top: 4px; white-space: nowrap; font-size: 9.5px; font-weight: 800; }
-    .reference-row .label { min-width: 86px; }
+    .republic { font-size: 12px; font-weight: 900; letter-spacing: 1.7px; }
+    .government { margin-top: 1mm; white-space: nowrap; font-size: 22px; font-weight: 900; line-height: 1.05; letter-spacing: .7px; }
+    .city { font-size: 13px; font-weight: 900; letter-spacing: .6px; }
+    h1 { margin: 4mm 0 0; white-space: nowrap; text-align: center; font-size: 22px; font-weight: 900; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .received-wrap { position: absolute; right: 0; top: 0; width: 50mm; break-inside: avoid; }
+    .received-box { border: 2px solid #0f172a; padding: 2mm 3mm; min-height: 28mm; background: white; }
+    .received-org { text-align: center; font-size: 10px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
+    .received-title { margin-top: 1mm; text-align: center; font-size: 16px; font-weight: 900; line-height: 1; letter-spacing: 4.5px; }
+    .stamp-lines { margin-top: 3.5mm; }
+    .stamp-line { display: grid; grid-template-columns: 9mm 1fr; align-items: end; gap: 1.5mm; margin-top: 2mm; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+    .stamp-value { min-height: 4mm; border-bottom: 1px solid #334155; font-size: 9px; font-weight: 400; text-transform: none; }
+    .reference-row { display: flex; align-items: end; gap: 1.5mm; width: 50mm; margin-top: 1.5mm; white-space: nowrap; font-size: 10px; font-weight: 800; }
+    .reference-row .label { min-width: 24mm; }
     .reference-row .line { flex: 1; font-family: monospace; font-weight: 800; letter-spacing: .3px; text-align: center; }
-    .employee-table { margin-top: 4px; border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
+    .content { display: flex; flex: 1; flex-direction: column; gap: 1mm; padding: 1mm 2mm; }
+    .employee-table { border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
     .employee-row { display: grid; border-bottom: 1px solid #64748b; align-items: stretch; }
     .employee-row-top { grid-template-columns: 38% 62%; }
     .employee-row-bottom { grid-template-columns: 37% 38% 25%; }
-    .employee-cell { min-height: 27px; border-right: 1px solid #64748b; padding: 2px 6px; }
-    .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 6px; }
+    .employee-cell { min-height: 11mm; border-right: 1px solid #64748b; padding: 1mm 2mm; }
+    .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 2mm; }
     .employee-label { font-weight: 800; text-transform: uppercase; }
-    .employee-value { min-height: 13px; border-bottom: 1px solid #64748b; padding: 0 5px; text-align: center; }
-    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 1px; text-align: center; font-size: 8px; }
+    .employee-value { min-height: 5mm; border-bottom: 1px solid #64748b; padding: 0 5px; text-align: center; }
+    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; margin-top: 1mm; text-align: center; font-size: 9px; }
     .name-part { border-top: 1px solid #64748b; padding-top: 1px; }
-    .row { display: flex; gap: 7px; align-items: baseline; margin: 0 auto 2px; max-width: 680px; font-size: 9.5px; }
-    .label { min-width: 136px; font-weight: 700; }
-    .line { flex: 1; min-height: 13px; border-bottom: 1px solid #64748b; padding: 0 4px; }
-    .section { margin: 4px 0; border: 1px solid #64748b; padding: 5px; page-break-inside: avoid; }
-    .section-title { margin: 0 0 3px; text-align: center; font-weight: 800; text-transform: uppercase; }
-    .subsection-title { margin: 0 auto 3px; max-width: 680px; text-align: center; font-weight: 800; }
-    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 22px; max-width: 680px; margin: 0 auto 3px; }
-    .item { break-inside: avoid; display: flex; align-items: center; gap: 4px; min-height: 10px; line-height: 1.08; }
-    .box { display: inline-flex; flex: 0 0 auto; width: 9px; height: 9px; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 7px; }
-    table { width: 100%; border-collapse: collapse; margin: 3px auto; font-size: 9px; text-align: center; }
-    th, td { border: 1px solid #9ca3af; padding: 2px; height: 14px; }
+    .row { display: flex; gap: 2mm; align-items: baseline; margin: 0 auto 1.5mm; max-width: 176mm; font-size: 11px; }
+    .label { min-width: 42mm; font-weight: 700; }
+    .line { flex: 1; min-height: 5mm; border-bottom: 1px solid #64748b; padding: 0 1mm; }
+    .section { border: 1px solid #64748b; padding: 3mm; page-break-inside: avoid; }
+    .section-application { min-height: 103mm; }
+    .section-action { min-height: 82mm; }
+    .section-title { margin: 0 0 2mm; text-align: center; font-weight: 800; text-transform: uppercase; }
+    .subsection-title { margin: 0 auto 2mm; max-width: 176mm; text-align: center; font-weight: 800; }
+    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1mm 7mm; max-width: 176mm; margin: 0 auto 2mm; }
+    .item { break-inside: avoid; display: flex; align-items: center; gap: 1.5mm; min-height: 4mm; line-height: 1.15; }
+    .box { display: inline-flex; flex: 0 0 auto; width: 3mm; height: 3mm; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 2mm auto; font-size: 10px; text-align: center; }
+    th, td { border: 1px solid #9ca3af; padding: 1.5mm; height: 6mm; }
     th { background: #f1f5f9; font-weight: 800; }
-    .president { margin-top: 4px; text-align: center; }
-    .president p { margin: 1px 0; }
-    .sig { width: 55%; margin: 10px auto 3px; border-bottom: 1px solid #0f172a; }
+    .president { margin-top: 3mm; text-align: center; }
+    .president p { margin: 1mm 0; }
+    .sig { width: 55%; margin: 5mm auto 2mm; border-bottom: 1px solid #0f172a; }
     @media screen and (max-width: 640px) {
       .form-heading { min-height: 0; }
       .letterhead { grid-template-columns: 1fr; min-height: 0; padding-right: 0; }
@@ -615,7 +618,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       .employee-row-top, .employee-row-bottom { grid-template-columns: 1fr; }
       .leave-grid, .communication-grid, .recommendation-grid { grid-template-columns: 1fr; }
     }
-    @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; overflow: visible; } }
+    @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 190mm; max-width: 190mm; min-height: 277mm; height: 277mm; box-shadow: none; overflow: hidden; } }
   </style>
 </head>
 <body>
@@ -644,6 +647,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="reference-row">${printRow('Reference Number', getLeaveReferenceNumber(request))}</div>
       </div>
     </div>
+    <div class="content">
     <div class="employee-table">
       <div class="employee-row employee-row-top">
         <div class="employee-cell">
@@ -661,7 +665,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="employee-cell employee-cell-inline"><span class="employee-label">5. Salary</span><span class="employee-value">${escapeHtml(request.salary ?? '')}</span></div>
       </div>
     </div>
-    <section class="section">
+    <section class="section section-application">
       <p class="section-title">6. Details of Application</p>
       <p class="subsection-title">6.A Type of Leave to be Availed Of</p>
       <div class="leave-grid">${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)} ${escapeHtml(type)}</div>`).join('')}</div>
@@ -677,7 +681,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       </div>
       ${printRow('Signature of Applicant', request.owner)}
     </section>
-    <section class="section">
+    <section class="section section-action">
       <p class="section-title">7. Details of Action on Application</p>
       <p class="subsection-title">7.A Certification of Leave Credits</p>
       <table>
@@ -697,6 +701,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <p>College President</p>
       <div class="sig"></div>
       <p style="font-weight:700;">Authorized Official</p>
+    </div>
     </div>
   </main>
 </body>
