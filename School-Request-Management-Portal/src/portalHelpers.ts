@@ -557,54 +557,55 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: letter portrait; margin: 8mm; }
+    @page { size: A4 portrait; margin: 6mm; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #e2e8f0; padding: 10px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; line-height: 1.15; }
-    .sheet { max-width: 8.5in; min-height: 0; margin: 0 auto; background: white; padding: 18px 22px; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .form-heading { position: relative; min-height: 145px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
-    .letterhead { display: grid; grid-template-columns: 170px 76px minmax(260px, 1fr) 238px; gap: 12px; min-height: 120px; padding-right: 238px; text-align: center; }
-    .form-label { padding-top: 4px; text-align: left; font-size: 12px; font-weight: 800; line-height: 1.15; }
+    body { margin: 0; background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 9.5px; line-height: 1.08; }
+    .sheet { width: 210mm; max-width: 210mm; min-height: 0; margin: 0 auto; background: white; padding: 8mm; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; overflow: hidden; }
+    .form-heading { position: relative; min-height: 112px; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
+    .letterhead { display: grid; grid-template-columns: 138px 56px minmax(235px, 1fr) 194px; gap: 8px; min-height: 95px; padding-right: 194px; text-align: center; }
+    .form-label { padding-top: 2px; text-align: left; font-size: 10.5px; font-weight: 800; line-height: 1.12; }
     .form-label span { font-weight: 800; }
-    .logo { width: 70px; height: 70px; object-fit: contain; border-radius: 999px; }
-    .title-block { padding-top: 4px; text-align: center; }
-    .republic { font-size: 13px; font-weight: 900; letter-spacing: 2px; }
-    .government { margin-top: 4px; white-space: nowrap; font-size: 24px; font-weight: 900; line-height: 1.05; letter-spacing: .8px; }
-    .city { font-size: 14px; font-weight: 900; letter-spacing: .7px; }
-    h1 { margin: 16px 0 0; white-space: nowrap; text-align: center; font-size: 24px; font-weight: 900; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
-    .received-wrap { position: absolute; right: 0; top: 0; width: 224px; break-inside: avoid; }
-    .received-box { border: 2px solid #0f172a; padding: 8px 12px; min-height: 104px; background: white; }
-    .received-org { text-align: center; font-size: 11px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
-    .received-title { margin-top: 5px; text-align: center; font-size: 18px; font-weight: 900; line-height: 1; letter-spacing: 5px; }
-    .stamp-lines { margin-top: 14px; }
-    .stamp-line { display: grid; grid-template-columns: 42px 1fr; align-items: end; gap: 8px; margin-top: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-    .stamp-value { min-height: 12px; border-bottom: 1px solid #334155; font-size: 10px; font-weight: 400; text-transform: none; }
-    .reference-row { display: flex; align-items: end; gap: 8px; width: 224px; margin-top: 8px; white-space: nowrap; font-size: 12px; font-weight: 800; }
-    .reference-row .label { min-width: 102px; }
+    .logo { width: 54px; height: 54px; object-fit: contain; border-radius: 999px; }
+    .title-block { text-align: center; }
+    .republic { font-size: 11px; font-weight: 900; letter-spacing: 1.7px; }
+    .government { margin-top: 2px; white-space: nowrap; font-size: 20px; font-weight: 900; line-height: 1.05; letter-spacing: .7px; }
+    .city { font-size: 12px; font-weight: 900; letter-spacing: .6px; }
+    h1 { margin: 10px 0 0; white-space: nowrap; text-align: center; font-size: 20px; font-weight: 900; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .received-wrap { position: absolute; right: 0; top: 0; width: 188px; break-inside: avoid; }
+    .received-box { border: 2px solid #0f172a; padding: 6px 10px; min-height: 84px; background: white; }
+    .received-org { text-align: center; font-size: 9px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
+    .received-title { margin-top: 4px; text-align: center; font-size: 15px; font-weight: 900; line-height: 1; letter-spacing: 4.2px; }
+    .stamp-lines { margin-top: 10px; }
+    .stamp-line { display: grid; grid-template-columns: 34px 1fr; align-items: end; gap: 6px; margin-top: 6px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; }
+    .stamp-value { min-height: 10px; border-bottom: 1px solid #334155; font-size: 8.5px; font-weight: 400; text-transform: none; }
+    .reference-row { display: flex; align-items: end; gap: 6px; width: 188px; margin-top: 4px; white-space: nowrap; font-size: 9.5px; font-weight: 800; }
+    .reference-row .label { min-width: 86px; }
     .reference-row .line { flex: 1; font-family: monospace; font-weight: 800; letter-spacing: .3px; text-align: center; }
-    .employee-table { margin-top: 3px; border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
+    .employee-table { margin-top: 4px; border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
     .employee-row { display: grid; border-bottom: 1px solid #64748b; align-items: stretch; }
     .employee-row-top { grid-template-columns: 38% 62%; }
     .employee-row-bottom { grid-template-columns: 37% 38% 25%; }
-    .employee-cell { min-height: 40px; border-right: 1px solid #64748b; padding: 4px 6px; }
-    .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 8px; }
+    .employee-cell { min-height: 27px; border-right: 1px solid #64748b; padding: 2px 6px; }
+    .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 6px; }
     .employee-label { font-weight: 800; text-transform: uppercase; }
-    .employee-value { min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; text-align: center; }
-    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 1px; text-align: center; font-size: 9px; }
+    .employee-value { min-height: 13px; border-bottom: 1px solid #64748b; padding: 0 5px; text-align: center; }
+    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 1px; text-align: center; font-size: 8px; }
     .name-part { border-top: 1px solid #64748b; padding-top: 1px; }
-    .row { display: flex; gap: 8px; align-items: baseline; margin: 0 auto 6px; max-width: 690px; font-size: 11px; }
-    .label { min-width: 160px; font-weight: 700; }
-    .line { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; }
-    .section { margin: 8px 0; border: 1px solid #64748b; padding: 8px; page-break-inside: avoid; }
-    .section-title { margin: 0 0 6px; text-align: center; font-weight: 800; text-transform: uppercase; }
-    .subsection-title { margin: 0 auto 6px; max-width: 690px; text-align: center; font-weight: 800; }
-    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 26px; max-width: 690px; margin: 0 auto 6px; }
-    .item { break-inside: avoid; display: flex; align-items: center; gap: 5px; min-height: 14px; line-height: 1.15; }
-    .box { display: inline-flex; flex: 0 0 auto; width: 11px; height: 11px; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 8px; }
-    table { width: 100%; border-collapse: collapse; margin: 6px auto; font-size: 10px; text-align: center; }
-    th, td { border: 1px solid #9ca3af; padding: 4px; height: 19px; }
+    .row { display: flex; gap: 7px; align-items: baseline; margin: 0 auto 2px; max-width: 680px; font-size: 9.5px; }
+    .label { min-width: 136px; font-weight: 700; }
+    .line { flex: 1; min-height: 13px; border-bottom: 1px solid #64748b; padding: 0 4px; }
+    .section { margin: 4px 0; border: 1px solid #64748b; padding: 5px; page-break-inside: avoid; }
+    .section-title { margin: 0 0 3px; text-align: center; font-weight: 800; text-transform: uppercase; }
+    .subsection-title { margin: 0 auto 3px; max-width: 680px; text-align: center; font-weight: 800; }
+    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 22px; max-width: 680px; margin: 0 auto 3px; }
+    .item { break-inside: avoid; display: flex; align-items: center; gap: 4px; min-height: 10px; line-height: 1.08; }
+    .box { display: inline-flex; flex: 0 0 auto; width: 9px; height: 9px; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 7px; }
+    table { width: 100%; border-collapse: collapse; margin: 3px auto; font-size: 9px; text-align: center; }
+    th, td { border: 1px solid #9ca3af; padding: 2px; height: 14px; }
     th { background: #f1f5f9; font-weight: 800; }
-    .president { margin-top: 9px; text-align: center; }
-    .sig { width: 55%; margin: 16px auto 5px; border-bottom: 1px solid #0f172a; }
+    .president { margin-top: 4px; text-align: center; }
+    .president p { margin: 1px 0; }
+    .sig { width: 55%; margin: 10px auto 3px; border-bottom: 1px solid #0f172a; }
     @media screen and (max-width: 640px) {
       .form-heading { min-height: 0; }
       .letterhead { grid-template-columns: 1fr; min-height: 0; padding-right: 0; }
@@ -614,7 +615,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       .employee-row-top, .employee-row-bottom { grid-template-columns: 1fr; }
       .leave-grid, .communication-grid, .recommendation-grid { grid-template-columns: 1fr; }
     }
-    @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; } }
+    @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; overflow: visible; } }
   </style>
 </head>
 <body>

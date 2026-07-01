@@ -2550,48 +2550,48 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   return (
-    <div className="rounded-lg border border-[#d9d3cc] bg-white p-5 font-serif text-[11px] leading-tight text-slate-950 shadow-sm">
-      <div className="relative min-h-[145px] border-b-2 border-slate-900 pb-2 max-sm:flex max-sm:flex-col max-sm:gap-3">
+    <div className="mx-auto max-w-[210mm] rounded-lg border border-[#d9d3cc] bg-white p-3 font-serif text-[9.5px] leading-tight text-slate-950 shadow-sm">
+      <div className="relative min-h-[112px] border-b-2 border-slate-900 pb-1.5 max-sm:flex max-sm:flex-col max-sm:gap-3">
         <LeaveApplicationHeader />
         <div className="absolute right-0 top-0 max-sm:static max-sm:order-3 max-sm:flex max-sm:justify-end">
           <LeaveReceivedReferenceBlock request={request} />
         </div>
       </div>
-      <div className="space-y-2 pt-2">
+      <div className="space-y-1 pt-1">
         <div className="border-l border-t border-slate-500">
-          <div className="grid min-h-12 border-b border-slate-500 md:grid-cols-[38%_62%]">
+          <div className="grid min-h-9 border-b border-slate-500 md:grid-cols-[38%_62%]">
             <div className="border-r border-slate-500 px-2 py-1">
               <p className="font-extrabold uppercase">1. Office/Department</p>
-              <p className="mt-1 border-b border-slate-500 px-2 text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
+              <p className="mt-0.5 border-b border-slate-500 px-2 text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
             </div>
             <div className="border-r border-slate-500 px-2 py-1">
               <div className="flex items-baseline gap-2">
                 <span className="font-extrabold uppercase">2. Name:</span>
-                <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{request.owner}</span>
+                <span className="min-h-4 flex-1 border-b border-slate-500 px-2 text-center">{request.owner}</span>
               </div>
-              <div className="mt-1 grid grid-cols-3 gap-2 text-center text-[10px]">
+              <div className="mt-0.5 grid grid-cols-3 gap-2 text-center text-[8px]">
                 <span className="border-t border-slate-500">(Last)</span>
                 <span className="border-t border-slate-500">(First)</span>
                 <span className="border-t border-slate-500">(Middle)</span>
               </div>
             </div>
           </div>
-          <div className="grid min-h-10 border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
+          <div className="grid min-h-7 border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
             <OfficialInfoCell label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
             <OfficialInfoCell label="4. Position" value={request.position ?? ''} />
             <OfficialInfoCell label="5. Salary" value={request.salary ?? ''} />
           </div>
         </div>
-        <div className="border border-slate-500 p-3">
-          <p className="mb-2 text-center font-extrabold uppercase">6. Details of Application</p>
+        <div className="border border-slate-500 p-2">
+          <p className="mb-1 text-center font-extrabold uppercase">6. Details of Application</p>
           <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
-          {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <PrintLine label="Other leave type" value={request.customLeaveType.trim()} />}
-          <PrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
-          <PrintLine label="6.C Working days applied for" value={String(request.workingDays ?? getDateDuration(request.date, request.time))} />
-          <PrintLine label="Inclusive dates" value={request.inclusiveDates ?? getLeaveDateRange(request)} />
-          {request.leaveDuration && <PrintLine label="Leave Duration" value={getLeaveDurationText(request)} />}
-          <PrintCheckGroup title="6.D Communication" options={['Not Requested', 'Requested']} selected={request.communication ?? 'Not Requested'} />
-          <SignatureLine label="Signature of Applicant" value={request.owner} />
+          {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <CompactPrintLine label="Other leave type" value={request.customLeaveType.trim()} />}
+          <CompactPrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
+          <CompactPrintLine label="6.C Working days applied for" value={String(request.workingDays ?? getDateDuration(request.date, request.time))} />
+          <CompactPrintLine label="Inclusive dates" value={request.inclusiveDates ?? getLeaveDateRange(request)} />
+          {request.leaveDuration && <CompactPrintLine label="Leave Duration" value={getLeaveDurationText(request)} />}
+          <CompactPrintCheckGroup title="6.D Communication" options={['Not Requested', 'Requested']} selected={request.communication ?? 'Not Requested'} />
+          <CompactSignatureLine label="Signature of Applicant" value={request.owner} />
         </div>
         <LeaveActionSection request={request} />
       </div>
@@ -2601,26 +2601,26 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
 function OfficialInfoCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid min-h-10 grid-cols-[max-content_1fr] items-end gap-2 border-r border-slate-500 px-2 py-1">
+    <div className="grid min-h-7 grid-cols-[max-content_1fr] items-end gap-2 border-r border-slate-500 px-2 py-0.5">
       <span className="font-extrabold uppercase leading-none">{label}</span>
-      <span className="min-h-5 border-b border-slate-500 px-2 text-center leading-5">{value}</span>
+      <span className="min-h-4 border-b border-slate-500 px-2 text-center leading-4">{value}</span>
     </div>
   )
 }
 
 function LeaveApplicationHeader() {
   return (
-    <div className="grid min-h-[120px] grid-cols-[170px_76px_minmax(260px,1fr)_238px] items-start gap-3 pr-[238px] text-center max-sm:grid-cols-1 max-sm:pr-0">
-      <div className="pt-1 text-left text-[12px] font-bold leading-tight">
+    <div className="grid min-h-[95px] grid-cols-[138px_56px_minmax(235px,1fr)_194px] items-start gap-2 pr-[194px] text-center max-sm:grid-cols-1 max-sm:pr-0">
+      <div className="pt-0.5 text-left text-[10.5px] font-bold leading-tight">
         <p className="font-bold">Civil Service Form No. 6</p>
         <p>Revised 2020</p>
       </div>
-      <img src={ccdLogo} alt="City College of Davao logo" className="h-[70px] w-[70px] rounded-full object-contain" />
-      <div className="pt-1 text-center">
-        <p className="text-[13px] font-extrabold tracking-[.16em]">Republic of the Philippines</p>
-        <p className="mt-1 whitespace-nowrap text-[24px] font-extrabold leading-tight tracking-wide">CITY GOVERNMENT OF DAVAO</p>
-        <p className="text-[14px] font-extrabold tracking-wide">DAVAO CITY</p>
-        <h3 className="mt-4 whitespace-nowrap text-[24px] font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
+      <img src={ccdLogo} alt="City College of Davao logo" className="h-[54px] w-[54px] rounded-full object-contain" />
+      <div className="text-center">
+        <p className="text-[11px] font-extrabold tracking-[.14em]">Republic of the Philippines</p>
+        <p className="mt-0.5 whitespace-nowrap text-[20px] font-extrabold leading-tight tracking-wide">CITY GOVERNMENT OF DAVAO</p>
+        <p className="text-[12px] font-extrabold tracking-wide">DAVAO CITY</p>
+        <h3 className="mt-2.5 whitespace-nowrap text-[20px] font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
       </div>
     </div>
   )
@@ -2628,17 +2628,17 @@ function LeaveApplicationHeader() {
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="w-[224px] space-y-2 justify-self-end">
-      <div className="min-h-[104px] border-2 border-slate-800 bg-white px-3 py-2">
-        <p className="text-center text-[11px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-1 text-center text-[18px] font-extrabold leading-none tracking-[.32em]">RECEIVED</p>
-        <div className="mt-4 space-y-2">
+    <div className="w-[188px] space-y-1 justify-self-end">
+      <div className="min-h-[84px] border-2 border-slate-800 bg-white px-2.5 py-1.5">
+        <p className="text-center text-[9px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-1 text-center text-[15px] font-extrabold leading-none tracking-[.28em]">RECEIVED</p>
+        <div className="mt-3 space-y-1.5">
           <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
           <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
           <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
         </div>
       </div>
-      <div className="grid grid-cols-[102px_1fr] items-end gap-2 whitespace-nowrap text-[12px]">
+      <div className="grid grid-cols-[86px_1fr] items-end gap-1.5 whitespace-nowrap text-[9.5px]">
         <span className="font-bold">Reference Number:</span>
         <span className="min-h-4 border-b border-slate-700 px-1 text-center font-mono font-bold tracking-wide">{getLeaveReferenceNumber(request)}</span>
       </div>
@@ -2648,9 +2648,9 @@ function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
 
 function ReceivedStampLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[42px_1fr] items-end gap-2 text-[10px] font-bold uppercase">
+    <div className="grid grid-cols-[34px_1fr] items-end gap-1.5 text-[8.5px] font-bold uppercase">
       <span>{label}:</span>
-      <span className="min-h-4 border-b border-slate-700 px-1 text-[10px] font-normal normal-case">{value}</span>
+      <span className="min-h-3 border-b border-slate-700 px-1 text-[8.5px] font-normal normal-case">{value}</span>
     </div>
   )
 }
@@ -2678,28 +2678,28 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
   ]
 
   return (
-    <div className="border border-slate-500 p-3">
-      <p className="mb-2 text-center font-extrabold uppercase">7. Details of Action on Application</p>
+    <div className="border border-slate-500 p-2">
+      <p className="mb-1 text-center font-extrabold uppercase">7. Details of Action on Application</p>
       <p className="font-semibold">7.A Certification of Leave Credits</p>
-      <table className="my-2 w-full border-collapse text-center text-xs">
+      <table className="my-1 w-full border-collapse text-center text-[9px]">
         <thead>
-          <tr><th className="border border-slate-400 p-2" /><th className="border border-slate-400 p-2">Vacation Leave</th><th className="border border-slate-400 p-2">Sick Leave</th></tr>
+          <tr><th className="border border-slate-400 p-1" /><th className="border border-slate-400 p-1">Vacation Leave</th><th className="border border-slate-400 p-1">Sick Leave</th></tr>
         </thead>
         <tbody>
           {leaveCreditRows.map(([label, vacation, sick]) => (
-            <tr key={label}><td className="border border-slate-400 p-2 font-semibold">{label}</td><td className="border border-slate-400 p-2">{vacation}</td><td className="border border-slate-400 p-2">{sick}</td></tr>
+            <tr key={label}><td className="border border-slate-400 p-1 font-semibold">{label}</td><td className="border border-slate-400 p-1">{vacation}</td><td className="border border-slate-400 p-1">{sick}</td></tr>
           ))}
         </tbody>
       </table>
       <CompactPrintCheckGroup title="7.B Recommendation" options={['For approval', 'For disapproval']} selected={request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'} />
-      <PrintLine label="HR remarks" value={request.hrRemarks ?? request.updatedBy ?? ''} />
-      <PrintLine label="7.C Approved for" value={request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : ''} />
-      <PrintLine label="7.D Disapproved due to" value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
-      <div className="mt-3 text-center">
+      <CompactPrintLine label="HR remarks" value={request.hrRemarks ?? request.updatedBy ?? ''} />
+      <CompactPrintLine label="7.C Approved for" value={request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : ''} />
+      <CompactPrintLine label="7.D Disapproved due to" value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
+      <div className="mt-1 text-center">
         <p className="font-bold">Wenefredo E. Cagape, EdD, PhD</p>
         <p>College President</p>
-        <div className="mx-auto mt-5 w-2/3 border-b border-slate-700" />
-        <p className="mt-2 font-semibold">Authorized Official</p>
+        <div className="mx-auto mt-3 w-2/3 border-b border-slate-700" />
+        <p className="mt-1 font-semibold">Authorized Official</p>
       </div>
     </div>
   )
@@ -2708,16 +2708,34 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
 function CompactPrintCheckGroup({ options, selected, title }: { options: string[]; selected: string | string[]; title: string }) {
   const selectedValues = Array.isArray(selected) ? selected : [selected]
   return (
-    <div className="mx-auto max-w-[690px]">
-      <p className="mb-2 text-center font-semibold">{title}:</p>
-      <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
+    <div className="mx-auto max-w-[680px]">
+      <p className="mb-1 text-center font-semibold">{title}:</p>
+      <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
         {options.map((option) => (
           <span key={option} className="flex items-start gap-1.5 leading-tight">
-            <span className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center border border-slate-600 text-[9px]">{selectedValues.includes(option) ? 'x' : ''}</span>
+            <span className="mt-px flex h-2.5 w-2.5 shrink-0 items-center justify-center border border-slate-600 text-[7px]">{selectedValues.includes(option) ? 'x' : ''}</span>
             {option}
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+function CompactPrintLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mx-auto flex max-w-[680px] items-baseline gap-2">
+      <span className="min-w-36 font-semibold">{label}:</span>
+      <span className="min-h-4 flex-1 border-b border-slate-500 px-1">{value}</span>
+    </div>
+  )
+}
+
+function CompactSignatureLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mx-auto max-w-[680px]">
+      <p className="mb-0.5 font-semibold">{label}:</p>
+      <p className="min-h-5 border-b border-slate-700 px-1">{value}</p>
     </div>
   )
 }
