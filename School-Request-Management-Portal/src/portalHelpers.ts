@@ -1,6 +1,5 @@
 import { BadgeCheck, Bell, Building2, CalendarClock, CheckCircle2, Clock, FileText, Home, Info, Layers3, Megaphone, MessageSquare, PackageCheck, Save, ShieldCheck, User as UserIcon, UsersRound, XCircle } from 'lucide-react'
 import ccdLogo from './assets/ccd-logo.png'
-import davaoCitySeal from './assets/davao-city-seal.png'
 import { allLeaveKinds, documentKinds, facilities, messageAttachmentCache, studentRequestKinds, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type User } from './portalData'
 
 export type NotificationItem = {
@@ -560,49 +559,60 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <style>
     @page { size: letter portrait; margin: 8mm; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #e2e8f0; padding: 10px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; }
-    .sheet { max-width: 8.5in; min-height: 0; margin: 0 auto; background: white; padding: 14px 18px; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .form-heading { position: relative; min-height: 111px; padding-right: 160px; }
-    .letterhead { position: relative; text-align: center; padding: 0 105px 4px; }
-    .logo { position: absolute; left: calc(45% - 190px); top: 0; width: 56px; height: 56px; object-fit: contain; border-radius: 999px; }
-    h1 { margin: 5px 0 0; text-align: center; font-size: 17px; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
-    .received-wrap { position: absolute; right: 0; top: 0; width: 150px; break-inside: avoid; }
-    .received-box { border: 1px solid #0f172a; padding: 5px 7px 7px; min-height: 96px; }
+    body { margin: 0; background: #e2e8f0; padding: 10px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; line-height: 1.15; }
+    .sheet { max-width: 8.5in; min-height: 0; margin: 0 auto; background: white; padding: 18px 22px; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
+    .form-heading { position: relative; min-height: 128px; }
+    .letterhead { position: relative; min-height: 88px; border-bottom: 2px solid #334155; padding-bottom: 8px; text-align: center; }
+    .form-label { position: absolute; left: 0; top: 0; width: 145px; text-align: left; font-weight: 800; line-height: 1.15; }
+    .form-label span { font-weight: 700; }
+    .logo { position: absolute; left: calc(50% - 220px); top: 0; width: 64px; height: 64px; object-fit: contain; border-radius: 999px; }
+    .title-block { display: inline-block; min-width: 320px; padding: 12px 64px 0; text-align: center; }
+    .republic { font-weight: 700; letter-spacing: 1px; }
+    .government { font-size: 20px; font-weight: 900; line-height: 1.05; }
+    .city { font-weight: 700; }
+    h1 { margin: 6px 0 0; text-align: center; font-size: 19px; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .received-wrap { position: absolute; right: 0; top: 0; width: 218px; break-inside: avoid; }
+    .received-box { border: 1px solid #0f172a; padding: 5px 7px 7px; min-height: 96px; background: white; }
     .received-org { text-align: center; font-size: 7.5px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
     .received-title { margin-top: 3px; text-align: center; font-size: 14px; font-weight: 900; letter-spacing: 1.6px; }
     .stamp-lines { margin-top: 8px; }
     .stamp-line { display: grid; grid-template-columns: 25px 1fr; align-items: end; gap: 4px; margin-top: 4px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
     .stamp-value { min-height: 11px; border-bottom: 1px solid #64748b; font-size: 9px; font-weight: 400; text-transform: none; }
-    .reference-row { margin-top: 5px; font-size: 9px; }
-    .reference-row .label { min-width: 72px; }
+    .reference-row { display: flex; align-items: end; gap: 4px; width: 218px; margin-top: 5px; white-space: nowrap; font-size: 9px; }
+    .reference-row .label { min-width: 86px; }
     .reference-row .line { font-family: monospace; font-weight: 800; letter-spacing: .3px; }
     .employee-table { margin-top: 3px; border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
-    .employee-row { display: grid; border-bottom: 1px solid #64748b; }
+    .employee-row { display: grid; border-bottom: 1px solid #64748b; align-items: stretch; }
     .employee-row-top { grid-template-columns: 38% 62%; }
     .employee-row-bottom { grid-template-columns: 37% 38% 25%; }
-    .employee-cell { min-height: 31px; border-right: 1px solid #64748b; padding: 3px 6px; }
-    .employee-cell-inline { display: flex; align-items: baseline; gap: 8px; }
+    .employee-cell { min-height: 40px; border-right: 1px solid #64748b; padding: 4px 6px; }
+    .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 8px; }
     .employee-label { font-weight: 800; text-transform: uppercase; }
-    .employee-value { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; text-align: center; }
+    .employee-value { min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; text-align: center; }
     .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 1px; text-align: center; font-size: 9px; }
     .name-part { border-top: 1px solid #64748b; padding-top: 1px; }
-    .row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 11px; }
+    .row { display: flex; gap: 8px; align-items: baseline; margin: 0 auto 6px; max-width: 690px; font-size: 11px; }
     .label { min-width: 160px; font-weight: 700; }
     .line { flex: 1; min-height: 16px; border-bottom: 1px solid #64748b; padding: 0 5px 1px; }
-    .section { margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; padding: 8px; page-break-inside: avoid; }
-    .section-title { margin: 0 0 5px; font-weight: 800; color: #1e3a3a; }
-    .leave-grid { columns: 2; column-gap: 18px; }
-    .item { break-inside: avoid; display: flex; align-items: center; gap: 5px; margin: 3px 0; line-height: 1.15; }
+    .section { margin: 8px 0; border: 1px solid #64748b; padding: 8px; page-break-inside: avoid; }
+    .section-title { margin: 0 0 6px; text-align: center; font-weight: 800; text-transform: uppercase; }
+    .subsection-title { margin: 0 auto 6px; max-width: 690px; text-align: center; font-weight: 800; }
+    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 26px; max-width: 690px; margin: 0 auto 6px; }
+    .item { break-inside: avoid; display: flex; align-items: center; gap: 5px; min-height: 14px; line-height: 1.15; }
     .box { display: inline-flex; flex: 0 0 auto; width: 11px; height: 11px; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 8px; }
-    table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10px; text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin: 6px auto; font-size: 10px; text-align: center; }
     th, td { border: 1px solid #9ca3af; padding: 4px; height: 19px; }
     th { background: #f1f5f9; font-weight: 800; }
     .president { margin-top: 9px; text-align: center; }
     .sig { width: 55%; margin: 16px auto 5px; border-bottom: 1px solid #0f172a; }
     @media screen and (max-width: 640px) {
-      .form-heading { min-height: 0; padding-right: 0; }
+      .form-heading { min-height: 0; }
+      .letterhead { min-height: 150px; }
+      .logo { left: 50%; top: 40px; transform: translateX(-50%); }
+      .title-block { min-width: 0; padding: 96px 0 0; }
       .received-wrap { position: static; margin: 8px 0 0 auto; }
       .employee-row-top, .employee-row-bottom { grid-template-columns: 1fr; }
+      .leave-grid, .communication-grid, .recommendation-grid { grid-template-columns: 1fr; }
     }
     @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 100%; max-width: none; box-shadow: none; padding: 0; } }
   </style>
@@ -611,11 +621,13 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <main class="sheet">
     <div class="form-heading">
       <header class="letterhead">
-        <img class="logo" src="${davaoCitySeal}" alt="Davao City seal">
-        <div style="position:absolute; left:0; top:0; text-align:left; font-weight:800;">Civil Service Form No. 6<br><span style="font-weight:700;">Revised 2020</span></div>
-        <div style="margin-top:18px; font-weight:700; letter-spacing:1px;">Republic of the Philippines</div>
-        <div style="font-size:20px; font-weight:900;">CITY GOVERNMENT OF DAVAO</div>
-        <div style="font-weight:700;">DAVAO CITY</div>
+        <img class="logo" src="${ccdLogo}" alt="City College of Davao logo">
+        <div class="form-label">Civil Service Form No. 6<br><span>Revised 2020</span></div>
+        <div class="title-block">
+          <div class="republic">Republic of the Philippines</div>
+          <div class="government">CITY GOVERNMENT OF DAVAO</div>
+          <div class="city">DAVAO CITY</div>
+        </div>
       </header>
       <h1>APPLICATION FOR LEAVE</h1>
       <div class="received-wrap">
@@ -650,28 +662,32 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     </div>
     <section class="section">
       <p class="section-title">6. Details of Application</p>
-      <p class="section-title">6.A Type of Leave to be Availed Of</p>
+      <p class="subsection-title">6.A Type of Leave to be Availed Of</p>
       <div class="leave-grid">${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)} ${escapeHtml(type)}</div>`).join('')}</div>
       ${otherLeaveDetail}
       ${printRow('6.B Details of Leave', request.leaveDetail ?? '')}
       ${printRow('6.C Number of Working Days Applied For', String(request.workingDays ?? getDateDuration(request.date, request.time)))}
       ${printRow('Inclusive Dates', request.inclusiveDates ?? getLeaveDateRange(request))}
       ${request.leaveDuration ? printRow('Leave Duration', getLeaveDurationText(request)) : ''}
-      <p class="section-title">6.D Communication</p>
-      <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')} Not Requested</div>
-      <div class="item">${check(request.communication ?? '', 'Requested')} Requested</div>
+      <p class="subsection-title">6.D Communication</p>
+      <div class="communication-grid">
+        <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')} Not Requested</div>
+        <div class="item">${check(request.communication ?? '', 'Requested')} Requested</div>
+      </div>
       ${printRow('Signature of Applicant', request.owner)}
     </section>
     <section class="section">
       <p class="section-title">7. Details of Action on Application</p>
-      <p class="section-title">7.A Certification of Leave Credits</p>
+      <p class="subsection-title">7.A Certification of Leave Credits</p>
       <table>
         <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
         <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
       </table>
-      <p class="section-title">7.B Recommendation</p>
-      <div class="item">${check(recommendation, 'For approval')} For approval</div>
-      <div class="item">${check(recommendation, 'For disapproval')} For disapproval due to: ${escapeHtml(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}</div>
+      <p class="subsection-title">7.B Recommendation</p>
+      <div class="recommendation-grid">
+        <div class="item">${check(recommendation, 'For approval')} For approval</div>
+        <div class="item">${check(recommendation, 'For disapproval')} For disapproval due to: ${escapeHtml(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}</div>
+      </div>
       ${printRow('7.C Approved for', request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : '')}
       ${printRow('7.D Disapproved due to', request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
     </section>

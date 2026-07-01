@@ -32,7 +32,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import ccdLogo from './assets/ccd-logo.png'
-import davaoCitySeal from './assets/davao-city-seal.png'
 import AdminOfficeDashboard from './AdminOfficeDashboard'
 import EmployeeDashboard from './EmployeeDashboard'
 import HrDashboard from './HrDashboard'
@@ -2551,22 +2550,22 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   return (
-    <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 font-serif text-sm text-slate-950 shadow-sm">
-      <div className="relative min-h-[132px] pr-[180px] max-sm:min-h-0 max-sm:pr-0">
+    <div className="rounded-lg border border-[#d9d3cc] bg-white p-5 font-serif text-[11px] leading-tight text-slate-950 shadow-sm">
+      <div className="relative min-h-[128px] max-sm:flex max-sm:flex-col max-sm:gap-3">
         <LeaveApplicationHeader />
-        <h3 className="mt-2 text-center text-xl font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
-        <div className="absolute right-0 top-0 max-sm:static max-sm:mt-3 max-sm:flex max-sm:justify-end">
+        <h3 className="mt-2 text-center text-[19px] font-extrabold leading-none underline underline-offset-4 max-sm:order-2">APPLICATION FOR LEAVE</h3>
+        <div className="absolute right-0 top-0 max-sm:static max-sm:order-3 max-sm:flex max-sm:justify-end">
           <LeaveReceivedReferenceBlock request={request} />
         </div>
       </div>
-      <div className="space-y-2 pt-3 text-xs">
+      <div className="space-y-2 pt-2">
         <div className="border-l border-t border-slate-500">
-          <div className="grid border-b border-slate-500 md:grid-cols-[38%_62%]">
-            <div className="min-h-11 border-r border-slate-500 px-2 py-1">
+          <div className="grid min-h-12 border-b border-slate-500 md:grid-cols-[38%_62%]">
+            <div className="border-r border-slate-500 px-2 py-1">
               <p className="font-extrabold uppercase">1. Office/Department</p>
               <p className="mt-1 border-b border-slate-500 px-2 text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
             </div>
-            <div className="min-h-11 border-r border-slate-500 px-2 py-1">
+            <div className="border-r border-slate-500 px-2 py-1">
               <div className="flex items-baseline gap-2">
                 <span className="font-extrabold uppercase">2. Name:</span>
                 <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{request.owner}</span>
@@ -2578,14 +2577,14 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               </div>
             </div>
           </div>
-          <div className="grid border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
+          <div className="grid min-h-10 border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
             <OfficialInfoCell label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
             <OfficialInfoCell label="4. Position" value={request.position ?? ''} />
             <OfficialInfoCell label="5. Salary" value={request.salary ?? ''} />
           </div>
         </div>
-        <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
-          <p className="mb-2 font-bold">6. Details of Application</p>
+        <div className="border border-slate-500 p-3">
+          <p className="mb-2 text-center font-extrabold uppercase">6. Details of Application</p>
           <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
           {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <PrintLine label="Other leave type" value={request.customLeaveType.trim()} />}
           <PrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
@@ -2603,28 +2602,33 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
 function OfficialInfoCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-9 items-baseline gap-2 border-r border-slate-500 px-2 py-1">
-      <span className="font-extrabold uppercase">{label}</span>
-      <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{value}</span>
+    <div className="grid min-h-10 grid-cols-[max-content_1fr] items-end gap-2 border-r border-slate-500 px-2 py-1">
+      <span className="font-extrabold uppercase leading-none">{label}</span>
+      <span className="min-h-5 border-b border-slate-500 px-2 text-center leading-5">{value}</span>
     </div>
   )
 }
 
 function LeaveApplicationHeader() {
   return (
-    <PrintPreviewHeader logo={davaoCitySeal} logoAlt="Davao City seal">
-      <p className="font-bold">Civil Service Form No. 6</p>
-      <p className="text-xs">Revised 2020</p>
-      <p className="mt-3 text-sm font-semibold tracking-wide">Republic of the Philippines</p>
-      <p className="text-xl font-extrabold">CITY GOVERNMENT OF DAVAO</p>
-      <p className="font-semibold">DAVAO CITY</p>
-    </PrintPreviewHeader>
+    <div className="relative min-h-[88px] border-b-2 border-slate-700 pb-2 text-center max-sm:min-h-[150px]">
+      <div className="absolute left-0 top-0 w-36 text-left leading-tight">
+        <p className="font-bold">Civil Service Form No. 6</p>
+        <p>Revised 2020</p>
+      </div>
+      <img src={ccdLogo} alt="City College of Davao logo" className="absolute left-[calc(50%_-_220px)] top-0 h-16 w-16 rounded-full object-contain max-sm:left-1/2 max-sm:top-10 max-sm:-translate-x-1/2" />
+      <div className="mx-auto w-fit min-w-[320px] px-16 pt-3 text-center max-sm:min-w-0 max-sm:px-0 max-sm:pt-24">
+        <p className="font-semibold tracking-wide">Republic of the Philippines</p>
+        <p className="text-[20px] font-extrabold leading-tight">CITY GOVERNMENT OF DAVAO</p>
+        <p className="font-semibold">DAVAO CITY</p>
+      </div>
+    </div>
   )
 }
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="w-[170px] space-y-1 justify-self-end">
+    <div className="w-[218px] space-y-1 justify-self-end">
       <div className="min-h-28 border border-slate-800 bg-white px-2 py-1.5">
         <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
         <p className="mt-1 text-center text-sm font-extrabold tracking-[.16em]">RECEIVED</p>
@@ -2634,9 +2638,9 @@ function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
           <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
         </div>
       </div>
-      <div className="flex items-baseline gap-1 text-[10px]">
+      <div className="grid grid-cols-[86px_1fr] items-end gap-1 whitespace-nowrap text-[10px]">
         <span className="font-semibold">Reference No.</span>
-        <span className="min-h-4 flex-1 border-b border-slate-500 px-1 font-mono font-bold">{getLeaveReferenceNumber(request)}</span>
+        <span className="min-h-4 border-b border-slate-500 px-1 font-mono font-bold">{getLeaveReferenceNumber(request)}</span>
       </div>
     </div>
   )
@@ -2674,8 +2678,8 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
   ]
 
   return (
-    <div className="rounded-md border border-slate-300 bg-slate-50 p-3">
-      <p className="mb-2 font-bold">7. Details of Action on Application</p>
+    <div className="border border-slate-500 p-3">
+      <p className="mb-2 text-center font-extrabold uppercase">7. Details of Action on Application</p>
       <p className="font-semibold">7.A Certification of Leave Credits</p>
       <table className="my-2 w-full border-collapse text-center text-xs">
         <thead>
@@ -2704,9 +2708,9 @@ function LeaveActionSection({ request }: { request: PortalRequest }) {
 function CompactPrintCheckGroup({ options, selected, title }: { options: string[]; selected: string | string[]; title: string }) {
   const selectedValues = Array.isArray(selected) ? selected : [selected]
   return (
-    <div>
-      <p className="mb-2 font-semibold">{title}:</p>
-      <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+    <div className="mx-auto max-w-[690px]">
+      <p className="mb-2 text-center font-semibold">{title}:</p>
+      <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
         {options.map((option) => (
           <span key={option} className="flex items-start gap-1.5 leading-tight">
             <span className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center border border-slate-600 text-[9px]">{selectedValues.includes(option) ? 'x' : ''}</span>
