@@ -2589,98 +2589,190 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 }
 
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
+  const leaveType = getCivilServiceLeaveLabel(request.kind)
+  const leaveTypes = getCivilServiceLeaveTypes()
+  const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
+  const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
+  const leaveDetail = request.leaveDetail ?? ''
+  const leaveCreditRows = [
+    ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
+    ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
+    ['Balance', request.vacationLeaveBalance ?? '', request.sickLeaveBalance ?? ''],
+  ]
+
   return (
-    <div className="mx-auto flex min-h-[277mm] w-full max-w-[190mm] flex-col rounded-lg border border-[#d9d3cc] bg-white p-0 font-serif text-[11px] leading-tight text-slate-950 shadow-sm">
-      <div className="relative min-h-[38mm] border-b-2 border-slate-900 px-2 py-1.5 max-sm:flex max-sm:flex-col max-sm:gap-3">
-        <LeaveApplicationHeader />
-        <div className="absolute right-0 top-0 max-sm:static max-sm:order-3 max-sm:flex max-sm:justify-end">
+    <div className="mx-auto h-[277mm] w-[190mm] overflow-hidden bg-white p-0 font-serif text-[9px] leading-[1.05] text-black shadow-sm print:h-[277mm] print:w-[190mm] print:shadow-none">
+      <div className="relative h-[32mm] border-b border-black px-[2mm] pt-[2mm]">
+        <div className="grid grid-cols-[42mm_18mm_1fr_48mm] items-start gap-[2mm]">
+          <div className="pt-[1mm] text-left text-[10px] font-bold leading-tight">
+            <p>Civil Service Form No. 6</p>
+            <p>Revised 2020</p>
+          </div>
+          <img src={ccdLogo} alt="City College of Davao logo" className="h-[15mm] w-[15mm] object-contain" />
+          <div className="pr-[4mm] text-center">
+            <p className="text-[10px] font-bold">Republic of the Philippines</p>
+            <p className="mt-[1mm] text-[11px] font-bold">CITY GOVERNMENT OF DAVAO</p>
+            <p className="text-[10px] font-bold">DAVAO CITY</p>
+            <h3 className="mt-[3mm] text-[15px] font-extrabold underline underline-offset-2">APPLICATION FOR LEAVE</h3>
+          </div>
           <LeaveReceivedReferenceBlock request={request} />
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-1 px-2 py-1">
-        <div className="border-l border-t border-slate-500">
-          <div className="grid min-h-[11mm] border-b border-slate-500 md:grid-cols-[38%_62%]">
-            <div className="border-r border-slate-500 px-2 py-1">
-              <p className="font-extrabold uppercase">1. Office/Department</p>
-              <p className="mt-1 border-b border-slate-500 px-2 text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
+
+      <div className="px-[2mm] py-[1.5mm]">
+        <div className="border border-black">
+          <div className="grid h-[13mm] grid-cols-[38%_62%] border-b border-black">
+            <div className="border-r border-black px-[1.5mm] py-[1mm]">
+              <p className="font-bold">1. OFFICE/DEPARTMENT</p>
+              <p className="mt-[1.5mm] border-b border-black px-[1mm] text-center font-semibold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
             </div>
-            <div className="border-r border-slate-500 px-2 py-1">
-              <div className="flex items-baseline gap-2">
-                <span className="font-extrabold uppercase">2. Name:</span>
-                <span className="min-h-5 flex-1 border-b border-slate-500 px-2 text-center">{request.owner}</span>
+            <div className="px-[1.5mm] py-[1mm]">
+              <div className="grid grid-cols-[18mm_1fr] items-end gap-[2mm]">
+                <span className="font-bold">2. NAME:</span>
+                <span className="border-b border-black px-[1mm] text-center font-semibold">{request.owner}</span>
               </div>
-              <div className="mt-1 grid grid-cols-3 gap-2 text-center text-[9px]">
-                <span className="border-t border-slate-500">(Last)</span>
-                <span className="border-t border-slate-500">(First)</span>
-                <span className="border-t border-slate-500">(Middle)</span>
+              <div className="ml-[20mm] mt-[1mm] grid grid-cols-3 text-center text-[8px]">
+                <span>(Last)</span>
+                <span>(First)</span>
+                <span>(Middle)</span>
               </div>
             </div>
           </div>
-          <div className="grid min-h-[9mm] border-b border-slate-500 md:grid-cols-[37%_38%_25%]">
-            <OfficialInfoCell label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
-            <OfficialInfoCell label="4. Position" value={request.position ?? ''} />
-            <OfficialInfoCell label="5. Salary" value={request.salary ?? ''} />
+          <div className="grid h-[10mm] grid-cols-[37%_38%_25%]">
+            <OfficialInfoCell label="3. DATE OF FILING" value={formatDate(request.filedDate ?? request.date)} />
+            <OfficialInfoCell label="4. POSITION" value={request.position ?? ''} />
+            <OfficialInfoCell label="5. SALARY" value={request.salary ?? ''} last />
           </div>
         </div>
-        <div className="min-h-[103mm] border border-slate-500 p-3">
-          <p className="mb-2 text-center font-extrabold uppercase">6. Details of Application</p>
-          <CompactPrintCheckGroup title="6.A Type of leave to be availed of" options={getCivilServiceLeaveTypes()} selected={getCivilServiceLeaveLabel(request.kind)} />
-          {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <CompactPrintLine label="Other leave type" value={request.customLeaveType.trim()} />}
-          <CompactPrintLine label="6.B Details of leave" value={request.leaveDetail ?? ''} />
-          <CompactPrintLine label="6.C Working days applied for" value={String(request.workingDays ?? getDateDuration(request.date, request.time))} />
-          <CompactPrintLine label="Inclusive dates" value={request.inclusiveDates ?? getLeaveDateRange(request)} />
-          {request.leaveDuration && <CompactPrintLine label="Leave Duration" value={getLeaveDurationText(request)} />}
-          <CompactPrintCheckGroup title="6.D Communication" options={['Not Requested', 'Requested']} selected={request.communication ?? 'Not Requested'} />
-          <CompactSignatureLine label="Signature of Applicant" value={request.owner} />
+
+        <div className="mt-[1.5mm] border border-black">
+          <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">6. DETAILS OF APPLICATION</p>
+          <div className="grid h-[99mm] grid-cols-2 border-b border-black">
+            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+              <p className="mb-[1mm] font-bold">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
+              <div className="space-y-[.85mm]">
+                {leaveTypes.map((type) => <OfficialCheck key={type} checked={leaveType === type} label={type} />)}
+                {request.kind === 'Other Leave' && request.customLeaveType?.trim() && <OfficialLine label="Specify" value={request.customLeaveType.trim()} tight />}
+              </div>
+            </div>
+            <div className="px-[2mm] py-[1.5mm]">
+              <p className="mb-[1mm] font-bold">6.B DETAILS OF LEAVE</p>
+              <p className="italic">In case of Vacation/Special Privilege Leave:</p>
+              <OfficialCheck checked={/philippines/i.test(leaveDetail)} label="Within the Philippines" />
+              <OfficialLine label="Specify" value={leaveDetail} tight />
+              <OfficialCheck checked={/abroad/i.test(leaveDetail)} label="Abroad" />
+              <OfficialLine label="Specify" value={leaveDetail} tight />
+              <p className="mt-[1mm] italic">In case of Sick Leave:</p>
+              <OfficialCheck checked={/hospital|in patient/i.test(leaveDetail)} label="In Hospital" />
+              <OfficialLine label="Specify illness" value={leaveDetail} tight />
+              <OfficialCheck checked={/out patient|outpatient/i.test(leaveDetail)} label="Out Patient" />
+              <OfficialLine label="Specify illness" value={leaveDetail} tight />
+              <p className="mt-[1mm] italic">In case of Special Leave Benefits for Women:</p>
+              <OfficialLine label="Specify illness" value={leaveDetail} tight />
+              <p className="mt-[1mm] italic">In case of Study Leave:</p>
+              <OfficialCheck checked={/master|degree/i.test(leaveDetail)} label="Completion of Master's Degree" />
+              <OfficialCheck checked={/bar|board/i.test(leaveDetail)} label="BAR/Board Examination Review" />
+              <p className="mt-[1mm] italic">Other purpose:</p>
+              <OfficialCheck checked={/monetization/i.test(leaveDetail)} label="Monetization of Leave Credits" />
+              <OfficialCheck checked={/terminal/i.test(leaveDetail)} label="Terminal Leave" />
+            </div>
+          </div>
+          <div className="grid h-[30mm] grid-cols-2 border-b border-black">
+            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+              <p className="font-bold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
+              <OfficialLine value={`${workingDays} day(s)`} />
+              <p className="mt-[2mm] font-bold">INCLUSIVE DATES</p>
+              <OfficialLine value={inclusiveDates} />
+              {request.leaveDuration && <p className="mt-[1mm] text-center">{getLeaveDurationText(request)}</p>}
+            </div>
+            <div className="px-[2mm] py-[1.5mm]">
+              <p className="font-bold">6.D COMMUTATION</p>
+              <OfficialCheck checked={(request.communication ?? 'Not Requested') === 'Not Requested'} label="Not Requested" />
+              <OfficialCheck checked={(request.communication ?? '') === 'Requested'} label="Requested" />
+              <div className="mt-[8mm] text-center">
+                <p className="border-b border-black px-[2mm] font-semibold">{request.owner}</p>
+                <p className="mt-[1mm] text-[8.5px]">Signature of Applicant</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <LeaveActionSection request={request} />
+
+        <div className="mt-[1.5mm] border border-black">
+          <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">7. DETAILS OF ACTION ON APPLICATION</p>
+          <div className="grid h-[47mm] grid-cols-2 border-b border-black">
+            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+              <p className="font-bold">7.A CERTIFICATION OF LEAVE CREDITS</p>
+              <table className="mt-[1.5mm] w-full border-collapse text-center text-[9px]">
+                <thead><tr><th className="border border-black p-[1mm]" /><th className="border border-black p-[1mm]">Vacation Leave</th><th className="border border-black p-[1mm]">Sick Leave</th></tr></thead>
+                <tbody>
+                  {leaveCreditRows.map(([label, vacation, sick]) => (
+                    <tr key={label}><td className="border border-black p-[1mm] text-left font-semibold">{label}</td><td className="border border-black p-[1mm]">{vacation}</td><td className="border border-black p-[1mm]">{sick}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-[5mm] text-center">
+                <p className="border-b border-black px-[2mm]">{request.receivedBy ?? ''}</p>
+                <p className="mt-[1mm] text-[8.5px]">Authorized Officer</p>
+              </div>
+            </div>
+            <div className="px-[2mm] py-[1.5mm]">
+              <p className="font-bold">7.B RECOMMENDATION</p>
+              <OfficialCheck checked={recommendation === 'For approval'} label="For approval" />
+              <OfficialCheck checked={recommendation === 'For disapproval'} label="For disapproval due to" />
+              <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
+              <div className="mt-[8mm] text-center">
+                <p className="border-b border-black px-[2mm]">{request.updatedBy ?? ''}</p>
+                <p className="mt-[1mm] text-[8.5px]">Authorized Officer</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid h-[31mm] grid-cols-2">
+            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+              <p className="font-bold">7.C APPROVED FOR:</p>
+              <OfficialLine label="days with pay" value={request.status === 'Approved' ? workingDays : ''} tight />
+              <OfficialLine label="days without pay" value="" tight />
+              <OfficialLine label="others (Specify)" value="" tight />
+            </div>
+            <div className="px-[2mm] py-[1.5mm]">
+              <p className="font-bold">7.D DISAPPROVED DUE TO:</p>
+              <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
+              <div className="mt-[6mm] text-center">
+                <p className="border-b border-black px-[2mm] font-bold">Wenefredo E. Cagape, EdD, PhD</p>
+                <p className="mt-[1mm] text-[8.5px]">College President</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-function OfficialInfoCell({ label, value }: { label: string; value: string }) {
+function OfficialInfoCell({ label, last, value }: { label: string; last?: boolean; value: string }) {
   return (
-    <div className="grid min-h-[9mm] grid-cols-[max-content_1fr] items-end gap-2 border-r border-slate-500 px-2 py-1">
-      <span className="font-extrabold uppercase leading-none">{label}</span>
-      <span className="min-h-5 border-b border-slate-500 px-2 text-center leading-5">{value}</span>
-    </div>
-  )
-}
-
-function LeaveApplicationHeader() {
-  return (
-    <div className="grid min-h-[32mm] grid-cols-[36mm_16mm_minmax(62mm,1fr)_52mm] items-start gap-2 pr-[52mm] text-center max-sm:grid-cols-1 max-sm:pr-0">
-      <div className="pt-1 text-left text-[11px] font-bold leading-tight">
-        <p className="font-bold">Civil Service Form No. 6</p>
-        <p>Revised 2020</p>
-      </div>
-      <img src={ccdLogo} alt="City College of Davao logo" className="h-[15mm] w-[15mm] rounded-full object-contain" />
-      <div className="text-center">
-        <p className="text-[12px] font-extrabold tracking-[.14em]">Republic of the Philippines</p>
-        <p className="mt-1 whitespace-nowrap text-[22px] font-extrabold leading-tight tracking-wide">CITY GOVERNMENT OF DAVAO</p>
-        <p className="text-[13px] font-extrabold tracking-wide">DAVAO CITY</p>
-        <h3 className="mt-4 whitespace-nowrap text-[22px] font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
-      </div>
+    <div className={`grid grid-cols-[max-content_1fr] items-end gap-[2mm] px-[1.5mm] py-[1mm] ${last ? '' : 'border-r border-black'}`}>
+      <span className="font-bold">{label}</span>
+      <span className="border-b border-black px-[1mm] text-center font-semibold">{value}</span>
     </div>
   )
 }
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="w-[50mm] space-y-1.5 justify-self-end">
-      <div className="min-h-[28mm] border-2 border-slate-800 bg-white px-3 py-2">
-        <p className="text-center text-[10px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-1 text-center text-[16px] font-extrabold leading-none tracking-[.3em]">RECEIVED</p>
-        <div className="mt-3.5 space-y-2">
+    <div className="w-[48mm] justify-self-end">
+      <div className="h-[22mm] border-2 border-black bg-white px-[2mm] py-[1.5mm]">
+        <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-[.5mm] text-center text-[13px] font-extrabold leading-none tracking-[.25em]">RECEIVED</p>
+        <div className="mt-[1.5mm] space-y-[.8mm]">
           <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
           <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
           <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
         </div>
       </div>
-      <div className="grid grid-cols-[24mm_1fr] items-end gap-1.5 whitespace-nowrap text-[10px]">
+      <div className="mt-[1mm] grid grid-cols-[21mm_1fr] items-end gap-[1mm] whitespace-nowrap text-[8.5px]">
         <span className="font-bold">Reference Number:</span>
-        <span className="min-h-4 border-b border-slate-700 px-1 text-center font-mono font-bold tracking-wide">{getLeaveReferenceNumber(request)}</span>
+        <span className="border-b border-black px-[1mm] text-center font-mono font-bold">{getLeaveReferenceNumber(request)}</span>
       </div>
     </div>
   )
@@ -2688,9 +2780,27 @@ function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
 
 function ReceivedStampLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[9mm_1fr] items-end gap-1.5 text-[9px] font-bold uppercase">
+    <div className="grid grid-cols-[8mm_1fr] items-end gap-[1mm] text-[8px] font-bold uppercase">
       <span>{label}:</span>
-      <span className="min-h-4 border-b border-slate-700 px-1 text-[9px] font-normal normal-case">{value}</span>
+      <span className="min-h-[3mm] border-b border-black px-[1mm] text-[8px] font-normal normal-case">{value}</span>
+    </div>
+  )
+}
+
+function OfficialCheck({ checked, label }: { checked: boolean; label: string }) {
+  return (
+    <div className="flex min-h-[3.4mm] items-start gap-[1.5mm]">
+      <span className="mt-[.2mm] flex h-[3mm] w-[3mm] shrink-0 items-center justify-center border border-black text-[7px] leading-none">{checked ? 'x' : ''}</span>
+      <span>{label}</span>
+    </div>
+  )
+}
+
+function OfficialLine({ label, tight, value }: { label?: string; tight?: boolean; value: string }) {
+  return (
+    <div className={`grid ${label ? 'grid-cols-[26mm_1fr]' : 'grid-cols-1'} items-end gap-[1.5mm] ${tight ? 'mt-[.5mm]' : 'mt-[2mm]'}`}>
+      {label && <span>{label}</span>}
+      <span className="min-h-[4mm] border-b border-black px-[1mm] text-center">{value}</span>
     </div>
   )
 }
@@ -2710,75 +2820,6 @@ function PrintPreviewHeader({ children, logo = ccdLogo, logoAlt = 'City College 
   )
 }
 
-function LeaveActionSection({ request }: { request: PortalRequest }) {
-  const leaveCreditRows = [
-    ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
-    ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
-    ['Balance', request.vacationLeaveBalance ?? '', request.sickLeaveBalance ?? ''],
-  ]
-
-  return (
-    <div className="min-h-[82mm] border border-slate-500 p-3">
-      <p className="mb-2 text-center font-extrabold uppercase">7. Details of Action on Application</p>
-      <p className="font-semibold">7.A Certification of Leave Credits</p>
-      <table className="my-2 w-full border-collapse text-center text-[10px]">
-        <thead>
-          <tr><th className="border border-slate-400 p-1.5" /><th className="border border-slate-400 p-1.5">Vacation Leave</th><th className="border border-slate-400 p-1.5">Sick Leave</th></tr>
-        </thead>
-        <tbody>
-          {leaveCreditRows.map(([label, vacation, sick]) => (
-            <tr key={label}><td className="border border-slate-400 p-1.5 font-semibold">{label}</td><td className="border border-slate-400 p-1.5">{vacation}</td><td className="border border-slate-400 p-1.5">{sick}</td></tr>
-          ))}
-        </tbody>
-      </table>
-      <CompactPrintCheckGroup title="7.B Recommendation" options={['For approval', 'For disapproval']} selected={request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'} />
-      <CompactPrintLine label="HR remarks" value={request.hrRemarks ?? request.updatedBy ?? ''} />
-      <CompactPrintLine label="7.C Approved for" value={request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : ''} />
-      <CompactPrintLine label="7.D Disapproved due to" value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
-      <div className="mt-3 text-center">
-        <p className="font-bold">Wenefredo E. Cagape, EdD, PhD</p>
-        <p>College President</p>
-        <div className="mx-auto mt-5 w-2/3 border-b border-slate-700" />
-        <p className="mt-2 font-semibold">Authorized Official</p>
-      </div>
-    </div>
-  )
-}
-
-function CompactPrintCheckGroup({ options, selected, title }: { options: string[]; selected: string | string[]; title: string }) {
-  const selectedValues = Array.isArray(selected) ? selected : [selected]
-  return (
-    <div className="mx-auto max-w-[176mm]">
-      <p className="mb-2 text-center font-semibold">{title}:</p>
-      <div className="grid gap-x-7 gap-y-1 sm:grid-cols-2">
-        {options.map((option) => (
-          <span key={option} className="flex items-start gap-1.5 leading-tight">
-            <span className="mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center border border-slate-600 text-[8px]">{selectedValues.includes(option) ? 'x' : ''}</span>
-            {option}
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function CompactPrintLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mx-auto flex max-w-[176mm] items-baseline gap-2">
-      <span className="min-w-40 font-semibold">{label}:</span>
-      <span className="min-h-5 flex-1 border-b border-slate-500 px-1">{value}</span>
-    </div>
-  )
-}
-
-function CompactSignatureLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mx-auto max-w-[176mm]">
-      <p className="mb-1 font-semibold">{label}:</p>
-      <p className="min-h-8 border-b border-slate-700 px-1">{value}</p>
-    </div>
-  )
-}
 
 function OfficeClearanceTable() {
   return (

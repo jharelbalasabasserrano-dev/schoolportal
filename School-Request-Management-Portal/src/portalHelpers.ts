@@ -545,11 +545,13 @@ export function getExitClearancePrintHtml(request: PortalRequest) {
 export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const leaveTypes = getCivilServiceLeaveTypes()
   const check = (selected: string, option: string) => `<span class="box">${selected === option ? 'x' : ''}</span>`
+  const checked = (value: boolean) => `<span class="box">${value ? 'x' : ''}</span>`
+  const line = (value = '', label = '') => `<div class="line-row ${label ? '' : 'line-row-full'}">${label ? `<span>${escapeHtml(label)}</span>` : ''}<span class="line">${escapeHtml(value)}</span></div>`
   const leaveType = getCivilServiceLeaveLabel(request.kind)
-  const otherLeaveDetail = request.kind === 'Other Leave' && request.customLeaveType?.trim()
-    ? printRow('Other leave type', request.customLeaveType.trim())
-    : ''
   const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
+  const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
+  const leaveDetail = request.leaveDetail ?? ''
   const leaveCreditRows = [
     ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
     ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
@@ -564,73 +566,68 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <style>
     @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #0f172a; font-size: 11px; line-height: 1.15; }
-    .sheet { display: flex; flex-direction: column; width: 190mm; max-width: 190mm; min-height: 277mm; margin: 0 auto; background: white; padding: 0; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; overflow: hidden; }
-    .form-heading { position: relative; min-height: 38mm; border-bottom: 2px solid #0f172a; padding: 1.5mm 2mm; }
-    .letterhead { display: grid; grid-template-columns: 36mm 16mm minmax(62mm, 1fr) 52mm; gap: 2mm; min-height: 32mm; padding-right: 52mm; text-align: center; }
-    .form-label { padding-top: 1mm; text-align: left; font-size: 11px; font-weight: 800; line-height: 1.15; }
-    .form-label span { font-weight: 800; }
+    html, body { margin: 0; }
+    body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #000; font-size: 9px; line-height: 1.05; }
+    .sheet { width: 190mm; height: 277mm; margin: 0 auto; overflow: hidden; background: white; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
+    .form-heading { height: 32mm; border-bottom: 1px solid #000; padding: 2mm 2mm 0; }
+    .letterhead { display: grid; grid-template-columns: 42mm 18mm 1fr 48mm; gap: 2mm; align-items: start; }
+    .form-label { padding-top: 1mm; text-align: left; font-size: 10px; font-weight: 800; line-height: 1.15; }
     .logo { width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
-    .title-block { text-align: center; }
-    .republic { font-size: 12px; font-weight: 900; letter-spacing: 1.7px; }
-    .government { margin-top: 1mm; white-space: nowrap; font-size: 22px; font-weight: 900; line-height: 1.05; letter-spacing: .7px; }
-    .city { font-size: 13px; font-weight: 900; letter-spacing: .6px; }
-    h1 { margin: 4mm 0 0; white-space: nowrap; text-align: center; font-size: 22px; font-weight: 900; line-height: 1; text-decoration: underline; text-underline-offset: 4px; }
-    .received-wrap { position: absolute; right: 0; top: 0; width: 50mm; break-inside: avoid; }
-    .received-box { border: 2px solid #0f172a; padding: 2mm 3mm; min-height: 28mm; background: white; }
-    .received-org { text-align: center; font-size: 10px; font-weight: 900; line-height: 1.1; letter-spacing: .1px; }
-    .received-title { margin-top: 1mm; text-align: center; font-size: 16px; font-weight: 900; line-height: 1; letter-spacing: 4.5px; }
-    .stamp-lines { margin-top: 3.5mm; }
-    .stamp-line { display: grid; grid-template-columns: 9mm 1fr; align-items: end; gap: 1.5mm; margin-top: 2mm; font-size: 9px; font-weight: 800; text-transform: uppercase; }
-    .stamp-value { min-height: 4mm; border-bottom: 1px solid #334155; font-size: 9px; font-weight: 400; text-transform: none; }
-    .reference-row { display: flex; align-items: end; gap: 1.5mm; width: 50mm; margin-top: 1.5mm; white-space: nowrap; font-size: 10px; font-weight: 800; }
-    .reference-row .label { min-width: 24mm; }
-    .reference-row .line { flex: 1; font-family: monospace; font-weight: 800; letter-spacing: .3px; text-align: center; }
-    .content { display: flex; flex: 1; flex-direction: column; gap: 1mm; padding: 1mm 2mm; }
-    .employee-table { border-top: 1px solid #64748b; border-left: 1px solid #64748b; }
-    .employee-row { display: grid; border-bottom: 1px solid #64748b; align-items: stretch; }
+    .title-block { padding-right: 4mm; text-align: center; }
+    .republic, .city { font-size: 10px; font-weight: 900; }
+    .government { margin-top: 1mm; font-size: 11px; font-weight: 900; }
+    h1 { margin: 3mm 0 0; text-align: center; font-size: 15px; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
+    .received-wrap { width: 48mm; }
+    .received-box { height: 22mm; border: 2px solid #000; padding: 1.5mm 2mm; background: white; }
+    .received-org { text-align: center; font-size: 8px; font-weight: 900; line-height: 1.1; }
+    .received-title { margin-top: .5mm; text-align: center; font-size: 13px; font-weight: 900; line-height: 1; letter-spacing: 3px; }
+    .stamp-lines { margin-top: 1.5mm; }
+    .stamp-line { display: grid; grid-template-columns: 8mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+    .stamp-value { min-height: 3mm; border-bottom: 1px solid #000; font-size: 8px; font-weight: 400; text-transform: none; }
+    .reference-row { display: grid; grid-template-columns: 21mm 1fr; align-items: end; gap: 1mm; margin-top: 1mm; white-space: nowrap; font-size: 8.5px; font-weight: 800; }
+    .reference-row .ref-line { border-bottom: 1px solid #000; font-family: monospace; text-align: center; }
+    .content { padding: 1.5mm 2mm; }
+    .employee-table, .section { border: 1px solid #000; }
+    .employee-row { display: grid; align-items: stretch; }
     .employee-row-top { grid-template-columns: 38% 62%; }
     .employee-row-bottom { grid-template-columns: 37% 38% 25%; }
-    .employee-cell { min-height: 11mm; border-right: 1px solid #64748b; padding: 1mm 2mm; }
+    .employee-row-top { height: 13mm; border-bottom: 1px solid #000; }
+    .employee-row-bottom { height: 10mm; }
+    .employee-cell { border-right: 1px solid #000; padding: 1mm 1.5mm; }
+    .employee-cell:last-child { border-right: 0; }
     .employee-cell-inline { display: grid; grid-template-columns: max-content 1fr; align-items: end; gap: 2mm; }
     .employee-label { font-weight: 800; text-transform: uppercase; }
-    .employee-value { min-height: 5mm; border-bottom: 1px solid #64748b; padding: 0 5px; text-align: center; }
-    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; margin-top: 1mm; text-align: center; font-size: 9px; }
-    .name-part { border-top: 1px solid #64748b; padding-top: 1px; }
-    .row { display: flex; gap: 2mm; align-items: baseline; margin: 0 auto 1.5mm; max-width: 176mm; font-size: 11px; }
-    .label { min-width: 42mm; font-weight: 700; }
-    .line { flex: 1; min-height: 5mm; border-bottom: 1px solid #64748b; padding: 0 1mm; }
-    .section { border: 1px solid #64748b; padding: 3mm; page-break-inside: avoid; }
-    .section-application { min-height: 103mm; }
-    .section-action { min-height: 82mm; }
-    .section-title { margin: 0 0 2mm; text-align: center; font-weight: 800; text-transform: uppercase; }
-    .subsection-title { margin: 0 auto 2mm; max-width: 176mm; text-align: center; font-weight: 800; }
-    .leave-grid, .communication-grid, .recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1mm 7mm; max-width: 176mm; margin: 0 auto 2mm; }
-    .item { break-inside: avoid; display: flex; align-items: center; gap: 1.5mm; min-height: 4mm; line-height: 1.15; }
-    .box { display: inline-flex; flex: 0 0 auto; width: 3mm; height: 3mm; align-items: center; justify-content: center; border: 1px solid #334155; font-size: 8px; }
-    table { width: 100%; border-collapse: collapse; margin: 2mm auto; font-size: 10px; text-align: center; }
-    th, td { border: 1px solid #9ca3af; padding: 1.5mm; height: 6mm; }
-    th { background: #f1f5f9; font-weight: 800; }
-    .president { margin-top: 3mm; text-align: center; }
-    .president p { margin: 1mm 0; }
-    .sig { width: 55%; margin: 5mm auto 2mm; border-bottom: 1px solid #0f172a; }
-    @media screen and (max-width: 640px) {
-      .form-heading { min-height: 0; }
-      .letterhead { grid-template-columns: 1fr; min-height: 0; padding-right: 0; }
-      .logo { margin: 0 auto; }
-      .government, h1 { white-space: normal; }
-      .received-wrap { position: static; margin: 8px 0 0 auto; }
-      .employee-row-top, .employee-row-bottom { grid-template-columns: 1fr; }
-      .leave-grid, .communication-grid, .recommendation-grid { grid-template-columns: 1fr; }
-    }
-    @media print { html, body { width: 100%; min-height: 0; } body { background: white; padding: 0; } .sheet { width: 190mm; max-width: 190mm; min-height: 277mm; height: 277mm; box-shadow: none; overflow: hidden; } }
+    .employee-value { border-bottom: 1px solid #000; padding: 0 1mm; text-align: center; font-weight: 700; }
+    .office-value { margin-top: 1.5mm; }
+    .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1mm 0 0 20mm; text-align: center; font-size: 8px; }
+    .section { margin-top: 1.5mm; }
+    .section-title { margin: 0; border-bottom: 1px solid #000; padding: 1mm 0; text-align: center; font-size: 10px; font-weight: 900; }
+    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: 99mm; border-bottom: 1px solid #000; }
+    .application-bottom, .action-top, .action-bottom { display: grid; grid-template-columns: 1fr 1fr; }
+    .application-bottom { height: 30mm; }
+    .action-top { height: 47mm; border-bottom: 1px solid #000; }
+    .action-bottom { height: 31mm; }
+    .cell { padding: 1.5mm 2mm; }
+    .cell-left { border-right: 1px solid #000; }
+    .subhead { margin: 0 0 1mm; font-weight: 900; }
+    .item { display: flex; align-items: flex-start; gap: 1.5mm; min-height: 3.4mm; }
+    .box { display: inline-flex; flex: 0 0 auto; width: 3mm; height: 3mm; align-items: center; justify-content: center; border: 1px solid #000; font-size: 7px; line-height: 1; }
+    .italic { margin: 1mm 0 .5mm; font-style: italic; }
+    .line-row { display: grid; grid-template-columns: 26mm 1fr; align-items: end; gap: 1.5mm; margin-top: .5mm; }
+    .line-row-full { grid-template-columns: 1fr; margin-top: 2mm; }
+    .line { min-height: 4mm; border-bottom: 1px solid #000; padding: 0 1mm; text-align: center; }
+    .signature { margin-top: 8mm; text-align: center; }
+    .signature .line, .president-line { display: block; border-bottom: 1px solid #000; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; font-size: 9px; text-align: center; }
+    th, td { border: 1px solid #000; padding: 1mm; }
+    @media print { body { background: white; padding: 0; } .sheet { box-shadow: none; } }
   </style>
 </head>
 <body>
   <main class="sheet">
     <div class="form-heading">
       <header class="letterhead">
-        <div class="form-label">Civil Service Form No. 6<br><span>Revised 2020</span></div>
+        <div class="form-label">Civil Service Form No. 6<br>Revised 2020</div>
         <img class="logo" src="${ccdLogo}" alt="City College of Davao logo">
         <div class="title-block">
           <div class="republic">Republic of the Philippines</div>
@@ -649,7 +646,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             <div class="stamp-line"><span>By:</span><span class="stamp-value">${escapeHtml(request.receivedBy ?? '')}</span></div>
           </div>
         </div>
-        <div class="reference-row">${printRow('Reference Number', getLeaveReferenceNumber(request))}</div>
+        <div class="reference-row"><span>Reference Number:</span><span class="ref-line">${escapeHtml(getLeaveReferenceNumber(request))}</span></div>
       </div>
     </div>
     <div class="content">
@@ -657,7 +654,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
       <div class="employee-row employee-row-top">
         <div class="employee-cell">
           <span class="employee-label">1. Office/Department</span>
-          <div class="employee-value">${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
+          <div class="employee-value office-value">${escapeHtml(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')}</div>
         </div>
         <div class="employee-cell">
           <div class="employee-cell-inline"><span class="employee-label">2. Name:</span><span class="employee-value">${escapeHtml(request.owner)}</span></div>
@@ -670,43 +667,85 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="employee-cell employee-cell-inline"><span class="employee-label">5. Salary</span><span class="employee-value">${escapeHtml(request.salary ?? '')}</span></div>
       </div>
     </div>
-    <section class="section section-application">
+    <section class="section">
       <p class="section-title">6. Details of Application</p>
-      <p class="subsection-title">6.A Type of Leave to be Availed Of</p>
-      <div class="leave-grid">${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)} ${escapeHtml(type)}</div>`).join('')}</div>
-      ${otherLeaveDetail}
-      ${printRow('6.B Details of Leave', request.leaveDetail ?? '')}
-      ${printRow('6.C Number of Working Days Applied For', String(request.workingDays ?? getDateDuration(request.date, request.time)))}
-      ${printRow('Inclusive Dates', request.inclusiveDates ?? getLeaveDateRange(request))}
-      ${request.leaveDuration ? printRow('Leave Duration', getLeaveDurationText(request)) : ''}
-      <p class="subsection-title">6.D Communication</p>
-      <div class="communication-grid">
-        <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')} Not Requested</div>
-        <div class="item">${check(request.communication ?? '', 'Requested')} Requested</div>
+      <div class="application-grid">
+        <div class="cell cell-left">
+          <p class="subhead">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
+          ${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)}<span>${escapeHtml(type)}</span></div>`).join('')}
+          ${request.kind === 'Other Leave' && request.customLeaveType?.trim() ? line(request.customLeaveType.trim(), 'Specify') : ''}
+        </div>
+        <div class="cell">
+          <p class="subhead">6.B DETAILS OF LEAVE</p>
+          <p class="italic">In case of Vacation/Special Privilege Leave:</p>
+          <div class="item">${checked(/philippines/i.test(leaveDetail))}<span>Within the Philippines</span></div>
+          ${line(leaveDetail, 'Specify')}
+          <div class="item">${checked(/abroad/i.test(leaveDetail))}<span>Abroad</span></div>
+          ${line(leaveDetail, 'Specify')}
+          <p class="italic">In case of Sick Leave:</p>
+          <div class="item">${checked(/hospital|in patient/i.test(leaveDetail))}<span>In Hospital</span></div>
+          ${line(leaveDetail, 'Specify illness')}
+          <div class="item">${checked(/out patient|outpatient/i.test(leaveDetail))}<span>Out Patient</span></div>
+          ${line(leaveDetail, 'Specify illness')}
+          <p class="italic">In case of Special Leave Benefits for Women:</p>
+          ${line(leaveDetail, 'Specify illness')}
+          <p class="italic">In case of Study Leave:</p>
+          <div class="item">${checked(/master|degree/i.test(leaveDetail))}<span>Completion of Master's Degree</span></div>
+          <div class="item">${checked(/bar|board/i.test(leaveDetail))}<span>BAR/Board Examination Review</span></div>
+          <p class="italic">Other purpose:</p>
+          <div class="item">${checked(/monetization/i.test(leaveDetail))}<span>Monetization of Leave Credits</span></div>
+          <div class="item">${checked(/terminal/i.test(leaveDetail))}<span>Terminal Leave</span></div>
+        </div>
       </div>
-      ${printRow('Signature of Applicant', request.owner)}
+      <div class="application-bottom">
+        <div class="cell cell-left">
+          <p class="subhead">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
+          ${line(`${workingDays} day(s)`)}
+          <p class="subhead" style="margin-top:2mm;">INCLUSIVE DATES</p>
+          ${line(inclusiveDates)}
+          ${request.leaveDuration ? `<p style="margin:1mm 0 0;text-align:center;">${escapeHtml(getLeaveDurationText(request))}</p>` : ''}
+        </div>
+        <div class="cell">
+          <p class="subhead">6.D COMMUTATION</p>
+          <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')}<span>Not Requested</span></div>
+          <div class="item">${check(request.communication ?? '', 'Requested')}<span>Requested</span></div>
+          <div class="signature"><span class="line">${escapeHtml(request.owner)}</span><p>Signature of Applicant</p></div>
+        </div>
+      </div>
     </section>
-    <section class="section section-action">
+    <section class="section">
       <p class="section-title">7. Details of Action on Application</p>
-      <p class="subsection-title">7.A Certification of Leave Credits</p>
-      <table>
-        <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
-        <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
-      </table>
-      <p class="subsection-title">7.B Recommendation</p>
-      <div class="recommendation-grid">
-        <div class="item">${check(recommendation, 'For approval')} For approval</div>
-        <div class="item">${check(recommendation, 'For disapproval')} For disapproval due to: ${escapeHtml(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}</div>
+      <div class="action-top">
+        <div class="cell cell-left">
+          <p class="subhead">7.A CERTIFICATION OF LEAVE CREDITS</p>
+          <table>
+            <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
+            <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td style="text-align:left;"><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
+          </table>
+          <div class="signature" style="margin-top:5mm;"><span class="line">${escapeHtml(request.receivedBy ?? '')}</span><p>Authorized Officer</p></div>
+        </div>
+        <div class="cell">
+          <p class="subhead">7.B RECOMMENDATION</p>
+          <div class="item">${check(recommendation, 'For approval')}<span>For approval</span></div>
+          <div class="item">${check(recommendation, 'For disapproval')}<span>For disapproval due to</span></div>
+          ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+          <div class="signature"><span class="line">${escapeHtml(request.updatedBy ?? '')}</span><p>Authorized Officer</p></div>
+        </div>
       </div>
-      ${printRow('7.C Approved for', request.status === 'Approved' ? `${request.workingDays ?? getDateDuration(request.date, request.time)} day(s) with pay` : '')}
-      ${printRow('7.D Disapproved due to', request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+      <div class="action-bottom">
+        <div class="cell cell-left">
+          <p class="subhead">7.C APPROVED FOR:</p>
+          ${line(request.status === 'Approved' ? workingDays : '', 'days with pay')}
+          ${line('', 'days without pay')}
+          ${line('', 'others (Specify)')}
+        </div>
+        <div class="cell">
+          <p class="subhead">7.D DISAPPROVED DUE TO:</p>
+          ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+          <div style="margin-top:6mm;text-align:center;"><span class="president-line">Wenefredo E. Cagape, EdD, PhD</span><p>College President</p></div>
+        </div>
+      </div>
     </section>
-    <div class="president">
-      <p style="font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
-      <p>College President</p>
-      <div class="sig"></div>
-      <p style="font-weight:700;">Authorized Official</p>
-    </div>
     </div>
   </main>
 </body>
