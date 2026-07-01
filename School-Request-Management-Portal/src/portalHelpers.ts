@@ -567,22 +567,21 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; }
-    body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #000; font-size: 9px; line-height: 1.05; }
+    body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", serif; color: #000; font-size: 9.5px; line-height: 1.08; }
     .sheet { width: 190mm; height: 277mm; margin: 0 auto; overflow: hidden; background: white; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .form-heading { height: 32mm; border-bottom: 1px solid #000; padding: 2mm 2mm 0; }
-    .letterhead { display: grid; grid-template-columns: 42mm 18mm 1fr 48mm; gap: 2mm; align-items: start; }
-    .form-label { padding-top: 1mm; text-align: left; font-size: 10px; font-weight: 800; line-height: 1.15; }
-    .logo { width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
-    .title-block { padding-right: 4mm; text-align: center; }
+    .form-heading { position: relative; height: 36mm; border-bottom: 1px solid #000; padding: 2mm 2mm 0; }
+    .form-label { position: absolute; left: 2mm; top: 3mm; text-align: left; font-size: 10px; font-weight: 800; line-height: 1.15; }
+    .logo { position: absolute; left: calc(50% - 48mm); top: 3mm; width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
+    .title-block { position: absolute; left: 50%; top: 3mm; width: 92mm; transform: translateX(-50%); text-align: center; }
     .republic, .city { font-size: 10px; font-weight: 900; }
     .government { margin-top: 1mm; font-size: 11px; font-weight: 900; }
-    h1 { margin: 3mm 0 0; text-align: center; font-size: 15px; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
-    .received-wrap { width: 48mm; }
-    .received-box { height: 22mm; border: 2px solid #000; padding: 1.5mm 2mm; background: white; }
+    h1 { margin: 4mm 0 0; text-align: center; font-size: 15px; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
+    .received-wrap { position: absolute; right: 2mm; top: 2mm; width: 48mm; }
+    .received-box { height: 25mm; border: 2px solid #000; padding: 1.5mm 2mm; background: white; }
     .received-org { text-align: center; font-size: 8px; font-weight: 900; line-height: 1.1; }
-    .received-title { margin-top: .5mm; text-align: center; font-size: 13px; font-weight: 900; line-height: 1; letter-spacing: 3px; }
-    .stamp-lines { margin-top: 1.5mm; }
-    .stamp-line { display: grid; grid-template-columns: 8mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+    .received-title { margin-top: 1mm; text-align: center; font-size: 13px; font-weight: 900; line-height: 1; letter-spacing: 3px; }
+    .stamp-lines { margin-top: 2.5mm; }
+    .stamp-line { display: grid; grid-template-columns: 8mm 1fr; align-items: end; gap: 1mm; margin-top: 1mm; font-size: 8px; font-weight: 800; text-transform: uppercase; }
     .stamp-value { min-height: 3mm; border-bottom: 1px solid #000; font-size: 8px; font-weight: 400; text-transform: none; }
     .reference-row { display: grid; grid-template-columns: 21mm 1fr; align-items: end; gap: 1mm; margin-top: 1mm; white-space: nowrap; font-size: 8.5px; font-weight: 800; }
     .reference-row .ref-line { border-bottom: 1px solid #000; font-family: monospace; text-align: center; }
@@ -602,10 +601,10 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .name-parts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 1mm 0 0 20mm; text-align: center; font-size: 8px; }
     .section { margin-top: 1.5mm; }
     .section-title { margin: 0; border-bottom: 1px solid #000; padding: 1mm 0; text-align: center; font-size: 10px; font-weight: 900; }
-    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: 99mm; border-bottom: 1px solid #000; }
+    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: 106mm; border-bottom: 1px solid #000; }
     .application-bottom, .action-top, .action-bottom { display: grid; grid-template-columns: 1fr 1fr; }
-    .application-bottom { height: 30mm; }
-    .action-top { height: 47mm; border-bottom: 1px solid #000; }
+    .application-bottom { height: 33mm; }
+    .action-top { height: 52mm; border-bottom: 1px solid #000; }
     .action-bottom { height: 31mm; }
     .cell { padding: 1.5mm 2mm; }
     .cell-left { border-right: 1px solid #000; }
@@ -626,16 +625,14 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
 <body>
   <main class="sheet">
     <div class="form-heading">
-      <header class="letterhead">
-        <div class="form-label">Civil Service Form No. 6<br>Revised 2020</div>
-        <img class="logo" src="${ccdLogo}" alt="City College of Davao logo">
-        <div class="title-block">
-          <div class="republic">Republic of the Philippines</div>
-          <div class="government">CITY GOVERNMENT OF DAVAO</div>
-          <div class="city">DAVAO CITY</div>
-          <h1>APPLICATION FOR LEAVE</h1>
-        </div>
-      </header>
+      <div class="form-label">Civil Service Form No. 6<br>Revised 2020</div>
+      <img class="logo" src="${ccdLogo}" alt="City College of Davao logo">
+      <div class="title-block">
+        <div class="republic">Republic of the Philippines</div>
+        <div class="government">CITY GOVERNMENT OF DAVAO</div>
+        <div class="city">DAVAO CITY</div>
+        <h1>APPLICATION FOR LEAVE</h1>
+      </div>
       <div class="received-wrap">
         <div class="received-box">
           <div class="received-org">CITY COLLEGE OF DAVAO</div>

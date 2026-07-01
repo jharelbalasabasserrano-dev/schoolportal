@@ -2602,20 +2602,20 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   ]
 
   return (
-    <div className="mx-auto h-[277mm] w-[190mm] overflow-hidden bg-white p-0 font-serif text-[9px] leading-[1.05] text-black shadow-sm print:h-[277mm] print:w-[190mm] print:shadow-none">
-      <div className="relative h-[32mm] border-b border-black px-[2mm] pt-[2mm]">
-        <div className="grid grid-cols-[42mm_18mm_1fr_48mm] items-start gap-[2mm]">
-          <div className="pt-[1mm] text-left text-[10px] font-bold leading-tight">
-            <p>Civil Service Form No. 6</p>
-            <p>Revised 2020</p>
-          </div>
-          <img src={ccdLogo} alt="City College of Davao logo" className="h-[15mm] w-[15mm] object-contain" />
-          <div className="pr-[4mm] text-center">
-            <p className="text-[10px] font-bold">Republic of the Philippines</p>
-            <p className="mt-[1mm] text-[11px] font-bold">CITY GOVERNMENT OF DAVAO</p>
-            <p className="text-[10px] font-bold">DAVAO CITY</p>
-            <h3 className="mt-[3mm] text-[15px] font-extrabold underline underline-offset-2">APPLICATION FOR LEAVE</h3>
-          </div>
+    <div className="mx-auto h-[277mm] w-[190mm] overflow-hidden bg-white p-0 font-serif text-[9.5px] leading-[1.08] text-black shadow-sm print:h-[277mm] print:w-[190mm] print:shadow-none">
+      <div className="relative h-[36mm] border-b border-black px-[2mm] pt-[2mm]">
+        <div className="absolute left-[2mm] top-[3mm] text-left text-[10px] font-bold leading-tight">
+          <p>Civil Service Form No. 6</p>
+          <p>Revised 2020</p>
+        </div>
+        <img src={ccdLogo} alt="City College of Davao logo" style={{ left: 'calc(50% - 48mm)' }} className="absolute top-[3mm] h-[15mm] w-[15mm] object-contain" />
+        <div className="absolute left-1/2 top-[3mm] w-[92mm] -translate-x-1/2 text-center">
+          <p className="text-[10px] font-bold">Republic of the Philippines</p>
+          <p className="mt-[1mm] text-[11px] font-bold">CITY GOVERNMENT OF DAVAO</p>
+          <p className="text-[10px] font-bold">DAVAO CITY</p>
+          <h3 className="mt-[4mm] text-[15px] font-extrabold underline underline-offset-2">APPLICATION FOR LEAVE</h3>
+        </div>
+        <div className="absolute right-[2mm] top-[2mm]">
           <LeaveReceivedReferenceBlock request={request} />
         </div>
       </div>
@@ -2648,7 +2648,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">6. DETAILS OF APPLICATION</p>
-          <div className="grid h-[99mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[106mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="mb-[1mm] font-bold">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
               <div className="space-y-[.85mm]">
@@ -2678,7 +2678,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <OfficialCheck checked={/terminal/i.test(leaveDetail)} label="Terminal Leave" />
             </div>
           </div>
-          <div className="grid h-[30mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[33mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
               <OfficialLine value={`${workingDays} day(s)`} />
@@ -2700,7 +2700,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">7. DETAILS OF ACTION ON APPLICATION</p>
-          <div className="grid h-[47mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[52mm] grid-cols-2 border-b border-black">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.A CERTIFICATION OF LEAVE CREDITS</p>
               <table className="mt-[1.5mm] w-full border-collapse text-center text-[9px]">
@@ -2761,10 +2761,10 @@ function OfficialInfoCell({ label, last, value }: { label: string; last?: boolea
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
     <div className="w-[48mm] justify-self-end">
-      <div className="h-[22mm] border-2 border-black bg-white px-[2mm] py-[1.5mm]">
+      <div className="h-[25mm] border-2 border-black bg-white px-[2mm] py-[1.5mm]">
         <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-[.5mm] text-center text-[13px] font-extrabold leading-none tracking-[.25em]">RECEIVED</p>
-        <div className="mt-[1.5mm] space-y-[.8mm]">
+        <p className="mt-[1mm] text-center text-[13px] font-extrabold leading-none tracking-[.25em]">RECEIVED</p>
+        <div className="mt-[2.5mm] space-y-[1mm]">
           <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
           <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
           <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
