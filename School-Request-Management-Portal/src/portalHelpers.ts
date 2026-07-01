@@ -744,7 +744,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         </div>
       </div>
       <div class="president-block">
-        <div class="president-signature-line">&nbsp;</div>
+        <div class="president-signature-line">&nbsp;&nbsp&nbsp</div>
         <p style="margin:.5mm 0 0;font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
         <p style="margin:.5mm 0 0;">College President</p>
         <p style="margin:.5mm 0 0;">(Authorized Official)</p>
