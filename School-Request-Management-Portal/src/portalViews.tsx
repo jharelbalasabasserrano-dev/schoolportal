@@ -2551,9 +2551,8 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   return (
     <div className="rounded-lg border border-[#d9d3cc] bg-white p-5 font-serif text-[11px] leading-tight text-slate-950 shadow-sm">
-      <div className="relative min-h-[128px] max-sm:flex max-sm:flex-col max-sm:gap-3">
+      <div className="relative min-h-[145px] border-b-2 border-slate-900 pb-2 max-sm:flex max-sm:flex-col max-sm:gap-3">
         <LeaveApplicationHeader />
-        <h3 className="mt-2 text-center text-[19px] font-extrabold leading-none underline underline-offset-4 max-sm:order-2">APPLICATION FOR LEAVE</h3>
         <div className="absolute right-0 top-0 max-sm:static max-sm:order-3 max-sm:flex max-sm:justify-end">
           <LeaveReceivedReferenceBlock request={request} />
         </div>
@@ -2611,16 +2610,17 @@ function OfficialInfoCell({ label, value }: { label: string; value: string }) {
 
 function LeaveApplicationHeader() {
   return (
-    <div className="relative min-h-[88px] border-b-2 border-slate-700 pb-2 text-center max-sm:min-h-[150px]">
-      <div className="absolute left-0 top-0 w-36 text-left leading-tight">
+    <div className="grid min-h-[120px] grid-cols-[170px_76px_minmax(260px,1fr)_238px] items-start gap-3 pr-[238px] text-center max-sm:grid-cols-1 max-sm:pr-0">
+      <div className="pt-1 text-left text-[12px] font-bold leading-tight">
         <p className="font-bold">Civil Service Form No. 6</p>
         <p>Revised 2020</p>
       </div>
-      <img src={ccdLogo} alt="City College of Davao logo" className="absolute left-[calc(50%_-_220px)] top-0 h-16 w-16 rounded-full object-contain max-sm:left-1/2 max-sm:top-10 max-sm:-translate-x-1/2" />
-      <div className="mx-auto w-fit min-w-[320px] px-16 pt-3 text-center max-sm:min-w-0 max-sm:px-0 max-sm:pt-24">
-        <p className="font-semibold tracking-wide">Republic of the Philippines</p>
-        <p className="text-[20px] font-extrabold leading-tight">CITY GOVERNMENT OF DAVAO</p>
-        <p className="font-semibold">DAVAO CITY</p>
+      <img src={ccdLogo} alt="City College of Davao logo" className="h-[70px] w-[70px] rounded-full object-contain" />
+      <div className="pt-1 text-center">
+        <p className="text-[13px] font-extrabold tracking-[.16em]">Republic of the Philippines</p>
+        <p className="mt-1 whitespace-nowrap text-[24px] font-extrabold leading-tight tracking-wide">CITY GOVERNMENT OF DAVAO</p>
+        <p className="text-[14px] font-extrabold tracking-wide">DAVAO CITY</p>
+        <h3 className="mt-4 whitespace-nowrap text-[24px] font-extrabold leading-none underline underline-offset-4">APPLICATION FOR LEAVE</h3>
       </div>
     </div>
   )
@@ -2628,19 +2628,19 @@ function LeaveApplicationHeader() {
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="w-[218px] space-y-1 justify-self-end">
-      <div className="min-h-28 border border-slate-800 bg-white px-2 py-1.5">
-        <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-1 text-center text-sm font-extrabold tracking-[.16em]">RECEIVED</p>
-        <div className="mt-3 space-y-1">
+    <div className="w-[224px] space-y-2 justify-self-end">
+      <div className="min-h-[104px] border-2 border-slate-800 bg-white px-3 py-2">
+        <p className="text-center text-[11px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-1 text-center text-[18px] font-extrabold leading-none tracking-[.32em]">RECEIVED</p>
+        <div className="mt-4 space-y-2">
           <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
           <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
           <ReceivedStampLine label="By" value={request.receivedBy ?? ''} />
         </div>
       </div>
-      <div className="grid grid-cols-[86px_1fr] items-end gap-1 whitespace-nowrap text-[10px]">
-        <span className="font-semibold">Reference No.</span>
-        <span className="min-h-4 border-b border-slate-500 px-1 font-mono font-bold">{getLeaveReferenceNumber(request)}</span>
+      <div className="grid grid-cols-[102px_1fr] items-end gap-2 whitespace-nowrap text-[12px]">
+        <span className="font-bold">Reference Number:</span>
+        <span className="min-h-4 border-b border-slate-700 px-1 text-center font-mono font-bold tracking-wide">{getLeaveReferenceNumber(request)}</span>
       </div>
     </div>
   )
@@ -2648,9 +2648,9 @@ function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
 
 function ReceivedStampLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[28px_1fr] items-end gap-1 text-[9px] font-bold uppercase">
+    <div className="grid grid-cols-[42px_1fr] items-end gap-2 text-[10px] font-bold uppercase">
       <span>{label}:</span>
-      <span className="min-h-4 border-b border-slate-500 px-1 text-[10px] font-normal normal-case">{value}</span>
+      <span className="min-h-4 border-b border-slate-700 px-1 text-[10px] font-normal normal-case">{value}</span>
     </div>
   )
 }
