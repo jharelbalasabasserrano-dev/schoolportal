@@ -110,14 +110,19 @@ export function getDocumentTitle(kind: RequestKind) {
   if (kind === 'Certificate of Registration') return 'Certificate of Registration'
   if (kind === 'Certificate of Grades') return 'Certificate of Grades'
   if (kind === 'Certificate of Credit Units') return 'Certificate of Credit Units'
-  if (kind === 'Change of Subject due to Conflict of Schedule') return 'Change of Student due to Conflict of Schedule'
+  if (kind === 'Change of Subject due to Conflict of Schedule') return 'Change of Subject due to Conflict of Schedule'
   if (kind === 'Adding/Dropping of Subjects') return 'Adding/Dropping of Subjects'
   if (kind === 'Other Registrar Request') return 'Other'
   return 'Exit Clearance'
 }
 
 export function hasFacilityConflict(requests: PortalRequest[], date: string, time: string, facility: string) {
-  return requests.some((request) => request.kind === 'Facility Reservation' && request.facility === facility && request.date === date && request.time === time && request.status !== 'Rejected')
+  const [start, end] = time.split('-')
+  return requests.some((request) => {
+    if (request.kind !== 'Facility Reservation' || request.facility !== facility || request.date !== date || request.status === 'Rejected') return false
+    const [reservedStart, reservedEnd] = request.time.split('-')
+    return start < reservedEnd && end > reservedStart
+  })
 }
 
 export function getInitials(name: string) {
@@ -204,7 +209,7 @@ export function getRegistrarRequestLabel(kind: RequestKind) {
   if (kind === 'Certificate of Grades') return 'Certificate of Grades'
   if (kind === 'Certificate of Credit Units') return 'Certificate of Credit Units'
   if (kind === 'TOR Request') return 'Transcript of Records (TOR)'
-  if (kind === 'Change of Subject due to Conflict of Schedule') return 'Change of Student due to Conflict of Schedule'
+  if (kind === 'Change of Subject due to Conflict of Schedule') return 'Change of Subject due to Conflict of Schedule'
   if (kind === 'Adding/Dropping of Subjects') return 'Adding/Dropping of Subjects'
   if (kind === 'Other Registrar Request') return 'Other'
   return getDocumentTitle(kind)
@@ -371,7 +376,7 @@ export function stripAttachmentDataForStorage(message: Message) {
 
 export function getRegistrarRequestPrintHtml(request: PortalRequest) {
   const programOptions = ['Bachelor of Early Childhood Education', 'Bachelor of Technical-Vocational Teacher Education', 'major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming', 'Bachelor of Science in Entrepreneurship']
-  const requestOptions = ['Certificate of Registration', 'Certificate of Enrollment', 'Certificate of Grades', 'Certificate of Credit Units', 'Transcript of Records (TOR)', 'Change of Student due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other']
+  const requestOptions = ['Certificate of Registration', 'Certificate of Enrollment', 'Certificate of Grades', 'Certificate of Credit Units', 'Transcript of Records (TOR)', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other']
   const selectedPrograms = [request.program ?? '', request.major ?? '']
   const check = (selected: string | string[], option: string) => `<span class="box">${(Array.isArray(selected) ? selected : [selected]).includes(option) ? 'x' : ''}</span>`
 

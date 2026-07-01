@@ -82,6 +82,14 @@ function formatMessageTime(value: string) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsed)
 }
 
+function getTodayInputValue() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function playNotificationSound() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) return
@@ -1334,13 +1342,14 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
   const [transferReason, setTransferReason] = useState('')
   const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(['Transcript of Records (TOR)'])
   const [purpose, setPurpose] = useState('')
+  const [error, setError] = useState('')
   const registrarDocuments: { kind: RequestKind; label: string; description: string }[] = [
     { kind: 'Certificate of Registration', label: 'Certificate of Registration', description: 'Official registration record for the current term.' },
     { kind: 'COE Request', label: 'Certificate of Enrollment', description: 'Proof of current enrollment for scholarships, visas, and requirements.' },
     { kind: 'Certificate of Grades', label: 'Certificate of Grades', description: 'Certified grade record for a term or school year.' },
     { kind: 'Certificate of Credit Units', label: 'Certificate of Credit Units', description: 'Certification of credited academic units.' },
     { kind: 'TOR Request', label: 'Transcript of Records', description: 'Official academic record for transfer or employment.' },
-    { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Student due to Conflict of Schedule', description: 'Request a student schedule change due to a conflict.' },
+    { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Subject due to Conflict of Schedule', description: 'Request a subject schedule change due to a conflict.' },
     { kind: 'Adding/Dropping of Subjects', label: 'Adding/Dropping of Subjects', description: 'Request to add or drop enrolled subjects.' },
     { kind: 'Other Registrar Request', label: 'Other', description: 'Submit another Registrar-related request.' },
     { kind: 'Exit Clearance', label: 'Exit Clearance', description: 'Required for graduation, transfer, or leave of absence.' },
@@ -1353,7 +1362,15 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!purpose.trim()) return
+    const requiredFields = [studentId, yearLevel, semester, schoolYear, program, purpose]
+    if (requiredFields.some((value) => !value.trim())) {
+      setError('Please complete all required fields before submitting.')
+      return
+    }
+    if (kind === 'Exit Clearance' && exitRequestedDocs.length === 0) {
+      setError('Please select at least one document for the exit clearance request.')
+      return
+    }
     onSubmit({
       id: `DR-2026-${Date.now().toString().slice(-3)}`,
       title: getDocumentTitle(kind),
@@ -1374,7 +1391,13 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
       transferReason: kind === 'Exit Clearance' ? transferReason.trim() : '',
       requestedDocs: kind === 'Exit Clearance' ? exitRequestedDocs : [getRegistrarRequestLabel(kind)],
     })
+    setStudentId('')
+    setYearLevel('')
+    setSemester('')
+    setTransferReason('')
+    setExitRequestedDocs(['Transcript of Records (TOR)'])
     setPurpose('')
+    setError('')
   }
 
   return (
@@ -1410,19 +1433,19 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
         <div className="grid gap-5 md:grid-cols-2">
           <label>
             <span className="mb-2 block font-medium">Student ID #</span>
-            <input value={studentId} onChange={(event) => setStudentId(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required value={studentId} onChange={(event) => setStudentId(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
           <label>
             <span className="mb-2 block font-medium">Year Level</span>
-            <input value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} placeholder="e.g. 3rd Year" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} placeholder="e.g. 3rd Year" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
           <label>
             <span className="mb-2 block font-medium">Semester</span>
-            <input value={semester} onChange={(event) => setSemester(event.target.value)} placeholder="e.g. 1st Semester" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required value={semester} onChange={(event) => setSemester(event.target.value)} placeholder="e.g. 1st Semester" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
           <label>
             <span className="mb-2 block font-medium">School Year</span>
-            <input value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
         </div>
         <label className="mt-5 block">
@@ -1458,9 +1481,10 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
         )}
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Purpose / reason</span>
-          <textarea value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. For scholarship renewal..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20" />
+          <textarea required value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. For scholarship renewal..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20" />
         </label>
         <p className="mt-2 text-slate-500">{purpose.length} / 500 characters</p>
+        {error && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-red-700">{error}</p>}
         <div className="mt-6 flex justify-end">
           <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#228b22]">Submit request</button>
         </div>
@@ -1471,7 +1495,7 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
 
 function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
   const [facility, setFacility] = useState(facilities[0][0])
-  const [date, setDate] = useState('2026-06-03')
+  const [date, setDate] = useState(() => getTodayInputValue())
   const [start, setStart] = useState('09:00')
   const [end, setEnd] = useState('11:00')
   const [attendees, setAttendees] = useState(10)
@@ -1481,7 +1505,23 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!purpose.trim()) return
+    const today = getTodayInputValue()
+    if (date < today) {
+      setError('Please choose today or a future date.')
+      return
+    }
+    if (start >= end) {
+      setError('End time must be later than the start time.')
+      return
+    }
+    if (!Number.isFinite(attendees) || attendees < 1) {
+      setError('Expected attendees must be at least 1.')
+      return
+    }
+    if (!purpose.trim()) {
+      setError('Please enter the purpose or activity for this reservation.')
+      return
+    }
     if (hasFacilityConflict(existingRequests, date, `${start}-${end}`, facility)) {
       setError(`${facility} already has a booking for that schedule.`)
       return
@@ -1519,24 +1559,24 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
           <label>
             <span className="mb-2 block font-medium">Date</span>
-            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required type="date" min={getTodayInputValue()} value={date} onChange={(event) => setDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
           <label>
             <span className="mb-2 block font-medium">Start time</span>
-            <input type="time" value={start} onChange={(event) => setStart(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required type="time" value={start} onChange={(event) => setStart(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
           <label>
             <span className="mb-2 block font-medium">End time</span>
-            <input type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
         </div>
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Expected attendees</span>
-          <input type="number" min={1} value={attendees} onChange={(event) => setAttendees(Number(event.target.value))} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          <input required type="number" min={1} value={attendees} onChange={(event) => setAttendees(Number(event.target.value))} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Purpose / activity</span>
-          <textarea value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. Thesis defense rehearsal, org meeting, workshop..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22]" />
+          <textarea required value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. Thesis defense rehearsal, org meeting, workshop..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22]" />
         </label>
         <p className="mt-2 text-slate-500">{purpose.length} / 500 characters</p>
         {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-red-700">{error}</p>}
@@ -2469,7 +2509,7 @@ function RegistrarRequestPrintForm({ request }: { request: PortalRequest }) {
     { kind: 'Certificate of Grades', label: 'Certificate of Grades' },
     { kind: 'Certificate of Credit Units', label: 'Certificate of Credit Units' },
     { kind: 'TOR Request', label: 'Transcript of Records (TOR)' },
-    { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Student due to Conflict of Schedule' },
+    { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Subject due to Conflict of Schedule' },
     { kind: 'Adding/Dropping of Subjects', label: 'Adding/Dropping of Subjects' },
     { kind: 'Other Registrar Request', label: 'Other' },
   ]
