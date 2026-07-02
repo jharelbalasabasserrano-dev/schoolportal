@@ -2648,7 +2648,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">6. DETAILS OF APPLICATION</p>
-          <div className="grid h-[96mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[124mm] grid-cols-2 grid-rows-[96mm_28mm]">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="mb-[1mm] font-bold">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
               <div className="space-y-[.85mm]">
@@ -2677,16 +2677,14 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <OfficialCheck checked={/monetization/i.test(leaveDetail)} label="Monetization of Leave Credits" />
               <OfficialCheck checked={/terminal/i.test(leaveDetail)} label="Terminal Leave" />
             </div>
-          </div>
-          <div className="grid h-[28mm] grid-cols-2 border-b border-black">
-            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+            <div className="border-r border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
               <OfficialLine value={`${workingDays} day(s)`} />
               <p className="mt-[2mm] font-bold">INCLUSIVE DATES</p>
               <OfficialLine value={inclusiveDates} />
               {request.leaveDuration && <p className="mt-[1mm] text-center">{getLeaveDurationText(request)}</p>}
             </div>
-            <div className="px-[2mm] py-[1.5mm]">
+            <div className="border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">6.D COMMUTATION</p>
               <OfficialCheck checked={(request.communication ?? 'Not Requested') === 'Not Requested'} label="Not Requested" />
               <OfficialCheck checked={(request.communication ?? '') === 'Requested'} label="Requested" />
@@ -2700,7 +2698,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
 
         <div className="mt-[1.5mm] border border-black">
           <p className="border-b border-black py-[1mm] text-center text-[10px] font-extrabold">7. DETAILS OF ACTION ON APPLICATION</p>
-          <div className="grid h-[43mm] grid-cols-2 border-b border-black">
+          <div className="grid h-[67mm] grid-cols-2 grid-rows-[43mm_24mm]">
             <div className="border-r border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.A CERTIFICATION OF LEAVE CREDITS</p>
               <table className="mt-[1.5mm] w-full border-collapse text-center text-[9px]">
@@ -2726,15 +2724,13 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
                 <p className="mt-[1mm] text-[8.5px]">Authorized Officer</p>
               </div>
             </div>
-          </div>
-          <div className="grid h-[24mm] grid-cols-2 border-b border-black">
-            <div className="border-r border-black px-[2mm] py-[1.5mm]">
+            <div className="border-r border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.C APPROVED FOR:</p>
               <OfficialLine label="days with pay" value={request.status === 'Approved' ? workingDays : ''} tight />
               <OfficialLine label="days without pay" value="" tight />
               <OfficialLine label="others (Specify)" value="" tight />
             </div>
-            <div className="px-[2mm] py-[1.5mm]">
+            <div className="border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.D DISAPPROVED DUE TO:</p>
               <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
             </div>

@@ -595,11 +595,12 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .section { border: 1px solid #000; border-top: 0; }
     .section-title { margin: 0; border-bottom: 1px solid #000; padding: .9mm 0; text-align: center; font-size: 9.5px; font-weight: 900; text-transform: uppercase; }
     .application-section { height: 112mm; }
-    .application-grid { display: grid; grid-template-columns: 1fr 1fr; height: calc(112mm - 5.2mm); }
-    .action-section { height: 86mm; display: flex; flex-direction: column; }
-    .action-grid { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; }
+    .application-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 76mm 30.8mm; height: calc(112mm - 5.2mm); }
+    .action-section { height: 86mm; }
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 48mm 32.8mm; height: calc(86mm - 5.2mm); }
     .cell { padding: 1.15mm 1.8mm; min-width: 0; }
-    .cell-left { border-right: 1px solid #000; }
+    .grid-right { border-left: 1px solid #000; }
+    .grid-bottom { border-top: 1px solid #000; }
     .column { display: flex; flex-direction: column; height: 100%; }
     .subhead { margin: 0 0 1mm; font-weight: 900; text-transform: uppercase; }
     .block { margin-top: 2mm; }
@@ -616,7 +617,6 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .signature p { margin: .8mm 0 0; }
     .credits-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 1.5mm; font-size: 8.3px; text-align: center; }
     .credits-table th, .credits-table td { border: 1px solid #000; height: 5.7mm; padding: .6mm; }
-    .approval-grid { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid #000; min-height: 34mm; }
     .president-block { width: 82mm; margin: auto auto 0; padding-top: 2mm; text-align: center; }
     .president-signature-line { width: 66mm; height: 3.5mm; margin: 0 auto 1mm; border-bottom: 1px solid #000; }
     @media print {
@@ -682,22 +682,14 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <section class="section application-section">
           <p class="section-title">6. Details of Application</p>
           <div class="application-grid">
-            <div class="cell cell-left column">
+            <div class="cell column">
               <div class="leave-types">
                 <p class="subhead">6.A Type of Leave to be Availed Of</p>
                 ${leaveTypes.map((type) => `<div class="item">${check(leaveType, type)}<span>${escapeHtml(type)}</span></div>`).join('')}
                 <div class="line-row compact-line"><span>Others:</span><span class="line">${escapeHtml(request.kind === 'Other Leave' ? request.customLeaveType?.trim() ?? '' : '')}</span></div>
               </div>
-              <div class="block">
-                <p class="subhead">Number of Working Days Applied For</p>
-                ${line(`${workingDays} day(s)`)}
-                <p class="subhead" style="margin-top:1.6mm;">Inclusive Dates</p>
-                ${line(inclusiveDates)}
-                <p class="subhead" style="margin-top:1.6mm;">Leave Duration</p>
-                ${line(request.leaveDuration ? getLeaveDurationText(request) : '')}
-              </div>
             </div>
-            <div class="cell column">
+            <div class="cell column grid-right">
               <div>
                 <p class="subhead">6.B Details of Leave</p>
                 <p class="italic">In case of Vacation/Special Privilege Leave:</p>
@@ -719,6 +711,18 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
                 <div class="item">${checked(/monetization/i.test(leaveDetail))}<span>Monetization of Leave Credits</span></div>
                 <div class="item">${checked(/terminal/i.test(leaveDetail))}<span>Terminal Leave</span></div>
               </div>
+            </div>
+            <div class="cell column grid-bottom">
+              <div class="block">
+                <p class="subhead">Number of Working Days Applied For</p>
+                ${line(`${workingDays} day(s)`)}
+                <p class="subhead" style="margin-top:1.6mm;">Inclusive Dates</p>
+                ${line(inclusiveDates)}
+                <p class="subhead" style="margin-top:1.6mm;">Leave Duration</p>
+                ${line(request.leaveDuration ? getLeaveDurationText(request) : '')}
+              </div>
+            </div>
+            <div class="cell column grid-right grid-bottom">
               <div class="block">
                 <p class="subhead">6.C Communication</p>
                 <div class="item">${check(request.communication ?? 'Not Requested', 'Requested')}<span>Requested</span></div>
@@ -731,34 +735,30 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <section class="section action-section">
           <p class="section-title">7. Details of Action on Application</p>
           <div class="action-grid">
-            <div class="column">
-              <div class="cell column" style="flex:1;">
-                <p class="subhead">7.A Certification of Leave Credits</p>
-                <table class="credits-table">
-                  <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
-                  <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td style="text-align:left;"><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
-                </table>
-                <div class="signature"><span class="line">${escapeHtml(request.receivedBy ?? '')}</span><p>Authorized Officer</p></div>
-              </div>
-              <div class="cell approval-grid" style="display:block;">
-                <p class="subhead">7.C Approved For:</p>
-                ${line(request.status === 'Approved' ? workingDays : '', 'days with pay')}
-                ${line('', 'days without pay')}
-                ${line('', 'others (Specify)')}
-              </div>
+            <div class="cell column">
+              <p class="subhead">7.A Certification of Leave Credits</p>
+              <table class="credits-table">
+                <thead><tr><th></th><th>Vacation Leave</th><th>Sick Leave</th></tr></thead>
+                <tbody>${leaveCreditRows.map(([label, vacation, sick]) => `<tr><td style="text-align:left;"><strong>${escapeHtml(label)}</strong></td><td>${escapeHtml(vacation)}</td><td>${escapeHtml(sick)}</td></tr>`).join('')}</tbody>
+              </table>
+              <div class="signature"><span class="line">${escapeHtml(request.receivedBy ?? '')}</span><p>Authorized Officer</p></div>
             </div>
-            <div class="column cell-left" style="border-right:0; border-left:1px solid #000;">
-              <div class="cell column" style="flex:1;">
-                <p class="subhead">7.B Recommendation</p>
-                <div class="item">${check(recommendation, 'For approval')}<span>For approval</span></div>
-                <div class="item">${check(recommendation, 'For disapproval')}<span>For disapproval due to</span></div>
-                ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
-                <div class="signature"><span class="line">${escapeHtml(request.updatedBy ?? '')}</span><p>Authorized Officer</p></div>
-              </div>
-              <div class="cell approval-grid" style="display:block;">
-                <p class="subhead">7.D Disapproved Due To:</p>
-                ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
-              </div>
+            <div class="cell column grid-right">
+              <p class="subhead">7.B Recommendation</p>
+              <div class="item">${check(recommendation, 'For approval')}<span>For approval</span></div>
+              <div class="item">${check(recommendation, 'For disapproval')}<span>For disapproval due to</span></div>
+              ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+              <div class="signature"><span class="line">${escapeHtml(request.updatedBy ?? '')}</span><p>Authorized Officer</p></div>
+            </div>
+            <div class="cell grid-bottom">
+              <p class="subhead">7.C Approved For:</p>
+              ${line(request.status === 'Approved' ? workingDays : '', 'days with pay')}
+              ${line('', 'days without pay')}
+              ${line('', 'others (Specify)')}
+            </div>
+            <div class="cell grid-right grid-bottom">
+              <p class="subhead">7.D Disapproved Due To:</p>
+              ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
             </div>
           </div>
         </section>
