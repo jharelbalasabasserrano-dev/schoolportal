@@ -714,7 +714,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             </div>
             <div class="cell column grid-bottom">
               <div class="block">
-                <p class="subhead">Number of Working Days Applied For</p>
+                <p class="subhead">6.C Number of Working Days Applied For</p>
                 ${line(`${workingDays} day(s)`)}
                 <p class="subhead" style="margin-top:1.6mm;">Inclusive Dates</p>
                 ${line(inclusiveDates)}
@@ -724,7 +724,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             </div>
             <div class="cell column grid-right grid-bottom">
               <div class="block">
-                <p class="subhead">6.C Communication</p>
+                <p class="subhead">6.D Communication</p>
                 <div class="item">${check(request.communication ?? 'Not Requested', 'Requested')}<span>Requested</span></div>
                 <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')}<span>Not Requested</span></div>
               </div>
@@ -763,8 +763,8 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
           </div>
         </section>
         <div class="president-block">
-          <div class="president-signature-line">&nbsp;</div>
           <p style="margin:.5mm 0 0;font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
+          <div class="president-signature-line">&nbsp;</div>
           <p style="margin:.5mm 0 0;">College President</p>
           <p style="margin:.5mm 0 0;">(Authorized Official)</p>
         </div>
