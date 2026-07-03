@@ -564,13 +564,27 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: A4 portrait; margin: 12mm; }
+    @page { size: 210mm 297mm; margin: 12mm; }
+    :root {
+      --a4-width: 210mm;
+      --a4-height: 297mm;
+      --page-margin: 12mm;
+      --printable-width: 186mm;
+      --printable-height: 273mm;
+      --line-width: 1px;
+      --half-width: 93mm;
+      --heading-height: 28mm;
+      --employee-height: 14mm;
+      --application-height: 112mm;
+      --action-height: 86mm;
+      --title-height: 5.2mm;
+    }
     * { box-sizing: border-box; }
-    html, body { margin: 0; }
+    html, body { width: 100%; min-height: 100%; margin: 0; }
     body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", Times, serif; color: #000; font-size: 8.2px; line-height: 1.04; }
-    .sheet { width: 186mm; min-height: 273mm; margin: 0 auto; overflow: hidden; background: #fff; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .inner { height: 273mm; padding: 0; display: flex; flex-direction: column; }
-    .form-heading { position: relative; height: 28mm; border: 1px solid #000; border-bottom: 0; padding: 2mm; }
+    .sheet { width: var(--printable-width); height: var(--printable-height); margin: 0 auto; overflow: hidden; background: #fff; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
+    .inner { width: var(--printable-width); height: var(--printable-height); padding: 0; display: flex; flex-direction: column; outline: var(--line-width) solid #000; outline-offset: calc(var(--line-width) * -1); }
+    .form-heading { position: relative; width: 100%; height: var(--heading-height); border-bottom: var(--line-width) solid #000; padding: 2mm; flex: 0 0 var(--heading-height); }
     .form-label { position: absolute; left: 2mm; top: 2mm; font-size: 9px; font-weight: 700; line-height: 1.15; }
     .logo { position: absolute; left: 48mm; top: 3mm; width: 14mm; height: 14mm; object-fit: contain; border-radius: 999px; }
     .title-block { position: absolute; left: 50%; top: 3mm; width: 90mm; transform: translateX(-50%); text-align: center; }
@@ -578,51 +592,55 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .government { margin-top: .9mm; font-size: 10px; font-weight: 700; }
     h1 { margin: 4mm 0 0; text-align: center; font-size: 15px; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
     .received-wrap { position: absolute; right: 2mm; top: 2mm; width: 46mm; }
-    .received-box { height: 20mm; border: 1.5px solid #000; padding: 1mm 1.5mm; background: white; }
+    .received-box { height: 20mm; border: var(--line-width) solid #000; padding: 1mm 1.5mm; background: white; }
     .received-org { text-align: center; font-size: 7.6px; font-weight: 900; line-height: 1.1; }
     .received-title { margin-top: 1mm; text-align: center; font-size: 12px; font-weight: 900; line-height: 1; letter-spacing: 2.5px; }
     .stamp-lines { margin-top: 1.1mm; }
     .stamp-line { display: grid; grid-template-columns: 7mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; font-size: 7.4px; font-weight: 800; text-transform: uppercase; }
-    .stamp-value { min-height: 3mm; border-bottom: 1px solid #000; font-size: 7.6px; font-weight: 400; text-transform: none; }
+    .stamp-value { min-height: 3mm; border-bottom: var(--line-width) solid #000; font-size: 7.6px; font-weight: 400; text-transform: none; }
     .reference-row { display: grid; grid-template-columns: 20mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; white-space: nowrap; font-size: 7.8px; font-weight: 800; }
-    .ref-line { border-bottom: 1px solid #000; font-family: monospace; text-align: center; }
-    .content { flex: 1; display: flex; flex-direction: column; }
-    .employee-info { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.6px; }
-    .employee-info th, .employee-info td { border: 1px solid #000; height: 6mm; padding: .55mm 1mm; vertical-align: middle; }
+    .ref-line { border-bottom: var(--line-width) solid #000; font-family: monospace; text-align: center; }
+    .content { width: 100%; flex: 1 1 auto; display: flex; flex-direction: column; }
+    .employee-info { width: 100%; height: var(--employee-height); border-collapse: collapse; table-layout: fixed; font-size: 8.6px; }
+    .employee-info th, .employee-info td { border: var(--line-width) solid #000; height: 6mm; padding: .55mm 1mm; vertical-align: middle; }
+    .employee-info th:first-child, .employee-info td:first-child { border-left: 0; }
+    .employee-info th:last-child, .employee-info td:last-child { border-right: 0; }
+    .employee-info thead tr:first-child th { border-top: 0; }
     .employee-info th { text-align: left; font-weight: 900; text-transform: uppercase; }
     .employee-info td { height: 8mm; text-align: center; font-weight: 700; }
     .name-note { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: .6mm; font-size: 7px; font-weight: 400; }
-    .section { border: 1px solid #000; border-top: 0; }
-    .section-title { margin: 0; border-bottom: 1px solid #000; padding: .9mm 0; text-align: center; font-size: 9.5px; font-weight: 900; text-transform: uppercase; }
-    .application-section { height: 112mm; }
-    .application-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 76mm 30.8mm; height: calc(112mm - 5.2mm); }
-    .action-section { height: 86mm; }
-    .action-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 48mm 32.8mm; height: calc(86mm - 5.2mm); }
+    .section { width: 100%; border-top: var(--line-width) solid #000; flex: 0 0 auto; }
+    .section-title { height: var(--title-height); margin: 0; border-bottom: var(--line-width) solid #000; padding: .9mm 0; text-align: center; font-size: 9.5px; font-weight: 900; text-transform: uppercase; }
+    .application-section { height: var(--application-height); }
+    .application-grid { display: grid; grid-template-columns: var(--half-width) var(--half-width); grid-template-rows: 76mm calc(var(--application-height) - var(--title-height) - 76mm); width: 100%; height: calc(var(--application-height) - var(--title-height)); }
+    .action-section { height: var(--action-height); }
+    .action-grid { display: grid; grid-template-columns: var(--half-width) var(--half-width); grid-template-rows: 48mm calc(var(--action-height) - var(--title-height) - 48mm); width: 100%; height: calc(var(--action-height) - var(--title-height)); }
     .cell { padding: 1.15mm 1.8mm; min-width: 0; }
-    .grid-right { border-left: 1px solid #000; }
-    .grid-bottom { border-top: 1px solid #000; }
+    .grid-right { border-left: var(--line-width) solid #000; }
+    .grid-bottom { border-top: var(--line-width) solid #000; }
     .column { display: flex; flex-direction: column; height: 100%; }
     .subhead { margin: 0 0 1mm; font-weight: 900; text-transform: uppercase; }
     .block { margin-top: 2mm; }
     .leave-types { flex: 1; }
     .item { display: flex; align-items: flex-start; gap: 1.3mm; min-height: 2.85mm; margin: 0 0 .32mm; }
-    .box { display: inline-flex; flex: 0 0 auto; width: 3mm; height: 3mm; align-items: center; justify-content: center; border: 1px solid #000; font-size: 7px; line-height: 1; }
+    .box { display: inline-flex; flex: 0 0 auto; width: 3mm; height: 3mm; align-items: center; justify-content: center; border: var(--line-width) solid #000; font-size: 7px; line-height: 1; }
     .italic { margin: 1mm 0 .6mm; font-style: italic; }
     .line-row { display: grid; grid-template-columns: 25mm 1fr; align-items: end; gap: 1.4mm; margin-top: .45mm; }
     .line-row-full { grid-template-columns: 1fr; margin-top: .85mm; }
-    .line { min-height: 3.25mm; border-bottom: 1px solid #000; padding: 0 1mm; text-align: center; }
+    .line { min-height: 3.25mm; border-bottom: var(--line-width) solid #000; padding: 0 1mm; text-align: center; }
     .compact-line .line { min-height: 3.2mm; }
     .signature { margin-top: auto; padding-top: 2mm; text-align: center; }
-    .signature .line { display: block; min-height: 4mm; border-bottom: 1px solid #000; font-weight: 700; }
+    .signature .line { display: block; min-height: 4mm; border-bottom: var(--line-width) solid #000; font-weight: 700; }
     .signature p { margin: .8mm 0 0; }
     .credits-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 1.5mm; font-size: 8.3px; text-align: center; }
-    .credits-table th, .credits-table td { border: 1px solid #000; height: 5.7mm; padding: .6mm; }
+    .credits-table th, .credits-table td { border: var(--line-width) solid #000; height: 5.7mm; padding: .6mm; }
     .president-block { width: 82mm; margin: auto auto 0; padding-top: 2mm; text-align: center; }
-    .president-signature-line { width: 66mm; height: 3.5mm; margin: 0 auto 1mm; border-bottom: 1px solid #000; }
+    .president-signature-line { width: 66mm; height: 3.5mm; margin: 0 auto 1mm; border-bottom: var(--line-width) solid #000; }
     @media print {
+      html, body { width: var(--a4-width); height: var(--a4-height); }
       body { background: white; padding: 0; }
-      .sheet { width: 100%; min-height: auto; box-shadow: none; }
-      .inner { height: calc(297mm - 24mm); }
+      .sheet { width: var(--printable-width); height: var(--printable-height); box-shadow: none; }
+      .inner { width: var(--printable-width); height: var(--printable-height); }
     }
   </style>
 </head>
