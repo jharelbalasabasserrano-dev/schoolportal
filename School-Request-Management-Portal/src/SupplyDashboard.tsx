@@ -1,21 +1,21 @@
 import { BarChart3, CheckCircle2, ClipboardList, Clock, Handshake, Layers3, Mail, PackageCheck, Phone, Plus, Search, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import type { PortalRequest, Status, StockMovement, SupplierInfo, SupplyCategory, SupplyItem } from './portalData'
-import { formatShortDate, getCounts, getSupplyItems } from './portalHelpers'
+import { supplyStatuses, type PortalRequest, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus } from './portalData'
+import { formatShortDate, getStatusCounts, getSupplyItems } from './portalHelpers'
 import { MetricCard, StatusPill } from './portalComponents'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
 
 export function SupplyOfficeView({ activeView, categories, inventory, onInventoryChange, suppliers, onSuppliersChange, stockMovements, onStockMovementAdd, onReview, requests }: { activeView: string; categories: SupplyCategory[]; inventory: SupplyItem[]; onInventoryChange: (inventory: SupplyItem[]) => void; suppliers: SupplierInfo[]; onSuppliersChange: (suppliers: SupplierInfo[]) => void; stockMovements: StockMovement[]; onStockMovementAdd: (movements: StockMovement[]) => void; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<SupplyStatus | 'All'>('All')
   const [query, setQuery] = useState('')
-  const supplyRequests = requests.filter((request) => ['Supply Request', 'Inventory Request'].includes(request.kind))
+  const supplyRequests = requests.filter((request): request is SupplyPortalRequest => ['Supply Request', 'Inventory Request'].includes(request.kind))
   const filtered = supplyRequests.filter((request) => {
     const itemText = getSupplyItems(request).map((item) => item.label).join(' ')
     const byStatus = statusFilter === 'All' || request.status === statusFilter
     const byQuery = `${request.id} ${request.owner} ${request.title} ${request.remarks} ${itemText}`.toLowerCase().includes(query.toLowerCase())
     return byStatus && byQuery
   })
-  const counts = getCounts(supplyRequests)
+  const counts = getStatusCounts(supplyRequests, supplyStatuses)
   const total = supplyRequests.length
 
   return (
@@ -23,7 +23,7 @@ export function SupplyOfficeView({ activeView, categories, inventory, onInventor
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label="Disapproved" value={counts.Disapproved} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={PackageCheck} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -61,7 +61,7 @@ export function SupplyOfficeView({ activeView, categories, inventory, onInventor
             </label>
           </div>
           <div className="mb-6 flex flex-wrap">
-            {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
+            {(['All', ...supplyStatuses] as const).map((status) => (
               <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
             ))}
           </div>

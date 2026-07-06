@@ -1,7 +1,14 @@
 export type Role = 'student' | 'registrar' | 'supply' | 'adminOffice' | 'hr' | 'employee' | 'admin'
-export type Status = 'Pending' | 'Approved' | 'Rejected' | 'Disapproved' | 'Completed'
 export type Office = 'Registrar' | 'Supply Office' | 'Admin Office' | 'HR Office'
-export type RequestKind =
+export const registrarStatuses = ['Pending', 'On Process', 'Ready for Pick Up', 'Disapproved'] as const
+export const hrLeaveStatuses = ['Pending', 'Approved', 'Disapproved'] as const
+export const supplyStatuses = ['Pending', 'Approved', 'Disapproved', 'Completed'] as const
+export const facilityStatuses = ['Pending', 'Approved', 'Disapproved', 'Completed'] as const
+export type RegistrarStatus = typeof registrarStatuses[number]
+export type HRLeaveStatus = typeof hrLeaveStatuses[number]
+export type SupplyStatus = typeof supplyStatuses[number]
+export type FacilityStatus = typeof facilityStatuses[number]
+export type RegistrarRequestKind =
   | 'TOR Request'
   | 'COE Request'
   | 'Exit Clearance'
@@ -11,8 +18,10 @@ export type RequestKind =
   | 'Change of Subject due to Conflict of Schedule'
   | 'Adding/Dropping of Subjects'
   | 'Other Registrar Request'
+export type SupplyRequestKind =
   | 'Supply Request'
   | 'Inventory Request'
+export type LeaveRequestKind =
   | 'Vacation Leave'
   | 'Mandatory/Forced Leave'
   | 'Sick Leave'
@@ -30,7 +39,9 @@ export type RequestKind =
   | 'Other Leave'
   | 'Personal Leave'
   | 'Official Leave'
+export type FacilityRequestKind =
   | 'Facility Reservation'
+export type RequestKind = RegistrarRequestKind | SupplyRequestKind | LeaveRequestKind | FacilityRequestKind
 
 export type User = {
   id: string
@@ -42,14 +53,13 @@ export type User = {
   avatarUrl?: string
 }
 
-export type PortalRequest = {
+type BasePortalRequest = {
   id: string
   title: string
   kind: RequestKind
   ownerId: string
   owner: string
   office: Office
-  status: Status
   date: string
   time: string
   remarks: string
@@ -91,6 +101,32 @@ export type PortalRequest = {
   hrRemarks?: string
   updatedBy?: string
 }
+
+export type RegistrarPortalRequest = BasePortalRequest & {
+  kind: RegistrarRequestKind
+  office: 'Registrar'
+  status: RegistrarStatus
+}
+
+export type SupplyPortalRequest = BasePortalRequest & {
+  kind: SupplyRequestKind
+  office: 'Supply Office'
+  status: SupplyStatus
+}
+
+export type HRLeavePortalRequest = BasePortalRequest & {
+  kind: LeaveRequestKind
+  office: 'HR Office'
+  status: HRLeaveStatus
+}
+
+export type FacilityPortalRequest = BasePortalRequest & {
+  kind: FacilityRequestKind
+  office: 'Admin Office'
+  status: FacilityStatus
+}
+
+export type PortalRequest = RegistrarPortalRequest | SupplyPortalRequest | HRLeavePortalRequest | FacilityPortalRequest
 
 export type Message = {
   id: string
@@ -169,10 +205,10 @@ export type Announcement = {
 
 
 export const studentRequestKinds: RequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request', 'Facility Reservation']
-export const documentKinds: RequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request']
-export const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Wellness Leave', 'Other Leave']
-export const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
-export const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
+export const documentKinds: RegistrarRequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request']
+export const leaveKinds: LeaveRequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Wellness Leave', 'Other Leave']
+export const legacyLeaveKinds: LeaveRequestKind[] = ['Personal Leave', 'Official Leave']
+export const allLeaveKinds: LeaveRequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
 export const storageKeys = {
   accounts: 'eduportal-accounts-v2',
   user: 'eduportal-user-v2',
@@ -212,12 +248,12 @@ export const initialRequests: PortalRequest[] = [
   { id: 'FR-2026-101', title: 'AVR 2 - Engineering Building', kind: 'Facility Reservation', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Admin Office', status: 'Approved', date: '2026-06-10', time: '13:00-15:00', remarks: 'Thesis presentation dry run', facility: 'AVR 2 - Engineering Building', updatedBy: 'Facilities Office' },
   { id: 'FR-2026-103', title: 'AVR 2 - Engineering Building', kind: 'Facility Reservation', ownerId: 'stu-02', owner: 'Other Student', office: 'Admin Office', status: 'Approved', date: '2026-06-10', time: '10:00-12:00', remarks: 'Student organization seminar', facility: 'AVR 2 - Engineering Building', updatedBy: 'Facilities Office' },
   { id: 'FR-2026-104', title: 'Conference Room A', kind: 'Facility Reservation', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Admin Office', status: 'Approved', date: '2026-06-15', time: '14:00-16:00', remarks: 'Department curriculum planning', facility: 'Conference Room A', updatedBy: 'Facilities Office' },
-  { id: 'DR-2026-001', title: 'TOR', kind: 'TOR Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Approved', date: '2026-05-12', time: '09:00', remarks: 'Application for graduate studies abroad', updatedBy: 'Ms. Reyes' },
-  { id: 'DR-2026-003', title: 'Exit Clearance', kind: 'Exit Clearance', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Completed', date: '2026-04-15', time: '13:00', remarks: 'Internship endorsement', updatedBy: 'Ms. Reyes' },
-  { id: 'DR-2026-004', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Rejected', date: '2026-03-02', time: '11:00', remarks: 'Visa application supporting document', updatedBy: 'Ms. Reyes' },
+  { id: 'DR-2026-001', title: 'TOR', kind: 'TOR Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'On Process', date: '2026-05-12', time: '09:00', remarks: 'Application for graduate studies abroad', updatedBy: 'Ms. Reyes' },
+  { id: 'DR-2026-003', title: 'Exit Clearance', kind: 'Exit Clearance', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Ready for Pick Up', date: '2026-04-15', time: '13:00', remarks: 'Internship endorsement', updatedBy: 'Ms. Reyes' },
+  { id: 'DR-2026-004', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Disapproved', date: '2026-03-02', time: '11:00', remarks: 'Visa application supporting document', updatedBy: 'Ms. Reyes' },
   { id: 'SR-2026-301', title: 'Bond paper, markers, and printer ink', kind: 'Supply Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Pending', date: '2026-05-28', time: '08:30', remarks: 'For midterm examination printing and lecture materials' },
   { id: 'SR-2026-302', title: 'Extension cords and USB flash drives', kind: 'Inventory Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Approved', date: '2026-05-10', time: '10:00', remarks: 'Lab equipment for incoming 2nd semester classes', updatedBy: 'Liza Mendoza' },
-  { id: 'SR-2026-303', title: 'Sticky notes and manila folders', kind: 'Supply Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Rejected', date: '2026-04-02', time: '09:00', remarks: 'Office organization supplies', updatedBy: 'Liza Mendoza' },
+  { id: 'SR-2026-303', title: 'Sticky notes and manila folders', kind: 'Supply Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Disapproved', date: '2026-04-02', time: '09:00', remarks: 'Office organization supplies', updatedBy: 'Liza Mendoza' },
   { id: 'LV-2026-501', title: 'Vacation leave', kind: 'Vacation Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Pending', date: '2026-06-20', time: '2026-06-24', remarks: 'Family vacation - will return papers after the leave period.' },
   { id: 'LV-2026-502', title: 'Sick leave', kind: 'Sick Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Approved', date: '2026-04-18', time: '2026-04-19', remarks: 'Medical appointment and recovery.', updatedBy: 'HR Office' },
   { id: 'LV-2026-503', title: 'Official leave', kind: 'Official Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Approved', date: '2026-05-10', time: '2026-05-12', remarks: 'Attending national engineering conference.', updatedBy: 'HR Office' },

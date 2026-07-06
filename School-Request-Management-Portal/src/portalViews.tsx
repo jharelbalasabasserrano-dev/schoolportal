@@ -38,8 +38,8 @@ import HrDashboard from './HrDashboard'
 import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
-import { documentKinds, facilities, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, roleMeta, storageKeys, type Announcement, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
-import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isLeaveApplication, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
+import { documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
@@ -48,7 +48,7 @@ import { getAttachmentErrorMessage, isSupabaseRealtimeEnabled, loadReadNotificat
 
 type ActiveModal =
   | { type: 'viewRequest'; request: PortalRequest }
-  | { type: 'decision'; request: PortalRequest; status: Status }
+  | { type: 'decision'; request: PortalRequest; status: PortalRequest['status'] }
   | { type: 'users' }
   | null
 
@@ -90,16 +90,15 @@ function getTodayInputValue() {
   return `${year}-${month}-${day}`
 }
 
-const deniedHrLeaveStatuses: Status[] = ['Rejected', 'Disapproved']
 const deniedHrLeaveLabel = 'Disapproved'
-const hrLeaveStatusRows: { color: string; label: string; status: Status }[] = [
+const hrLeaveStatusRows: { color: string; label: string; status: HRLeaveStatus }[] = [
   { label: 'Pending', color: 'bg-[#eba900]', status: 'Pending' },
   { label: 'Approved', color: 'bg-[#3a9276]', status: 'Approved' },
-  { label: deniedHrLeaveLabel, color: 'bg-[#b94247]', status: 'Rejected' },
+  { label: deniedHrLeaveLabel, color: 'bg-[#b94247]', status: 'Disapproved' },
 ]
 
-function getHrLeaveStatusLabel(status: Status | 'All') {
-  return status === 'Rejected' ? deniedHrLeaveLabel : status
+function getHrLeaveStatusLabel(status: HRLeaveStatus | 'All') {
+  return status
 }
 
 function playNotificationSound() {
@@ -159,7 +158,7 @@ export function Dashboard() {
   const { user, logout, accounts } = useAuth()
   const [requestList, setRequestList] = useState<PortalRequest[]>(() => {
     const stored = readStored<PortalRequest[]>(storageKeys.requests, [])
-    const merged = [...stored]
+    const merged = stored.map(normalizeRequestStatus)
     initialRequests.forEach((request) => {
       if (!merged.some((item) => item.id === request.id)) merged.push(request)
     })
@@ -310,7 +309,7 @@ export function Dashboard() {
         }
 
         const messages = await refreshMessageAttachmentUrls(data.messages)
-        setRequestList(data.requests)
+        setRequestList(data.requests.map(normalizeRequestStatus))
         setMessageList((current) => mergeMessages(current, messages))
         setAnnouncements(data.announcements)
         setInventory(data.inventory)
@@ -342,7 +341,7 @@ export function Dashboard() {
       refreshBootstrapData()
         .then(async (data) => {
           const messages = await refreshMessageAttachmentUrls(data.messages)
-          setRequestList(data.requests)
+          setRequestList(data.requests.map(normalizeRequestStatus))
           setMessageList((current) => mergeMessages(current, messages))
           setAnnouncements(data.announcements)
           setInventory(data.inventory)
@@ -529,15 +528,17 @@ export function Dashboard() {
     pendingRequestSavesRef.current.set(requestToSave.id, save)
   }
 
-  const updateRequestStatus = (requestId: string, status: Status, remarks: string, updates: Partial<PortalRequest> = {}) => {
+  const updateRequestStatus = (requestId: string, status: PortalRequest['status'], remarks: string, updates: Partial<PortalRequest> = {}) => {
     const currentRequest = requestList.find((request) => request.id === requestId)
-    const requestToSave = currentRequest?.kind === 'Facility Reservation'
-      ? { ...currentRequest, status, facilityRemarks: remarks, updatedBy: user.name }
-      : currentRequest && isLeaveApplication(currentRequest)
-        ? { ...currentRequest, ...updates, status, hrRemarks: remarks, updatedBy: user.name }
-        : currentRequest
-          ? { ...currentRequest, status, remarks, updatedBy: user.name }
-          : undefined
+    const requestToSave = currentRequest && isFacilityRequest(currentRequest)
+      ? { ...currentRequest, status: status as FacilityStatus, facilityRemarks: remarks, updatedBy: user.name }
+      : currentRequest && isHRLeaveRequest(currentRequest)
+        ? { ...currentRequest, ...updates, status: status as HRLeaveStatus, hrRemarks: remarks, updatedBy: user.name }
+        : currentRequest && isSupplyRequest(currentRequest)
+          ? { ...currentRequest, status: status as SupplyStatus, remarks, updatedBy: user.name }
+          : currentRequest && isRegistrarRequest(currentRequest)
+            ? { ...currentRequest, status: status as RegistrarStatus, remarks, updatedBy: user.name }
+            : undefined
     setRequestList((current) => current.map((request) => {
       if (request.id !== requestId) return request
       return requestToSave ?? request
@@ -761,7 +762,7 @@ export function Dashboard() {
   )
 }
 
-function OverviewView({ announcements, counts, onView, requests, user }: { announcements: Announcement[]; counts: Record<Status, number>; onView: (view: string) => void; requests: PortalRequest[]; user: User }) {
+function OverviewView({ announcements, counts, onView, requests, user }: { announcements: Announcement[]; counts: Record<string, number>; onView: (view: string) => void; requests: PortalRequest[]; user: User }) {
   return (
     <div className="space-y-8">
       <section className="rounded-lg bg-[linear-gradient(100deg,#228b22,#228b22_56%,#4cbb17)] p-7 text-white shadow-sm">
@@ -786,9 +787,9 @@ function OverviewView({ announcements, counts, onView, requests, user }: { annou
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
-        <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
-        <MetricCard label="Completed" value={counts.Completed} icon={BadgeCheck} tone="bg-stone-100 text-stone-700" />
+        <MetricCard label="Approved" value={counts.Approved ?? 0} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
+        <MetricCard label="Disapproved" value={counts.Disapproved ?? 0} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label="Completed" value={(counts.Completed ?? 0) + (counts['Ready for Pick Up'] ?? 0)} icon={BadgeCheck} tone="bg-stone-100 text-stone-700" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-3">
@@ -1003,18 +1004,18 @@ function AnnouncementsManager({ announcements, onCreate, onDelete, onUpdate, use
 }
 
 export function AdminOfficeView({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<FacilityStatus | 'All'>('All')
   const [query, setQuery] = useState('')
-  const reservations = requests.filter((request) => request.kind === 'Facility Reservation')
+  const reservations = requests.filter((request): request is FacilityPortalRequest => request.kind === 'Facility Reservation')
   const filtered = reservations.filter((request) => {
     const byStatus = statusFilter === 'All' || request.status === statusFilter
     const byQuery = `${request.id} ${request.owner} ${request.facility} ${request.remarks}`.toLowerCase().includes(query.toLowerCase())
     return byStatus && byQuery
   })
-  const counts = getCounts(reservations)
+  const counts = getStatusCounts(reservations, facilityStatuses)
   const total = reservations.length
   const today = '2026-06-03'
-  const todaysReservations = reservations.filter((request) => request.date === today && request.status !== 'Rejected')
+  const todaysReservations = reservations.filter((request) => request.date === today && request.status !== 'Disapproved')
   const upcomingApproved = reservations
     .filter((request) => request.status === 'Approved')
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
@@ -1024,7 +1025,7 @@ export function AdminOfficeView({ activeView, onReview, requests }: { activeView
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label="Disapproved" value={counts.Disapproved} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={Building2} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -1078,7 +1079,7 @@ export function AdminOfficeView({ activeView, onReview, requests }: { activeView
             </label>
           </div>
           <div className="mb-6 flex flex-wrap">
-            {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
+            {(['All', ...facilityStatuses] as const).map((status) => (
               <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
             ))}
           </div>
@@ -1155,18 +1156,17 @@ function FacilityReservationsTable({ onReview, requests }: { onReview: (request:
 
 export function HrOfficeView({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [typeFilter, setTypeFilter] = useState<RequestKind | 'All'>('All')
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<HRLeaveStatus | 'All'>('All')
   const [query, setQuery] = useState('')
-  const leaveApplications = requests.filter((request) => isLeaveApplication(request))
+  const leaveApplications = requests.filter((request): request is HRLeavePortalRequest => isHRLeaveRequest(request))
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
-    const byStatus = statusFilter === 'All' || (statusFilter === 'Rejected' ? deniedHrLeaveStatuses.includes(request.status) : request.status === statusFilter)
+    const byStatus = statusFilter === 'All' || request.status === statusFilter
     const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
-  const counts = getCounts(leaveApplications)
-  const deniedCount = counts.Rejected + counts.Disapproved
-  const hrStatusCounts = { ...counts, Rejected: deniedCount }
+  const counts = getStatusCounts(leaveApplications, hrLeaveStatuses)
+  const deniedCount = counts.Disapproved
   const total = leaveApplications.length
   const approvedRate = total ? Math.round((counts.Approved / total) * 100) : 0
 
@@ -1221,7 +1221,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
               ))}
             </div>
             <div className="flex flex-wrap">
-              {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
+              {(['All', ...hrLeaveStatuses] as const).map((status) => (
                 <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{getHrLeaveStatusLabel(status)}</button>
               ))}
             </div>
@@ -1233,7 +1233,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
       {activeView === 'Reports' && (
         <div className="space-y-6">
           <section className="grid gap-6 xl:grid-cols-2">
-            <StatusBreakdownPanel counts={hrStatusCounts} rows={hrLeaveStatusRows} total={total} title="Applications by status" />
+            <StatusBreakdownPanel counts={counts} rows={hrLeaveStatusRows} total={total} title="Applications by status" />
             <LeaveTypeDistributionPanel requests={leaveApplications} />
           </section>
           <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -1259,7 +1259,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
   )
 }
 
-function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: HRLeavePortalRequest[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1050px] text-left">

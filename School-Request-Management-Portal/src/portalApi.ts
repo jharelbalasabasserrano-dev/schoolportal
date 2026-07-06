@@ -1,4 +1,5 @@
 import { initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, initialUsers, type Announcement, type Message, type PortalRequest, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type User } from './portalData'
+import { normalizeRequestStatus } from './portalHelpers'
 
 export type BootstrapData = {
   accounts: User[]
@@ -63,21 +64,22 @@ function delay(ms: number) {
 }
 
 function fromApiRequest(request: ApiPortalRequest): PortalRequest {
-  return {
+  return normalizeRequestStatus({
     ...request,
     filedDate: request.filedDate ?? request.filingDate,
     vacationLeaveTotalEarned: request.vacationLeaveTotalEarned ?? request.vacationLeaveEarned,
     sickLeaveTotalEarned: request.sickLeaveTotalEarned ?? request.sickLeaveEarned,
-  }
+  })
 }
 
 function toApiRequest(request: PortalRequest): ApiPortalRequest {
+  const normalized = normalizeRequestStatus(request)
   return {
-    ...request,
-    date: toApiDate(request.date) ?? new Date().toISOString().slice(0, 10),
-    filingDate: toApiDate(request.filedDate),
-    vacationLeaveEarned: request.vacationLeaveTotalEarned,
-    sickLeaveEarned: request.sickLeaveTotalEarned,
+    ...normalized,
+    date: toApiDate(normalized.date) ?? new Date().toISOString().slice(0, 10),
+    filingDate: toApiDate(normalized.filedDate),
+    vacationLeaveEarned: normalized.vacationLeaveTotalEarned,
+    sickLeaveEarned: normalized.sickLeaveTotalEarned,
   }
 }
 

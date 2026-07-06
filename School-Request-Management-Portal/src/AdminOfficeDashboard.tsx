@@ -1,13 +1,13 @@
 import { useState, type ComponentType } from 'react'
 import { BadgeCheck, Building2, CheckCircle2, Clock, Search, XCircle } from 'lucide-react'
-import type { PortalRequest, Status } from './portalData'
+import { facilityStatuses, type FacilityPortalRequest, type FacilityStatus, type PortalRequest } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
 export default function AdminOfficeDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<FacilityStatus | 'All'>('All')
   const [query, setQuery] = useState('')
-  const reservations = requests.filter((request) => request.kind === 'Facility Reservation')
+  const reservations = requests.filter((request): request is FacilityPortalRequest => request.kind === 'Facility Reservation')
   const filtered = reservations.filter((request) => {
     const byStatus = statusFilter === 'All' || request.status === statusFilter
     const byQuery = `${request.id} ${request.owner} ${request.facility} ${request.remarks}`.toLowerCase().includes(query.toLowerCase())
@@ -16,7 +16,7 @@ export default function AdminOfficeDashboard({ activeView, onReview, requests }:
   const counts = getCounts(reservations)
   const total = reservations.length
   const today = '2026-06-03'
-  const todaysReservations = reservations.filter((request) => request.date === today && request.status !== 'Rejected')
+  const todaysReservations = reservations.filter((request) => request.date === today && request.status !== 'Disapproved')
   const upcomingApproved = reservations
     .filter((request) => request.status === 'Approved')
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
@@ -26,7 +26,7 @@ export default function AdminOfficeDashboard({ activeView, onReview, requests }:
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label="Disapproved" value={counts.Disapproved} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={Building2} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -80,7 +80,7 @@ export default function AdminOfficeDashboard({ activeView, onReview, requests }:
             </label>
           </div>
           <div className="mb-6 flex flex-wrap">
-            {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
+            {(['All', ...facilityStatuses] as const).map((status) => (
               <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
             ))}
           </div>
@@ -109,7 +109,7 @@ export default function AdminOfficeDashboard({ activeView, onReview, requests }:
   )
 }
 
-function FacilityReservationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+function FacilityReservationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: FacilityPortalRequest[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1050px] text-left">
@@ -176,14 +176,14 @@ function MetricCard({ icon: Icon, label, tone, value }: { icon: IconComponent; l
   )
 }
 
-function StatusPill({ status }: { status: Status }) {
-  const styles: Record<Status, string> = {
+function StatusPill({ status }: { status: FacilityStatus }) {
+  const styles: Record<FacilityStatus, string> = {
     Pending: 'bg-amber-50 text-amber-800 ring-amber-300',
     Approved: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
-    Rejected: 'bg-red-100 text-red-800 ring-red-300',
+    Disapproved: 'bg-red-100 text-red-800 ring-red-300',
     Completed: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
   }
-  const Icon = status === 'Pending' ? Clock : status === 'Rejected' ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
+  const Icon = status === 'Pending' ? Clock : status === 'Disapproved' ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold ring-1 ${styles[status]}`}>
       <Icon size={15} />
@@ -192,11 +192,12 @@ function StatusPill({ status }: { status: Status }) {
   )
 }
 
-function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { counts: Record<Status, number>; title?: string; total: number }) {
-  const rows: { label: Status; color: string }[] = [
+function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { counts: Record<FacilityStatus, number>; title?: string; total: number }) {
+  const rows: { label: FacilityStatus; color: string }[] = [
     { label: 'Pending', color: 'bg-[#eba900]' },
     { label: 'Approved', color: 'bg-[#3a9276]' },
-    { label: 'Rejected', color: 'bg-[#b94247]' },
+    { label: 'Disapproved', color: 'bg-[#b94247]' },
+    { label: 'Completed', color: 'bg-emerald-600' },
   ]
   return (
     <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -222,11 +223,11 @@ function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { c
   )
 }
 
-function getCounts(list: PortalRequest[]) {
+function getCounts(list: FacilityPortalRequest[]) {
   return {
     Pending: list.filter((item) => item.status === 'Pending').length,
     Approved: list.filter((item) => item.status === 'Approved').length,
-    Rejected: list.filter((item) => item.status === 'Rejected').length,
+    Disapproved: list.filter((item) => item.status === 'Disapproved').length,
     Completed: list.filter((item) => item.status === 'Completed').length,
   }
 }

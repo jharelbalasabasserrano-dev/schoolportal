@@ -1,6 +1,8 @@
-import type { Status } from './portalData'
+import type { PortalRequest } from './portalData'
 
-export default function StatusBreakdownPanel({ counts, rows = defaultRows, title = 'Status breakdown', total }: { counts: Record<Status, number>; rows?: { color: string; label: string; status: Status }[]; title?: string; total: number }) {
+type DisplayStatus = PortalRequest['status']
+
+export default function StatusBreakdownPanel<T extends string = DisplayStatus>({ counts, rows = defaultRows as { color: string; label: string; status: T }[], title = 'Status breakdown', total }: { counts: Record<T, number>; rows?: { color: string; label: string; status: T }[]; title?: string; total: number }) {
   return (
     <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
       <h2 className="mb-6 text-2xl font-bold">{title}</h2>
@@ -25,8 +27,8 @@ export default function StatusBreakdownPanel({ counts, rows = defaultRows, title
   )
 }
 
-const defaultRows: { color: string; label: string; status: Status }[] = [
+const defaultRows: { color: string; label: string; status: DisplayStatus }[] = [
     { label: 'Pending', color: 'bg-[#eba900]' },
     { label: 'Approved', color: 'bg-[#3a9276]' },
-    { label: 'Rejected', color: 'bg-[#b94247]' },
-  ].map((row) => ({ ...row, status: row.label as Status }))
+    { label: 'Disapproved', color: 'bg-[#b94247]' },
+  ].map((row) => ({ ...row, status: row.label as DisplayStatus }))

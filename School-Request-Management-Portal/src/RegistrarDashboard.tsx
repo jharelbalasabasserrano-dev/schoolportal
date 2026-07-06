@@ -1,18 +1,16 @@
 import { useState, type ComponentType } from 'react'
 import { BadgeCheck, CheckCircle2, Clock, FileText, Search, ShieldCheck, XCircle } from 'lucide-react'
-import type { PortalRequest, RequestKind, Status } from './portalData'
+import { documentKinds, registrarStatuses, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
-
-const documentKinds: RequestKind[] = ['TOR Request', 'COE Request', 'Exit Clearance', 'Certificate of Registration', 'Certificate of Grades', 'Certificate of Credit Units', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other Registrar Request']
 
 export default function RegistrarDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const initialType = activeView === 'TOR Requests' ? 'TOR Request' : activeView === 'COE Requests' ? 'COE Request' : activeView === 'Exit Clearance' ? 'Exit Clearance' : 'All'
   const [typeFilter, setTypeFilter] = useState<RequestKind | 'All'>(initialType)
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<RegistrarStatus | 'All'>('All')
   const [query, setQuery] = useState('')
 
-  const academicRequests = requests.filter((request) => documentKinds.includes(request.kind))
+  const academicRequests = requests.filter((request): request is RegistrarPortalRequest => documentKinds.includes(request.kind as RegistrarPortalRequest['kind']))
   const filtered = academicRequests.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
     const byStatus = statusFilter === 'All' || request.status === statusFilter
@@ -58,7 +56,7 @@ export default function RegistrarDashboard({ activeView, onReview, requests }: {
             ))}
           </div>
           <div className="flex flex-wrap">
-            {(['All', 'Pending', 'Approved', 'Rejected', 'Completed'] as const).map((status) => (
+            {(['All', ...registrarStatuses] as const).map((status) => (
               <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
             ))}
           </div>
@@ -127,14 +125,14 @@ function MetricCard({ icon: Icon, label, tone, value }: { icon: IconComponent; l
   )
 }
 
-function StatusPill({ status }: { status: Status }) {
-  const styles: Record<Status, string> = {
+function StatusPill({ status }: { status: RegistrarStatus }) {
+  const styles: Record<RegistrarStatus, string> = {
     Pending: 'bg-amber-50 text-amber-800 ring-amber-300',
-    Approved: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
-    Rejected: 'bg-red-100 text-red-800 ring-red-300',
-    Completed: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
+    'On Process': 'bg-blue-100 text-blue-800 ring-blue-300',
+    'Ready for Pick Up': 'bg-emerald-100 text-emerald-900 ring-emerald-300',
+    Disapproved: 'bg-red-100 text-red-800 ring-red-300',
   }
-  const Icon = status === 'Pending' ? Clock : status === 'Rejected' ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
+  const Icon = status === 'Pending' || status === 'On Process' ? Clock : status === 'Disapproved' ? XCircle : status === 'Ready for Pick Up' ? BadgeCheck : CheckCircle2
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold ring-1 ${styles[status]}`}>
       <Icon size={15} />

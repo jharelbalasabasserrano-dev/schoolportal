@@ -1,29 +1,24 @@
 import { useState, type ComponentType } from 'react'
 import { BadgeCheck, CalendarClock, CheckCircle2, Clock, Search, XCircle } from 'lucide-react'
-import type { PortalRequest, RequestKind, Status } from './portalData'
+import { allLeaveKinds, hrLeaveStatuses, leaveKinds, type HRLeavePortalRequest, type HRLeaveStatus, type PortalRequest, type RequestKind } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
-const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Wellness Leave', 'Other Leave']
-const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
-const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
-const deniedLeaveStatuses: Status[] = ['Rejected', 'Disapproved']
 const deniedLeaveLabel = 'Disapproved'
 
 export default function HrDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [typeFilter, setTypeFilter] = useState<RequestKind | 'All'>('All')
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>('All')
+  const [statusFilter, setStatusFilter] = useState<HRLeaveStatus | 'All'>('All')
   const [query, setQuery] = useState('')
-  const leaveApplications = requests.filter((request) => isLeaveApplication(request))
+  const leaveApplications = requests.filter((request): request is HRLeavePortalRequest => isLeaveApplication(request))
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
-    const byStatus = statusFilter === 'All' || (statusFilter === 'Rejected' ? deniedLeaveStatuses.includes(request.status) : request.status === statusFilter)
+    const byStatus = statusFilter === 'All' || request.status === statusFilter
     const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
   const counts = getCounts(leaveApplications)
-  const deniedCount = counts.Rejected + counts.Disapproved
-  const hrStatusCounts = { ...counts, Rejected: deniedCount }
+  const deniedCount = counts.Disapproved
   const total = leaveApplications.length
   const approvedRate = total ? Math.round((counts.Approved / total) * 100) : 0
 
@@ -96,7 +91,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
+              {(['All', ...hrLeaveStatuses] as const).map((status) => (
                 <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{getHrLeaveStatusLabel(status)}</button>
               ))}
             </div>
@@ -108,7 +103,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
       {activeView === 'Reports' && (
         <div className="space-y-6">
           <section className="grid gap-6 xl:grid-cols-2">
-            <StatusBreakdownPanel counts={hrStatusCounts} total={total} title="Applications by status" />
+            <StatusBreakdownPanel counts={counts} total={total} title="Applications by status" />
             <LeaveTypeDistributionPanel requests={leaveApplications} />
           </section>
           <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -239,15 +234,13 @@ function MetricCard({ icon: Icon, label, tone, value }: { icon: IconComponent; l
   )
 }
 
-function StatusPill({ status }: { status: Status }) {
-  const styles: Record<Status, string> = {
+function StatusPill({ status }: { status: HRLeaveStatus }) {
+  const styles: Record<HRLeaveStatus, string> = {
     Pending: 'bg-amber-50 text-amber-800 ring-amber-300',
     Approved: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
-    Rejected: 'bg-red-100 text-red-800 ring-red-300',
     Disapproved: 'bg-red-100 text-red-800 ring-red-300',
-    Completed: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
   }
-  const Icon = status === 'Pending' ? Clock : deniedLeaveStatuses.includes(status) ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
+  const Icon = status === 'Pending' ? Clock : status === 'Disapproved' ? XCircle : CheckCircle2
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold ring-1 ${styles[status]}`}>
       <Icon size={15} />
@@ -256,11 +249,11 @@ function StatusPill({ status }: { status: Status }) {
   )
 }
 
-function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { counts: Record<Status, number>; title?: string; total: number }) {
-  const rows: { label: Status; color: string }[] = [
+function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { counts: Record<HRLeaveStatus, number>; title?: string; total: number }) {
+  const rows: { label: HRLeaveStatus; color: string }[] = [
     { label: 'Pending', color: 'bg-[#eba900]' },
     { label: 'Approved', color: 'bg-[#3a9276]' },
-    { label: 'Rejected', color: 'bg-[#b94247]' },
+    { label: 'Disapproved', color: 'bg-[#b94247]' },
   ]
   return (
     <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -286,18 +279,16 @@ function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { c
   )
 }
 
-function getCounts(list: PortalRequest[]) {
+function getCounts(list: HRLeavePortalRequest[]) {
   return {
     Pending: list.filter((item) => item.status === 'Pending').length,
     Approved: list.filter((item) => item.status === 'Approved').length,
-    Rejected: list.filter((item) => item.status === 'Rejected').length,
     Disapproved: list.filter((item) => item.status === 'Disapproved').length,
-    Completed: list.filter((item) => item.status === 'Completed').length,
   }
 }
 
-function getHrLeaveStatusLabel(status: Status | 'All') {
-  return status === 'Rejected' ? deniedLeaveLabel : status
+function getHrLeaveStatusLabel(status: HRLeaveStatus | 'All') {
+  return status
 }
 
 function isLeaveApplication(request: PortalRequest) {

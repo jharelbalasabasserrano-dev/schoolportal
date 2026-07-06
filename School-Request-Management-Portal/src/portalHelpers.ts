@@ -1,6 +1,15 @@
 import { BadgeCheck, Bell, Building2, CalendarClock, CheckCircle2, Clock, FileText, Home, Info, Layers3, Megaphone, MessageSquare, PackageCheck, Save, ShieldCheck, User as UserIcon, UsersRound, XCircle } from 'lucide-react'
 import ccdLogo from './assets/ccd-logo.png'
-import { allLeaveKinds, documentKinds, facilities, messageAttachmentCache, studentRequestKinds, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type User } from './portalData'
+import { allLeaveKinds, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, messageAttachmentCache, registrarStatuses, studentRequestKinds, supplyStatuses, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+
+type LegacyStatus = 'Approved' | 'Completed' | 'Rejected'
+export type RequestModule = 'registrar' | 'hrLeave' | 'supply' | 'facility'
+export type ModuleStatusMap = {
+  registrar: RegistrarStatus
+  hrLeave: HRLeaveStatus
+  supply: SupplyStatus
+  facility: FacilityStatus
+}
 
 export type NotificationItem = {
   id: string
@@ -95,14 +104,60 @@ export function getVisibleRequests(user: User, list: PortalRequest[]) {
   )
 }
 
+export function getRequestModule(request: PortalRequest): RequestModule {
+  if (request.office === 'Registrar') return 'registrar'
+  if (request.office === 'HR Office') return 'hrLeave'
+  if (request.office === 'Supply Office') return 'supply'
+  return 'facility'
+}
+
+export function getModuleStatuses(module: 'registrar'): readonly RegistrarStatus[]
+export function getModuleStatuses(module: 'hrLeave'): readonly HRLeaveStatus[]
+export function getModuleStatuses(module: 'supply'): readonly SupplyStatus[]
+export function getModuleStatuses(module: 'facility'): readonly FacilityStatus[]
+export function getModuleStatuses(module: RequestModule) {
+  if (module === 'registrar') return registrarStatuses
+  if (module === 'hrLeave') return hrLeaveStatuses
+  if (module === 'supply') return supplyStatuses
+  return facilityStatuses
+}
+
+export function getStatusCounts<T extends string>(list: { status: T }[], statuses: readonly T[]) {
+  return Object.fromEntries(statuses.map((status) => [status, list.filter((item) => item.status === status).length])) as Record<T, number>
+}
+
 export function getCounts(list: PortalRequest[]) {
-  return {
-    Pending: list.filter((item) => item.status === 'Pending').length,
-    Approved: list.filter((item) => item.status === 'Approved').length,
-    Rejected: list.filter((item) => item.status === 'Rejected').length,
-    Disapproved: list.filter((item) => item.status === 'Disapproved').length,
-    Completed: list.filter((item) => item.status === 'Completed').length,
+  const statuses = Array.from(new Set(list.map((request) => request.status)))
+  return getStatusCounts(list, statuses)
+}
+
+export function isRegistrarRequest(request: PortalRequest): request is RegistrarPortalRequest {
+  return request.office === 'Registrar'
+}
+
+export function isSupplyRequest(request: PortalRequest): request is SupplyPortalRequest {
+  return request.office === 'Supply Office'
+}
+
+export function isFacilityRequest(request: PortalRequest): request is FacilityPortalRequest {
+  return request.kind === 'Facility Reservation'
+}
+
+export function isHRLeaveRequest(request: PortalRequest): request is HRLeavePortalRequest {
+  return request.office === 'HR Office' && allLeaveKinds.includes(request.kind)
+}
+
+export function normalizeRequestStatus(request: PortalRequest): PortalRequest {
+  if (isRegistrarRequest(request)) {
+    const status = request.status as RegistrarStatus | LegacyStatus
+    if (status === 'Approved') return { ...request, status: 'On Process' }
+    if (status === 'Completed') return { ...request, status: 'Ready for Pick Up' }
+    if (status === 'Rejected') return { ...request, status: 'Disapproved' }
   }
+  if (isHRLeaveRequest(request) || isSupplyRequest(request) || isFacilityRequest(request)) {
+    if ((request.status as string) === 'Rejected') return { ...request, status: 'Disapproved' } as PortalRequest
+  }
+  return request
 }
 
 export function getDocumentTitle(kind: RequestKind) {
@@ -120,7 +175,7 @@ export function getDocumentTitle(kind: RequestKind) {
 export function hasFacilityConflict(requests: PortalRequest[], date: string, time: string, facility: string) {
   const [start, end] = time.split('-')
   return requests.some((request) => {
-    if (request.kind !== 'Facility Reservation' || request.facility !== facility || request.date !== date || request.status === 'Rejected') return false
+    if (request.kind !== 'Facility Reservation' || request.facility !== facility || request.date !== date || request.status === 'Disapproved') return false
     const [reservedStart, reservedEnd] = request.time.split('-')
     return start < reservedEnd && end > reservedStart
   })
@@ -943,21 +998,19 @@ export function isLeaveApplication(request: PortalRequest) {
 }
 
 export function isLeaveDisapproved(request: PortalRequest) {
-  return isLeaveApplication(request) && (request.status === 'Disapproved' || request.status === 'Rejected')
+  return isLeaveApplication(request) && request.status === 'Disapproved'
 }
 
 export function getRequestStatusLabel(request: PortalRequest) {
-  return isLeaveDisapproved(request) ? 'Disapproved' : request.status
+  return request.status
 }
 
 export function normalizeLeaveStatus(request: PortalRequest): PortalRequest {
-  return isLeaveApplication(request) && request.status === 'Rejected'
-    ? { ...request, status: 'Disapproved' }
-    : request
+  return normalizeRequestStatus(request)
 }
 
-export function getLeaveStatusFilterValue(request: PortalRequest): Status {
-  return isLeaveDisapproved(request) ? 'Disapproved' : request.status
+export function getLeaveStatusFilterValue(request: HRLeavePortalRequest): HRLeaveStatus {
+  return request.status
 }
 
 export function getLeaveTypeLabel(kind: RequestKind, customLeaveType?: string) {
