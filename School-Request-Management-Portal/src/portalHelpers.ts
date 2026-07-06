@@ -564,13 +564,18 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: 210mm 297mm; margin: 12mm; }
+    @page { size: 210mm 297mm; margin: 8mm; }
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --page-margin: 12mm;
-      --printable-width: 186mm;
-      --printable-height: 273mm;
+      --page-margin: 8mm;
+      --printable-width: 194mm;
+      --printable-height: 281mm;
+      --form-width: 186mm;
+      --form-height: 273mm;
+      --form-scale: 1.0293;
+      --scaled-form-width: 191.45mm;
+      --scaled-form-height: 281mm;
       --line-width: 1px;
       --half-width: 93mm;
       --heading-height: 28mm;
@@ -582,8 +587,8 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     * { box-sizing: border-box; }
     html, body { width: 100%; min-height: 100%; margin: 0; }
     body { background: #e2e8f0; padding: 8px; font-family: "Times New Roman", Times, serif; color: #000; font-size: 8.2px; line-height: 1.04; }
-    .sheet { width: var(--printable-width); height: var(--printable-height); margin: 0 auto; overflow: hidden; background: #fff; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
-    .inner { width: var(--printable-width); height: var(--printable-height); padding: 0; display: flex; flex-direction: column; outline: var(--line-width) solid #000; outline-offset: calc(var(--line-width) * -1); }
+    .sheet { width: var(--scaled-form-width); height: var(--scaled-form-height); margin: 0 auto; overflow: hidden; background: #fff; box-shadow: 0 12px 24px rgba(15, 23, 42, .16); page-break-inside: avoid; }
+    .inner { width: var(--form-width); height: var(--form-height); padding: 0; display: flex; flex-direction: column; outline: var(--line-width) solid #000; outline-offset: calc(var(--line-width) * -1); transform: scale(var(--form-scale)); transform-origin: top left; }
     .form-heading { position: relative; width: 100%; height: var(--heading-height); border-bottom: var(--line-width) solid #000; padding: 2mm; flex: 0 0 var(--heading-height); }
     .form-label { position: absolute; left: 2mm; top: 2mm; font-size: 9px; font-weight: 700; line-height: 1.15; }
     .logo { position: absolute; left: 48mm; top: 3mm; width: 14mm; height: 14mm; object-fit: contain; border-radius: 999px; }
@@ -639,8 +644,8 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     @media print {
       html, body { width: var(--a4-width); height: var(--a4-height); }
       body { background: white; padding: 0; }
-      .sheet { width: var(--printable-width); height: var(--printable-height); box-shadow: none; }
-      .inner { width: var(--printable-width); height: var(--printable-height); }
+      .sheet { width: var(--scaled-form-width); height: var(--scaled-form-height); box-shadow: none; }
+      .inner { width: var(--form-width); height: var(--form-height); }
     }
   </style>
 </head>
