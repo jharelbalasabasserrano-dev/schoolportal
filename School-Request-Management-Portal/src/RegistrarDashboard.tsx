@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from 'react'
 import { BadgeCheck, CheckCircle2, Clock, FileText, Search, ShieldCheck, XCircle } from 'lucide-react'
-import { documentKinds, registrarStatuses, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind } from './portalData'
+import { registrarStatuses, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind } from './portalData'
+import { isRegistrarRequest } from './portalHelpers'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
@@ -10,7 +11,7 @@ export default function RegistrarDashboard({ activeView, onReview, requests }: {
   const [statusFilter, setStatusFilter] = useState<RegistrarStatus | 'All'>('All')
   const [query, setQuery] = useState('')
 
-  const academicRequests = requests.filter((request): request is RegistrarPortalRequest => documentKinds.includes(request.kind as RegistrarPortalRequest['kind']))
+  const academicRequests = requests.filter((request): request is RegistrarPortalRequest => isRegistrarRequest(request))
   const filtered = academicRequests.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
     const byStatus = statusFilter === 'All' || request.status === statusFilter

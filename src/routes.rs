@@ -119,7 +119,7 @@ pub async fn get_bootstrap_data(
             released_by,
             position,
             salary,
-            working_days,
+            working_days::float8 AS working_days,
             inclusive_dates,
             communication,
             leave_detail,
@@ -459,7 +459,7 @@ pub async fn sync_bootstrap_data(
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-                $30, $31, $32, $33, $34, $35, $36, $37,
+                $30, $31::numeric, $32, $33, $34, $35, $36, $37,
                 $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
             )
             "#;
@@ -813,7 +813,7 @@ pub async fn create_portal_request(
             CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
             $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
             $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-            $30, $31, $32, $33, $34, $35, $36, $37,
+            $30, $31::numeric, $32, $33, $34, $35, $36, $37,
             $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
         )
         ON CONFLICT (id) DO UPDATE SET
@@ -899,7 +899,7 @@ pub async fn create_portal_request(
             released_by,
             position,
             salary,
-            working_days,
+            working_days::float8 AS working_days,
             inclusive_dates,
             communication,
             leave_detail,

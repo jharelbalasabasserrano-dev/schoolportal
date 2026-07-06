@@ -366,9 +366,28 @@ export function Dashboard() {
   useEffect(() => {
     if (!databaseReady || !supabase) return undefined
     const realtimeClient = supabase
+    const refreshPortalState = () => {
+      refreshBootstrapData()
+        .then(async (data) => {
+          const messages = await refreshMessageAttachmentUrls(data.messages)
+          setRequestList(data.requests.map(normalizeRequestStatus))
+          setMessageList((current) => mergeMessages(current, messages))
+          setAnnouncements(data.announcements)
+          setInventory(data.inventory)
+          setCategories(data.categories)
+          setSuppliers(data.suppliers)
+          setStockMovements(data.stockMovements)
+        })
+        .catch((error) => {
+          console.warn(error)
+        })
+    }
 
     const channel = realtimeClient
-      .channel('portal-request-messages')
+      .channel('portal-data-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'portal_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'portal_requests' }, refreshPortalState)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_messages' }, async (payload) => {
         const message = await messageFromRealtimePayload(payload)
         if (message) setMessageList((current) => mergeMessages(current, [message]))

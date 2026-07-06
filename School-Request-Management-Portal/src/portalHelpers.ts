@@ -31,6 +31,15 @@ export const notificationItems: NotificationItem[] = [
   { id: 'enrollment-reminder', kind: 'info', title: 'Reminder: Enrollment Period', body: 'Online enrollment for 1st Semester AY 2026-2027 opens on June 22.', date: '5/29/2026, 11:00:00 PM', age: '3d ago', read: false, icon: Info, tone: 'bg-stone-100 text-stone-700' },
 ]
 
+function normalizeOfficeValue(office: string) {
+  const normalized = office.trim().toLowerCase()
+  if (normalized === 'registrar' || normalized === 'registrar office') return 'Registrar'
+  if (normalized === 'supply office' || normalized === 'supply') return 'Supply Office'
+  if (normalized === 'admin office' || normalized === 'facilities office' || normalized === 'facility office') return 'Admin Office'
+  if (normalized === 'hr office' || normalized === 'hr') return 'HR Office'
+  return office
+}
+
 export function getNavItems(role: Role) {
   const student = [
     { label: 'Overview', icon: Home },
@@ -144,16 +153,17 @@ export function isHRLeaveRequest(request: PortalRequest): request is HRLeavePort
 }
 
 export function normalizeRequestStatus(request: PortalRequest): PortalRequest {
-  if (isRegistrarRequest(request)) {
-    const status = request.status as string
-    if (status === 'Approved') return { ...request, status: 'On Process' }
-    if (status === 'Completed') return { ...request, status: 'Ready for Pick Up' }
-    if (status === legacyDisapprovedStatus) return { ...request, status: 'Disapproved' }
+  const status = (request.status as string).trim()
+  const normalizedRequest = { ...request, office: normalizeOfficeValue(request.office), status } as PortalRequest
+  if (isRegistrarRequest(normalizedRequest)) {
+    if (status === 'Approved') return { ...normalizedRequest, status: 'On Process' }
+    if (status === 'Completed') return { ...normalizedRequest, status: 'Ready for Pick Up' }
+    if (status === legacyDisapprovedStatus) return { ...normalizedRequest, status: 'Disapproved' }
   }
-  if (isHRLeaveRequest(request) || isSupplyRequest(request) || isFacilityRequest(request)) {
-    if ((request.status as string) === legacyDisapprovedStatus) return { ...request, status: 'Disapproved' } as PortalRequest
+  if (isHRLeaveRequest(normalizedRequest) || isSupplyRequest(normalizedRequest) || isFacilityRequest(normalizedRequest)) {
+    if (status === legacyDisapprovedStatus) return { ...normalizedRequest, status: 'Disapproved' } as PortalRequest
   }
-  return request
+  return normalizedRequest
 }
 
 export function getDocumentTitle(kind: RequestKind) {
