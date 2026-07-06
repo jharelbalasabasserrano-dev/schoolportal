@@ -7,6 +7,8 @@ type IconComponent = ComponentType<{ size?: number; className?: string }>
 const leaveKinds: RequestKind[] = ['Vacation Leave', 'Mandatory/Forced Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Special Privilege Leave', 'Solo Parent Leave', 'Study Leave', '10-Day VAWC Leave', 'Rehabilitation Privilege', 'Special Leave Benefits for Women', 'Special Emergency (Calamity) Leave', 'Adoption Leave', 'Wellness Leave', 'Other Leave']
 const legacyLeaveKinds: RequestKind[] = ['Personal Leave', 'Official Leave']
 const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
+const deniedLeaveStatuses: Status[] = ['Rejected', 'Disapproved']
+const deniedLeaveLabel = 'Disapproved'
 
 export default function HrDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [typeFilter, setTypeFilter] = useState<RequestKind | 'All'>('All')
@@ -15,11 +17,13 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
   const leaveApplications = requests.filter((request) => isLeaveApplication(request))
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
-    const byStatus = statusFilter === 'All' || request.status === statusFilter
+    const byStatus = statusFilter === 'All' || (statusFilter === 'Rejected' ? deniedLeaveStatuses.includes(request.status) : request.status === statusFilter)
     const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
   const counts = getCounts(leaveApplications)
+  const deniedCount = counts.Rejected + counts.Disapproved
+  const hrStatusCounts = { ...counts, Rejected: deniedCount }
   const total = leaveApplications.length
   const approvedRate = total ? Math.round((counts.Approved / total) * 100) : 0
 
@@ -28,7 +32,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label={deniedLeaveLabel} value={deniedCount} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={CalendarClock} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -93,7 +97,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
             </div>
             <div className="flex flex-wrap gap-2">
               {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
-                <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
+                <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{getHrLeaveStatusLabel(status)}</button>
               ))}
             </div>
           </div>
@@ -104,7 +108,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
       {activeView === 'Reports' && (
         <div className="space-y-6">
           <section className="grid gap-6 xl:grid-cols-2">
-            <StatusBreakdownPanel counts={counts} total={total} title="Applications by status" />
+            <StatusBreakdownPanel counts={hrStatusCounts} total={total} title="Applications by status" />
             <LeaveTypeDistributionPanel requests={leaveApplications} />
           </section>
           <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -115,7 +119,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
                 ['Pending', counts.Pending],
                 ['Approval rate', `${approvedRate}%`],
                 ['Approved', counts.Approved],
-                ['Rejected', counts.Rejected],
+                [deniedLeaveLabel, deniedCount],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
                   <span className="text-slate-600">{label}</span>
@@ -240,13 +244,14 @@ function StatusPill({ status }: { status: Status }) {
     Pending: 'bg-amber-50 text-amber-800 ring-amber-300',
     Approved: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
     Rejected: 'bg-red-100 text-red-800 ring-red-300',
+    Disapproved: 'bg-red-100 text-red-800 ring-red-300',
     Completed: 'bg-emerald-100 text-emerald-900 ring-emerald-300',
   }
-  const Icon = status === 'Pending' ? Clock : status === 'Rejected' ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
+  const Icon = status === 'Pending' ? Clock : deniedLeaveStatuses.includes(status) ? XCircle : status === 'Completed' ? BadgeCheck : CheckCircle2
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold ring-1 ${styles[status]}`}>
       <Icon size={15} />
-      {status}
+      {getHrLeaveStatusLabel(status)}
     </span>
   )
 }
@@ -267,7 +272,7 @@ function StatusBreakdownPanel({ counts, title = 'Status breakdown', total }: { c
           return (
             <div key={row.label}>
               <div className="mb-2 flex justify-between text-lg">
-                <span>{row.label}</span>
+                <span>{getHrLeaveStatusLabel(row.label)}</span>
                 <span className="font-semibold">{value} ({percent.toFixed(1)}%)</span>
               </div>
               <div className="h-2.5 overflow-hidden rounded-full bg-stone-200">
@@ -286,8 +291,13 @@ function getCounts(list: PortalRequest[]) {
     Pending: list.filter((item) => item.status === 'Pending').length,
     Approved: list.filter((item) => item.status === 'Approved').length,
     Rejected: list.filter((item) => item.status === 'Rejected').length,
+    Disapproved: list.filter((item) => item.status === 'Disapproved').length,
     Completed: list.filter((item) => item.status === 'Completed').length,
   }
+}
+
+function getHrLeaveStatusLabel(status: Status | 'All') {
+  return status === 'Rejected' ? deniedLeaveLabel : status
 }
 
 function isLeaveApplication(request: PortalRequest) {

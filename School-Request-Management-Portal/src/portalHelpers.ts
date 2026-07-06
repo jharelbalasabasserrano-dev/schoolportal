@@ -1,6 +1,6 @@
 import { BadgeCheck, Bell, Building2, CalendarClock, CheckCircle2, Clock, FileText, Home, Info, Layers3, Megaphone, MessageSquare, PackageCheck, Save, ShieldCheck, User as UserIcon, UsersRound, XCircle } from 'lucide-react'
 import ccdLogo from './assets/ccd-logo.png'
-import { allLeaveKinds, documentKinds, facilities, messageAttachmentCache, studentRequestKinds, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type User } from './portalData'
+import { allLeaveKinds, documentKinds, facilities, messageAttachmentCache, studentRequestKinds, type Message, type MessageAttachment, type PortalRequest, type RequestKind, type Role, type Status, type User } from './portalData'
 
 export type NotificationItem = {
   id: string
@@ -100,6 +100,7 @@ export function getCounts(list: PortalRequest[]) {
     Pending: list.filter((item) => item.status === 'Pending').length,
     Approved: list.filter((item) => item.status === 'Approved').length,
     Rejected: list.filter((item) => item.status === 'Rejected').length,
+    Disapproved: list.filter((item) => item.status === 'Disapproved').length,
     Completed: list.filter((item) => item.status === 'Completed').length,
   }
 }
@@ -548,7 +549,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const checked = (value: boolean) => `<span class="box">${value ? 'x' : ''}</span>`
   const line = (value = '', label = '') => `<div class="line-row ${label ? '' : 'line-row-full'}">${label ? `<span>${escapeHtml(label)}</span>` : ''}<span class="line">${escapeHtml(value)}</span></div>`
   const leaveType = getCivilServiceLeaveLabel(request.kind)
-  const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const recommendation = isLeaveDisapproved(request) ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
@@ -770,7 +771,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
               <p class="subhead">7.B Recommendation</p>
               <div class="item">${check(recommendation, 'For approval')}<span>For approval</span></div>
               <div class="item">${check(recommendation, 'For disapproval')}<span>For disapproval due to</span></div>
-              ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+              ${line(isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')}
               <div class="signature"><span class="line">${escapeHtml(request.updatedBy ?? '')}</span><p>Authorized Officer</p></div>
             </div>
             <div class="cell grid-bottom">
@@ -781,7 +782,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             </div>
             <div class="cell grid-right grid-bottom">
               <p class="subhead">7.D Disapproved Due To:</p>
-              ${line(request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : '')}
+              ${line(isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')}
             </div>
           </div>
         </section>
@@ -939,6 +940,24 @@ export function getTopFacilities(requests: PortalRequest[]) {
 
 export function isLeaveApplication(request: PortalRequest) {
   return allLeaveKinds.includes(request.kind) && request.id.startsWith('LV-')
+}
+
+export function isLeaveDisapproved(request: PortalRequest) {
+  return isLeaveApplication(request) && (request.status === 'Disapproved' || request.status === 'Rejected')
+}
+
+export function getRequestStatusLabel(request: PortalRequest) {
+  return isLeaveDisapproved(request) ? 'Disapproved' : request.status
+}
+
+export function normalizeLeaveStatus(request: PortalRequest): PortalRequest {
+  return isLeaveApplication(request) && request.status === 'Rejected'
+    ? { ...request, status: 'Disapproved' }
+    : request
+}
+
+export function getLeaveStatusFilterValue(request: PortalRequest): Status {
+  return isLeaveDisapproved(request) ? 'Disapproved' : request.status
 }
 
 export function getLeaveTypeLabel(kind: RequestKind, customLeaveType?: string) {

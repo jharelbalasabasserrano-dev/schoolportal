@@ -1,5 +1,5 @@
 export type Role = 'student' | 'registrar' | 'supply' | 'adminOffice' | 'hr' | 'employee' | 'admin'
-export type Status = 'Pending' | 'Approved' | 'Rejected' | 'Completed'
+export type Status = 'Pending' | 'Approved' | 'Rejected' | 'Disapproved' | 'Completed'
 export type Office = 'Registrar' | 'Supply Office' | 'Admin Office' | 'HR Office'
 export type RequestKind =
   | 'TOR Request'
@@ -221,7 +221,7 @@ export const initialRequests: PortalRequest[] = [
   { id: 'LV-2026-501', title: 'Vacation leave', kind: 'Vacation Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Pending', date: '2026-06-20', time: '2026-06-24', remarks: 'Family vacation - will return papers after the leave period.' },
   { id: 'LV-2026-502', title: 'Sick leave', kind: 'Sick Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Approved', date: '2026-04-18', time: '2026-04-19', remarks: 'Medical appointment and recovery.', updatedBy: 'HR Office' },
   { id: 'LV-2026-503', title: 'Official leave', kind: 'Official Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Approved', date: '2026-05-10', time: '2026-05-12', remarks: 'Attending national engineering conference.', updatedBy: 'HR Office' },
-  { id: 'LV-2026-504', title: 'Personal leave', kind: 'Personal Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Rejected', date: '2026-03-05', time: '2026-03-05', remarks: 'Personal errand - will make up class schedule.', updatedBy: 'HR Office' },
+  { id: 'LV-2026-504', title: 'Personal leave', kind: 'Personal Leave', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'HR Office', status: 'Disapproved', date: '2026-03-05', time: '2026-03-05', remarks: 'Personal errand - will make up class schedule.', updatedBy: 'HR Office' },
   { id: 'REQ-2406', title: 'Vacation leave filing', kind: 'Vacation Leave', ownerId: 'emp-01', owner: 'Juan Reyes', office: 'HR Office', status: 'Approved', date: '2026-06-18', time: '07:30', remarks: 'Approved by department head', updatedBy: 'HR Office' },
 ]
 

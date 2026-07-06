@@ -90,6 +90,18 @@ function getTodayInputValue() {
   return `${year}-${month}-${day}`
 }
 
+const deniedHrLeaveStatuses: Status[] = ['Rejected', 'Disapproved']
+const deniedHrLeaveLabel = 'Disapproved'
+const hrLeaveStatusRows: { color: string; label: string; status: Status }[] = [
+  { label: 'Pending', color: 'bg-[#eba900]', status: 'Pending' },
+  { label: 'Approved', color: 'bg-[#3a9276]', status: 'Approved' },
+  { label: deniedHrLeaveLabel, color: 'bg-[#b94247]', status: 'Rejected' },
+]
+
+function getHrLeaveStatusLabel(status: Status | 'All') {
+  return status === 'Rejected' ? deniedHrLeaveLabel : status
+}
+
 function playNotificationSound() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) return
@@ -1148,11 +1160,13 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
   const leaveApplications = requests.filter((request) => isLeaveApplication(request))
   const filtered = leaveApplications.filter((request) => {
     const byType = typeFilter === 'All' || request.kind === typeFilter
-    const byStatus = statusFilter === 'All' || request.status === statusFilter
+    const byStatus = statusFilter === 'All' || (statusFilter === 'Rejected' ? deniedHrLeaveStatuses.includes(request.status) : request.status === statusFilter)
     const byQuery = `${request.id} ${request.owner} ${request.remarks} ${getLeaveTypeLabel(request.kind, request.customLeaveType)} ${request.leaveDuration ?? ''} ${request.leaveTime ?? ''}`.toLowerCase().includes(query.toLowerCase())
     return byType && byStatus && byQuery
   })
   const counts = getCounts(leaveApplications)
+  const deniedCount = counts.Rejected + counts.Disapproved
+  const hrStatusCounts = { ...counts, Rejected: deniedCount }
   const total = leaveApplications.length
   const approvedRate = total ? Math.round((counts.Approved / total) * 100) : 0
 
@@ -1161,7 +1175,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label={deniedHrLeaveLabel} value={deniedCount} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={CalendarClock} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -1176,7 +1190,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
                     <p className="font-semibold"><span className="font-mono font-normal">{request.id}</span> {request.owner}</p>
                     <p className="text-slate-600">{getLeaveTypeLabel(request.kind, request.customLeaveType)} - {getLeaveDateRange(request)}</p>
                   </div>
-                  <StatusPill status={request.status} />
+                  <StatusPill label={getHrLeaveStatusLabel(request.status)} status={request.status} />
                 </button>
               ))}
             </div>
@@ -1208,7 +1222,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
             </div>
             <div className="flex flex-wrap">
               {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((status) => (
-                <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{status}</button>
+                <button key={status} onClick={() => setStatusFilter(status)} className={`rounded-full border px-5 py-2 ${statusFilter === status ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{getHrLeaveStatusLabel(status)}</button>
               ))}
             </div>
           </div>
@@ -1219,7 +1233,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
       {activeView === 'Reports' && (
         <div className="space-y-6">
           <section className="grid gap-6 xl:grid-cols-2">
-            <StatusBreakdownPanel counts={counts} total={total} title="Applications by status" />
+            <StatusBreakdownPanel counts={hrStatusCounts} rows={hrLeaveStatusRows} total={total} title="Applications by status" />
             <LeaveTypeDistributionPanel requests={leaveApplications} />
           </section>
           <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
@@ -1230,7 +1244,7 @@ export function HrOfficeView({ activeView, onReview, requests }: { activeView: s
                 ['Pending', counts.Pending],
                 ['Approval rate', `${approvedRate}%`],
                 ['Approved', counts.Approved],
-                ['Rejected', counts.Rejected],
+                [deniedHrLeaveLabel, deniedCount],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
                   <span className="text-slate-600">{label}</span>
@@ -1270,7 +1284,7 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
               <td className="px-7 py-5"><span className="rounded-full bg-stone-100 px-3 py-1">{getLeaveTypeLabel(request.kind, request.customLeaveType)}</span></td>
               <td className="px-7 py-5 text-slate-600">{getLeaveDateRange(request)}</td>
               <td className="max-w-[420px] truncate px-7 py-5 text-xl text-slate-600">{request.remarks}</td>
-              <td className="px-7 py-5"><StatusPill status={request.status} /></td>
+              <td className="px-7 py-5"><StatusPill label={getHrLeaveStatusLabel(request.status)} status={request.status} /></td>
               <td className="px-7 py-5 text-right">
                 <button onClick={() => onReview(request)} className="font-semibold text-[#228b22]">Review</button>
               </td>
@@ -3380,7 +3394,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               ['Duration', getLeaveDurationText(editedRequest)],
               ['Dates', getLeaveDateRange(editedRequest)],
               ['Reason', reason],
-              ['Current Status', request.status],
+              ['Current Status', getHrLeaveStatusLabel(request.status)],
               ['Updated By', request.updatedBy ?? 'No office action yet'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-[#e7e1db] p-4">
@@ -3401,7 +3415,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={request.status === 'Rejected' || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={deniedHrLeaveStatuses.includes(request.status) || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
               Reject
             </button>
