@@ -337,18 +337,20 @@ function InventoryView({ categories, inventory, onInventoryChange, onStockMoveme
                     onClick={() => {
                       const newQty = selectedItem.quantity + stockChangeQty
                       onInventoryChange(inventory.map((item) => item.id === selectedItem.id ? { ...item, quantity: newQty } : item))
-                      onStockMovementAdd && onStockMovementAdd([{
-                        id: `SM-${Date.now()}`,
-                        itemId: selectedItem.id,
-                        itemName: selectedItem.name,
-                        type: 'Stock In',
-                        quantity: stockChangeQty,
-                        reason: stockChangeReason || 'Stock In',
-                        performedBy: 'Liza Mendoza',
-                        date: new Date().toLocaleString(),
-                        previousQty: selectedItem.quantity,
-                        newQty,
-                      }])
+                      if (onStockMovementAdd) {
+                        onStockMovementAdd([{
+                          id: `SM-${Date.now()}`,
+                          itemId: selectedItem.id,
+                          itemName: selectedItem.name,
+                          type: 'Stock In',
+                          quantity: stockChangeQty,
+                          reason: stockChangeReason || 'Stock In',
+                          performedBy: 'Liza Mendoza',
+                          date: new Date().toLocaleString(),
+                          previousQty: selectedItem.quantity,
+                          newQty,
+                        }])
+                      }
                       setSelectedItem({ ...selectedItem, quantity: newQty })
                       setStockChangeQty(0)
                       setStockChangeReason('')
@@ -366,18 +368,20 @@ function InventoryView({ categories, inventory, onInventoryChange, onStockMoveme
                       }
                       const newQty = selectedItem.quantity - stockChangeQty
                       onInventoryChange(inventory.map((item) => item.id === selectedItem.id ? { ...item, quantity: newQty } : item))
-                      onStockMovementAdd && onStockMovementAdd([{
-                        id: `SM-${Date.now()}`,
-                        itemId: selectedItem.id,
-                        itemName: selectedItem.name,
-                        type: 'Stock Out',
-                        quantity: stockChangeQty,
-                        reason: stockChangeReason || 'Stock Out',
-                        performedBy: 'Liza Mendoza',
-                        date: new Date().toLocaleString(),
-                        previousQty: selectedItem.quantity,
-                        newQty,
-                      }])
+                      if (onStockMovementAdd) {
+                        onStockMovementAdd([{
+                          id: `SM-${Date.now()}`,
+                          itemId: selectedItem.id,
+                          itemName: selectedItem.name,
+                          type: 'Stock Out',
+                          quantity: stockChangeQty,
+                          reason: stockChangeReason || 'Stock Out',
+                          performedBy: 'Liza Mendoza',
+                          date: new Date().toLocaleString(),
+                          previousQty: selectedItem.quantity,
+                          newQty,
+                        }])
+                      }
                       setSelectedItem({ ...selectedItem, quantity: newQty })
                       setStockChangeQty(0)
                       setStockChangeReason('')

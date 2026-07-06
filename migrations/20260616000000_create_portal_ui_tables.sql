@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS portal_requests (
     status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN (
         'Pending',
         'Approved',
-        'Rejected',
+        'Disapproved',
+        'On Process',
+        'Ready for Pick Up',
         'Completed'
     )),
     request_date DATE NOT NULL,

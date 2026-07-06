@@ -1,6 +1,6 @@
 import { Building2, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers3, PackageCheck, Plus, Printer, Send, XCircle } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { facilities, leaveKinds, type Announcement, type PortalRequest, type RequestKind, type User } from './portalData'
+import { facilities, leaveKinds, type Announcement, type LeaveRequestKind, type PortalRequest, type User } from './portalData'
 import { createLeaveReferenceNumber, formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
 import { AnnouncementsPanel, MetricCard, StatusPill } from './portalComponents'
 import { RoomAvailabilityView } from './portalViews'
@@ -15,7 +15,7 @@ export function EmployeePortalView({ activeView, announcements, existingRequests
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Pending" value={counts.Pending} icon={Clock} tone="bg-amber-100 text-amber-800" />
         <MetricCard label="Approved" value={counts.Approved} icon={CheckCircle2} tone="bg-emerald-100 text-emerald-800" />
-        <MetricCard label="Rejected" value={counts.Rejected} icon={XCircle} tone="bg-red-100 text-red-800" />
+        <MetricCard label="Disapproved" value={counts.Disapproved} icon={XCircle} tone="bg-red-100 text-red-800" />
         <MetricCard label="Total" value={total} icon={Layers3} tone="bg-stone-100 text-stone-700" />
       </section>
 
@@ -62,7 +62,7 @@ function EmployeeOverviewCards({ onView }: { onView: (view: string) => void }) {
 }
 
 function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalRequest) => void; user: User }) {
-  const [kind, setKind] = useState<RequestKind>('Vacation Leave')
+  const [kind, setKind] = useState<LeaveRequestKind>('Vacation Leave')
   const [officeDepartment, setOfficeDepartment] = useState(user.department || 'CITY COLLEGE OF DAVAO')
   const [filedDate, setFiledDate] = useState('2026-06-03')
   const [startDate, setStartDate] = useState('2026-06-03')

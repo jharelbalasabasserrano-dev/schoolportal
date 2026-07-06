@@ -1,11 +1,15 @@
 import { CheckCircle2, FileText, Plus, Save, Search, ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { roleMeta, type PortalRequest, type Role, type Status, type User } from './portalData'
+import { facilityStatuses, hrLeaveStatuses, registrarStatuses, roleMeta, supplyStatuses, type PortalRequest, type Role, type User } from './portalData'
 import { formatShortDate, getAdminActivityLogs, getAdminRequestType, getAdminStats, getAdminTypeRows, getAdminTypeTone, getCounts, getSystemAdminRequests } from './portalHelpers'
 import { useAuth } from './portalAuth'
 import { Avatar, StatusPill } from './portalComponents'
 import { Modal } from './portalViews'
 import StatusBreakdownPanel from './StatusBreakdownPanel'
+
+type AdminStatusFilter = 'All' | PortalRequest['status']
+
+const adminStatusFilters: readonly AdminStatusFilter[] = ['All', ...new Set([...registrarStatuses, ...hrLeaveStatuses, ...supplyStatuses, ...facilityStatuses])]
 
 export function SystemAdminView({ activeView, onViewRequest, requests }: { activeView: string; onViewRequest: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const { accounts } = useAuth()
@@ -212,7 +216,7 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
 function AdminAllRequestsView({ onViewRequest, requests }: { onViewRequest: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [query, setQuery] = useState('')
   const [type, setType] = useState<'All' | 'Document' | 'Facility' | 'Supply' | 'Leave'>('All')
-  const [status, setStatus] = useState<Status | 'All'>('All')
+  const [status, setStatus] = useState<AdminStatusFilter>('All')
   const filtered = requests.filter((request) => {
     const requestType = getAdminRequestType(request)
     const byType = type === 'All' || requestType === type
@@ -231,8 +235,8 @@ function AdminAllRequestsView({ onViewRequest, requests }: { onViewRequest: (req
         <select value={type} onChange={(event) => setType(event.target.value as typeof type)} className="h-14 rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
           {(['All', 'Document', 'Facility', 'Supply', 'Leave'] as const).map((item) => <option key={item} value={item}>{item === 'All' ? 'All types' : item}</option>)}
         </select>
-        <select value={status} onChange={(event) => setStatus(event.target.value as Status | 'All')} className="h-14 rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
-          {(['All', 'Pending', 'Approved', 'Rejected', 'Completed'] as const).map((item) => <option key={item} value={item}>{item === 'All' ? 'All status' : item}</option>)}
+        <select value={status} onChange={(event) => setStatus(event.target.value as AdminStatusFilter)} className="h-14 rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+          {adminStatusFilters.map((item) => <option key={item} value={item}>{item === 'All' ? 'All status' : item}</option>)}
         </select>
       </div>
       <div className="overflow-x-auto">
@@ -299,7 +303,7 @@ function AdminReportsView({ accounts, requests, stats }: { accounts: User[]; req
             {[
               ['Total requests', requests.length],
               ['Approved', stats.approved],
-              ['Rejected', stats.rejected],
+              ['Disapproved', stats.disapproved],
             ].map(([label, value]) => <div key={label} className="flex justify-between"><span className="text-slate-600">{label}</span><span className="font-bold">{value}</span></div>)}
           </div>
           <div className="space-y-3 text-xl">

@@ -38,7 +38,7 @@ import HrDashboard from './HrDashboard'
 import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
-import { documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+import { documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
 import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
@@ -89,6 +89,12 @@ function getTodayInputValue() {
   const day = String(today.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+type RequestStatusFilter = 'All' | PortalRequest['status']
+type RequestDecisionStatus = PortalRequest['status']
+
+const requestStatusFilters: readonly RequestStatusFilter[] = ['All', ...new Set([...registrarStatuses, ...hrLeaveStatuses, ...supplyStatuses, ...facilityStatuses])]
+const hrLeaveDisapprovedStatuses: readonly HRLeaveStatus[] = ['Disapproved']
 
 const deniedHrLeaveLabel = 'Disapproved'
 const hrLeaveStatusRows: { color: string; label: string; status: HRLeaveStatus }[] = [
@@ -248,7 +254,7 @@ export function Dashboard() {
     }
     window.addEventListener('storage', syncMessages)
     return () => window.removeEventListener('storage', syncMessages)
-  }, [])
+  }, [accounts])
 
   useEffect(() => {
     localStorage.setItem(storageKeys.inventory, JSON.stringify(inventory))
@@ -530,15 +536,21 @@ export function Dashboard() {
 
   const updateRequestStatus = (requestId: string, status: PortalRequest['status'], remarks: string, updates: Partial<PortalRequest> = {}) => {
     const currentRequest = requestList.find((request) => request.id === requestId)
-    const requestToSave = currentRequest && isFacilityRequest(currentRequest)
-      ? { ...currentRequest, status: status as FacilityStatus, facilityRemarks: remarks, updatedBy: user.name }
-      : currentRequest && isHRLeaveRequest(currentRequest)
-        ? { ...currentRequest, ...updates, status: status as HRLeaveStatus, hrRemarks: remarks, updatedBy: user.name }
-        : currentRequest && isSupplyRequest(currentRequest)
-          ? { ...currentRequest, status: status as SupplyStatus, remarks, updatedBy: user.name }
-          : currentRequest && isRegistrarRequest(currentRequest)
-            ? { ...currentRequest, status: status as RegistrarStatus, remarks, updatedBy: user.name }
-            : undefined
+    const requestToSave: PortalRequest | undefined = (() => {
+      if (currentRequest && isFacilityRequest(currentRequest) && facilityStatuses.includes(status as FacilityStatus)) {
+        return { ...currentRequest, status: status as FacilityStatus, facilityRemarks: remarks, updatedBy: user.name }
+      }
+      if (currentRequest && isHRLeaveRequest(currentRequest) && hrLeaveStatuses.includes(status as HRLeaveStatus)) {
+        return { ...currentRequest, ...(updates as Partial<HRLeavePortalRequest>), status: status as HRLeaveStatus, hrRemarks: remarks, updatedBy: user.name }
+      }
+      if (currentRequest && isSupplyRequest(currentRequest) && supplyStatuses.includes(status as SupplyStatus)) {
+        return { ...currentRequest, status: status as SupplyStatus, remarks, updatedBy: user.name }
+      }
+      if (currentRequest && isRegistrarRequest(currentRequest) && registrarStatuses.includes(status as RegistrarStatus)) {
+        return { ...currentRequest, status: status as RegistrarStatus, remarks, updatedBy: user.name }
+      }
+      return undefined
+    })()
     setRequestList((current) => current.map((request) => {
       if (request.id !== requestId) return request
       return requestToSave ?? request
@@ -737,10 +749,10 @@ export function Dashboard() {
         </main>
       </div>
 
-      {modal?.type === 'viewRequest' && user.role === 'registrar' && <RegistrarReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && user.role === 'supply' && <SupplyReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && user.role === 'adminOffice' && <FacilityReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && user.role === 'hr' && <LeaveReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'registrar' && isRegistrarRequest(modal.request) && <RegistrarReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'supply' && isSupplyRequest(modal.request) && <SupplyReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'adminOffice' && isFacilityRequest(modal.request) && <FacilityReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'hr' && isHRLeaveRequest(modal.request) && <LeaveReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && !['registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
       {modal?.type === 'decision' && <DecisionModal request={modal.request} status={modal.status} onClose={() => setModal(null)} onSubmit={updateRequestStatus} />}
       {modal?.type === 'users' && <UsersModal onClose={() => setModal(null)} />}
@@ -1346,7 +1358,7 @@ function LeaveTypeDistributionPanel({ requests }: { requests: PortalRequest[] })
 }
 
 function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalRequest) => void; user: User }) {
-  const [kind, setKind] = useState<RequestKind>('COE Request')
+  const [kind, setKind] = useState<RegistrarRequestKind>('COE Request')
   const [studentId, setStudentId] = useState('')
   const [yearLevel, setYearLevel] = useState('')
   const [semester, setSemester] = useState('')
@@ -1357,7 +1369,7 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
   const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(['Transcript of Records (TOR)'])
   const [purpose, setPurpose] = useState('')
   const [error, setError] = useState('')
-  const registrarDocuments: { kind: RequestKind; label: string; description: string }[] = [
+  const registrarDocuments: { kind: RegistrarRequestKind; label: string; description: string }[] = [
     { kind: 'Certificate of Registration', label: 'Certificate of Registration', description: 'Official registration record for the current term.' },
     { kind: 'COE Request', label: 'Certificate of Enrollment', description: 'Proof of current enrollment for scholarships, visas, and requirements.' },
     { kind: 'Certificate of Grades', label: 'Certificate of Grades', description: 'Certified grade record for a term or school year.' },
@@ -1515,7 +1527,7 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
   const [attendees, setAttendees] = useState(10)
   const [purpose, setPurpose] = useState('')
   const [error, setError] = useState('')
-  const upcoming = existingRequests.filter((request) => request.facility === facility && request.status !== 'Rejected')
+  const upcoming = existingRequests.filter((request) => request.facility === facility && request.status !== 'Disapproved')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1624,11 +1636,11 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
 export function RoomAvailabilityView({ requests }: { requests: PortalRequest[] }) {
   const [selectedDay, setSelectedDay] = useState(3)
   const bookedDays = requests
-    .filter((request) => request.kind === 'Facility Reservation' && request.date.startsWith('2026-06-') && request.status !== 'Rejected')
+    .filter((request) => request.kind === 'Facility Reservation' && request.date.startsWith('2026-06-') && request.status !== 'Disapproved')
     .map((request) => Number(request.date.slice(-2)))
   const bookedDaySet = new Set(bookedDays)
   const selectedDate = `2026-06-${String(selectedDay).padStart(2, '0')}`
-  const bookings = requests.filter((request) => request.kind === 'Facility Reservation' && request.date === selectedDate && request.status !== 'Rejected')
+  const bookings = requests.filter((request) => request.kind === 'Facility Reservation' && request.date === selectedDate && request.status !== 'Disapproved')
   const bookedFacilityNames = new Set(bookings.map((booking) => booking.facility))
   const availableCount = facilities.filter(([name]) => !bookedFacilityNames.has(name)).length
   const bookedCount = facilities.length - availableCount
@@ -1700,7 +1712,7 @@ export function RoomAvailabilityView({ requests }: { requests: PortalRequest[] }
 
 function MyRequestsView({ onView, requests }: { onView: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<Status | 'All'>('All')
+  const [status, setStatus] = useState<RequestStatusFilter>('All')
   const [category, setCategory] = useState<'All' | 'Documents' | 'Facilities'>('All')
   const filtered = requests.filter((request) => {
     const bySearch = `${request.id} ${request.title} ${request.remarks} ${request.kind}`.toLowerCase().includes(query.toLowerCase())
@@ -1717,7 +1729,7 @@ function MyRequestsView({ onView, requests }: { onView: (request: PortalRequest)
             <h2 className="text-2xl font-bold">My requests</h2>
             <p className="mt-2 text-xl text-slate-600">Track the status of your document requests and facility reservations.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              {(['All', 'Pending', 'Approved', 'Rejected', 'Completed'] as const).map((item) => (
+              {requestStatusFilters.map((item) => (
                 <button key={item} onClick={() => setStatus(item)} className={`rounded-full border px-5 py-2 ${status === item ? 'border-[#4cbb17] bg-[#4cbb17]/10 text-[#228b22]' : 'border-[#e7e1db] hover:bg-stone-50'}`}>{item}</button>
               ))}
             </div>
@@ -1806,13 +1818,6 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
   const thread = selected ? messages.filter((message) => message.requestId === selected.id) : []
 
   useEffect(() => {
-    if (!conversations.length) return
-    if (!selectedId || !conversations.some((request) => request.id === selectedId)) {
-      setSelectedId(conversations[0].id)
-    }
-  }, [conversations, selectedId])
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [selected?.id, thread.length])
 
@@ -1845,9 +1850,18 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
     const attachmentData = getMessageAttachmentData(message)
     if (!attachmentData) return
 
-    let attachmentUrl = ''
     try {
-      attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+      const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+      if (!attachmentUrl) return
+
+      const link = document.createElement('a')
+      link.href = attachmentUrl
+      link.download = attachmentData.name
+      link.target = '_blank'
+      link.rel = 'noreferrer'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
     } catch (error) {
       const errorMessage = getAttachmentErrorMessage(error)
       console.error('[message attachment] Download failed', {
@@ -1858,25 +1872,17 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
       setComposerError(errorMessage)
       return
     }
-    if (!attachmentUrl) return
-
-    const link = document.createElement('a')
-    link.href = attachmentUrl
-    link.download = attachmentData.name
-    link.target = '_blank'
-    link.rel = 'noreferrer'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
   }
 
   const printAttachment = async (message: Message) => {
     const attachmentData = getMessageAttachmentData(message)
     if (!attachmentData) return
 
-    let attachmentUrl = ''
     try {
-      attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+      const attachmentUrl = await getFreshAttachmentUrl(attachmentData)
+      if (!attachmentUrl) return
+
+      printMessageAttachment({ ...attachmentData, accessUrl: attachmentUrl, dataUrl: attachmentData.dataUrl || '' })
     } catch (error) {
       const errorMessage = getAttachmentErrorMessage(error)
       console.error('[message attachment] Print failed', {
@@ -1887,9 +1893,6 @@ function MessagesView({ currentUser, messages, onMarkRead, onSend, requests }: {
       setComposerError(errorMessage)
       return
     }
-    if (!attachmentUrl) return
-
-    printMessageAttachment({ ...attachmentData, accessUrl: attachmentUrl, dataUrl: attachmentData.dataUrl || '' })
   }
 
   const uploadAttachment = (file?: File) => {
@@ -2399,7 +2402,11 @@ function DialogShell({ children, onClose, width }: { children: ReactNode; onClos
 }
 
 
-function RequestsWorkspace({ canApprove, onDecision, onView, requests }: { canApprove: boolean; onDecision: (request: PortalRequest, status: Status) => void; onView: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+function getDefaultApprovalStatus(request: PortalRequest): RequestDecisionStatus {
+  return isRegistrarRequest(request) ? 'On Process' : 'Approved'
+}
+
+function RequestsWorkspace({ canApprove, onDecision, onView, requests }: { canApprove: boolean; onDecision: (request: PortalRequest, status: RequestDecisionStatus) => void; onView: (request: PortalRequest) => void; requests: PortalRequest[] }) {
   return (
     <section className="overflow-hidden rounded-lg border border-[#e7e1db] bg-white">
       <div className="border-b border-[#e7e1db] p-7">
@@ -2421,8 +2428,8 @@ function RequestsWorkspace({ canApprove, onDecision, onView, requests }: { canAp
                 <td className="px-7 py-5">
                   <div className="flex gap-2">
                     <button onClick={() => onView(request)} className="rounded-md border border-[#d9d3cc] px-3 py-2">View</button>
-                    {canApprove && request.status === 'Pending' && <button onClick={() => onDecision(request, 'Approved')} className="rounded-md bg-emerald-700 px-3 py-2 text-white">Approve</button>}
-                    {canApprove && request.status === 'Pending' && <button onClick={() => onDecision(request, 'Rejected')} className="rounded-md bg-red-700 px-3 py-2 text-white">Reject</button>}
+                    {canApprove && request.status === 'Pending' && <button onClick={() => onDecision(request, getDefaultApprovalStatus(request))} className="rounded-md bg-emerald-700 px-3 py-2 text-white">Approve</button>}
+                    {canApprove && request.status === 'Pending' && <button onClick={() => onDecision(request, 'Disapproved')} className="rounded-md bg-red-700 px-3 py-2 text-white">Disapprove</button>}
                   </div>
                 </td>
               </tr>
@@ -2605,7 +2612,7 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   const leaveType = getCivilServiceLeaveLabel(request.kind)
   const leaveTypes = getCivilServiceLeaveTypes()
-  const recommendation = request.status === 'Rejected' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const recommendation = request.status === 'Disapproved' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
@@ -2732,7 +2739,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <p className="font-bold">7.B RECOMMENDATION</p>
               <OfficialCheck checked={recommendation === 'For approval'} label="For approval" />
               <OfficialCheck checked={recommendation === 'For disapproval'} label="For disapproval due to" />
-              <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
+              <OfficialLine value={request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : ''} />
               <div className="mt-[8mm] text-center">
                 <p className="border-b border-black px-[2mm]">{request.updatedBy ?? ''}</p>
                 <p className="mt-[1mm] text-[8.5px]">Authorized Officer</p>
@@ -2746,7 +2753,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
             </div>
             <div className="border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.D DISAPPROVED DUE TO:</p>
-              <OfficialLine value={request.status === 'Rejected' ? request.hrRemarks ?? request.remarks : ''} />
+              <OfficialLine value={request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : ''} />
             </div>
           </div>
           <div className="mx-auto h-[16mm] w-[86mm] px-[2mm] pt-[2mm] text-center">
@@ -2944,7 +2951,7 @@ function PrintLine({ label, value }: { label: string; value: string }) {
   )
 }
 
-function RegistrarReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string) => void; request: PortalRequest }) {
+function RegistrarReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: RegistrarStatus, remarks: string) => void; request: RegistrarPortalRequest }) {
   const [remarks, setRemarks] = useState(request.remarks)
 
   return (
@@ -2992,27 +2999,27 @@ function RegistrarReviewModal({ onClose, onSubmit, request }: { onClose: () => v
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-5">
           <h3 className="mb-4 text-xl font-bold">Decision</h3>
           <div className="space-y-3">
-            <button disabled={request.status === 'Approved'} onClick={() => onSubmit(request.id, 'Approved', remarks || 'Approved by Registrar.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'On Process'} onClick={() => onSubmit(request.id, 'On Process', remarks || 'Approved for processing by Registrar.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={request.status === 'Rejected'} onClick={() => onSubmit(request.id, 'Rejected', remarks || 'Rejected by Registrar.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Disapproved'} onClick={() => onSubmit(request.id, 'Disapproved', remarks || 'Disapproved by Registrar.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
-              Reject
+              Disapprove
             </button>
-            <button disabled={request.status !== 'Approved'} onClick={() => onSubmit(request.id, 'Completed', remarks || 'Request completed and released.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3cc] font-semibold disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status !== 'On Process'} onClick={() => onSubmit(request.id, 'Ready for Pick Up', remarks || 'Request is ready for pick up.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3cc] font-semibold disabled:cursor-not-allowed disabled:opacity-45">
               <BadgeCheck size={18} />
-              Mark completed
+              Ready for pick up
             </button>
           </div>
-          <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved requests can be marked completed after the document is released.</p>
+          <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved requests move to On Process and can be marked ready once prepared.</p>
         </aside>
       </div>
     </Modal>
   )
 }
 
-function SupplyReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string) => void; request: PortalRequest }) {
+function SupplyReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: SupplyStatus, remarks: string) => void; request: SupplyPortalRequest }) {
   const [remarks, setRemarks] = useState(request.remarks)
   const items = getSupplyItems(request)
 
@@ -3062,9 +3069,9 @@ function SupplyReviewModal({ onClose, onSubmit, request }: { onClose: () => void
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={request.status === 'Rejected'} onClick={() => onSubmit(request.id, 'Rejected', remarks || 'Rejected by Supply Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Disapproved'} onClick={() => onSubmit(request.id, 'Disapproved', remarks || 'Disapproved by Supply Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
-              Reject
+              Disapprove
             </button>
           </div>
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved supply requests are reflected immediately in the reports and status breakdown.</p>
@@ -3074,7 +3081,7 @@ function SupplyReviewModal({ onClose, onSubmit, request }: { onClose: () => void
   )
 }
 
-function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string) => void; request: PortalRequest }) {
+function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: FacilityStatus, remarks: string) => void; request: FacilityPortalRequest }) {
   const [remarks, setRemarks] = useState(request.facilityRemarks ?? '')
 
   return (
@@ -3126,9 +3133,9 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={request.status === 'Rejected'} onClick={() => onSubmit(request.id, 'Rejected', remarks || 'Reservation rejected by Admin Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={request.status === 'Disapproved'} onClick={() => onSubmit(request.id, 'Disapproved', remarks || 'Reservation disapproved by Admin Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
-              Reject
+              Disapprove
             </button>
           </div>
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved reservations appear in room availability and Admin Office reports.</p>
@@ -3138,8 +3145,8 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
   )
 }
 
-function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string, updates?: Partial<PortalRequest>) => void; request: PortalRequest }) {
-  const [kind, setKind] = useState<RequestKind>(request.kind)
+function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: HRLeaveStatus, remarks: string, updates?: Partial<HRLeavePortalRequest>) => void; request: HRLeavePortalRequest }) {
+  const [kind, setKind] = useState<LeaveRequestKind>(request.kind)
   const [officeDepartment, setOfficeDepartment] = useState(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')
   const [filedDate, setFiledDate] = useState(request.filedDate ?? request.date)
   const [position, setPosition] = useState(request.position ?? '')
@@ -3165,7 +3172,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const workingDays = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
   const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
   const leaveTitle = getLeaveTypeLabel(kind, customLeaveTypeValue)
-  const editedRequest: PortalRequest = {
+  const editedRequest: HRLeavePortalRequest = {
     ...request,
     title: leaveTitle,
     kind,
@@ -3196,7 +3203,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
     hrRemarks,
   }
 
-  const submitDecision = (status: Status, fallbackRemarks: string) => {
+  const submitDecision = (status: HRLeaveStatus, fallbackRemarks: string) => {
     onSubmit(request.id, status, hrRemarks.trim() || fallbackRemarks, {
       title: leaveTitle,
       kind,
@@ -3244,7 +3251,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="sm:col-span-2">
                 <span className="mb-2 block font-medium">Leave type</span>
-                <select value={kind} onChange={(event) => setKind(event.target.value as RequestKind)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                <select value={kind} onChange={(event) => setKind(event.target.value as LeaveRequestKind)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
                   {leaveKinds.map((item) => <option key={item} value={item}>{getLeaveTypeLabel(item)}</option>)}
                 </select>
               </label>
@@ -3415,9 +3422,9 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               <CheckCircle2 size={18} />
               Approve
             </button>
-            <button disabled={deniedHrLeaveStatuses.includes(request.status) || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Rejected', 'Leave application rejected by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+            <button disabled={hrLeaveDisapprovedStatuses.includes(request.status) || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Disapproved', 'Leave application disapproved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#228b22] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <XCircle size={18} />
-              Reject
+              Disapprove
             </button>
           </div>
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved leave applications are reflected immediately in HR reports and status totals.</p>
@@ -3427,8 +3434,8 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   )
 }
 
-function DecisionModal({ onClose, onSubmit, request, status }: { onClose: () => void; onSubmit: (requestId: string, status: Status, remarks: string) => void; request: PortalRequest; status: Status }) {
-  const [remarks, setRemarks] = useState(status === 'Approved' ? 'Approved for processing.' : status === 'Completed' ? 'Request completed.' : '')
+function DecisionModal({ onClose, onSubmit, request, status }: { onClose: () => void; onSubmit: (requestId: string, status: RequestDecisionStatus, remarks: string) => void; request: PortalRequest; status: RequestDecisionStatus }) {
+  const [remarks, setRemarks] = useState(status === 'Approved' || status === 'On Process' ? 'Approved for processing.' : status === 'Completed' || status === 'Ready for Pick Up' ? 'Request completed.' : '')
   return (
     <Modal title={`${status} Request`} onClose={onClose}>
       <div className="space-y-4">

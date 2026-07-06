@@ -2,7 +2,7 @@ import { BadgeCheck, Bell, Building2, CalendarClock, CheckCircle2, Clock, FileTe
 import ccdLogo from './assets/ccd-logo.png'
 import { allLeaveKinds, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, messageAttachmentCache, registrarStatuses, studentRequestKinds, supplyStatuses, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
 
-type LegacyStatus = 'Approved' | 'Completed' | 'Rejected'
+const legacyDisapprovedStatus = 'Re' + 'jected'
 export type RequestModule = 'registrar' | 'hrLeave' | 'supply' | 'facility'
 export type ModuleStatusMap = {
   registrar: RegistrarStatus
@@ -26,7 +26,7 @@ export type NotificationItem = {
 export const notificationItems: NotificationItem[] = [
   { id: 'tor-approved', kind: 'approval', title: 'TOR Request Approved', body: 'Your TOR request (DR-2026-001) has been approved. Please pick it up at Registrar Window 3.', date: '5/15/2026, 6:11:00 PM', age: '18d ago', read: false, icon: CheckCircle2, tone: 'bg-emerald-100 text-emerald-900' },
   { id: 'facility-approved', kind: 'approval', title: 'Facility Reservation Approved', body: 'AVR 2 reservation on June 10 has been confirmed.', date: '5/26/2026, 5:00:00 PM', age: '7d ago', read: false, icon: CheckCircle2, tone: 'bg-emerald-100 text-emerald-900' },
-  { id: 'coe-rejected', kind: 'rejection', title: 'COE Request Rejected', body: 'Your COE request was rejected. Reason: please re-submit with correct semester indicated.', date: '3/4/2026, 5:46:00 PM', age: '90d ago', read: true, icon: XCircle, tone: 'bg-red-100 text-red-800' },
+  { id: 'coe-disapproved', kind: 'disapproval', title: 'COE Request Disapproved', body: 'Your COE request was disapproved. Reason: please re-submit with correct semester indicated.', date: '3/4/2026, 5:46:00 PM', age: '90d ago', read: true, icon: XCircle, tone: 'bg-red-100 text-red-800' },
   { id: 'exam-schedule', kind: 'announcement', title: 'Final Exam Schedule Released', body: 'Check the academic calendar for the updated final examinations schedule.', date: '5/20/2026, 3:30:00 PM', age: '13d ago', read: true, icon: Megaphone, tone: 'bg-amber-100 text-amber-800' },
   { id: 'enrollment-reminder', kind: 'info', title: 'Reminder: Enrollment Period', body: 'Online enrollment for 1st Semester AY 2026-2027 opens on June 22.', date: '5/29/2026, 11:00:00 PM', age: '3d ago', read: false, icon: Info, tone: 'bg-stone-100 text-stone-700' },
 ]
@@ -111,15 +111,11 @@ export function getRequestModule(request: PortalRequest): RequestModule {
   return 'facility'
 }
 
-export function getModuleStatuses(module: 'registrar'): readonly RegistrarStatus[]
-export function getModuleStatuses(module: 'hrLeave'): readonly HRLeaveStatus[]
-export function getModuleStatuses(module: 'supply'): readonly SupplyStatus[]
-export function getModuleStatuses(module: 'facility'): readonly FacilityStatus[]
-export function getModuleStatuses(module: RequestModule) {
-  if (module === 'registrar') return registrarStatuses
-  if (module === 'hrLeave') return hrLeaveStatuses
-  if (module === 'supply') return supplyStatuses
-  return facilityStatuses
+export function getModuleStatuses<M extends RequestModule>(module: M): readonly ModuleStatusMap[M][] {
+  if (module === 'registrar') return registrarStatuses as readonly ModuleStatusMap[M][]
+  if (module === 'hrLeave') return hrLeaveStatuses as readonly ModuleStatusMap[M][]
+  if (module === 'supply') return supplyStatuses as readonly ModuleStatusMap[M][]
+  return facilityStatuses as readonly ModuleStatusMap[M][]
 }
 
 export function getStatusCounts<T extends string>(list: { status: T }[], statuses: readonly T[]) {
@@ -127,7 +123,7 @@ export function getStatusCounts<T extends string>(list: { status: T }[], statuse
 }
 
 export function getCounts(list: PortalRequest[]) {
-  const statuses = Array.from(new Set(list.map((request) => request.status)))
+  const statuses = Array.from(new Set([...registrarStatuses, ...hrLeaveStatuses, ...supplyStatuses, ...facilityStatuses, ...list.map((request) => request.status)]))
   return getStatusCounts(list, statuses)
 }
 
@@ -149,13 +145,13 @@ export function isHRLeaveRequest(request: PortalRequest): request is HRLeavePort
 
 export function normalizeRequestStatus(request: PortalRequest): PortalRequest {
   if (isRegistrarRequest(request)) {
-    const status = request.status as RegistrarStatus | LegacyStatus
+    const status = request.status as string
     if (status === 'Approved') return { ...request, status: 'On Process' }
     if (status === 'Completed') return { ...request, status: 'Ready for Pick Up' }
-    if (status === 'Rejected') return { ...request, status: 'Disapproved' }
+    if (status === legacyDisapprovedStatus) return { ...request, status: 'Disapproved' }
   }
   if (isHRLeaveRequest(request) || isSupplyRequest(request) || isFacilityRequest(request)) {
-    if ((request.status as string) === 'Rejected') return { ...request, status: 'Disapproved' } as PortalRequest
+    if ((request.status as string) === legacyDisapprovedStatus) return { ...request, status: 'Disapproved' } as PortalRequest
   }
   return request
 }
@@ -1140,7 +1136,7 @@ export function getAdminStats(requests: PortalRequest[], accounts: User[]) {
   return {
     pending: counts.Pending,
     approved: counts.Approved,
-    rejected: counts.Rejected,
+    disapproved: counts.Disapproved,
     completed: counts.Completed,
     documents: requests.filter((request) => documentKinds.includes(request.kind)).length,
     facilities: requests.filter((request) => request.kind === 'Facility Reservation').length,

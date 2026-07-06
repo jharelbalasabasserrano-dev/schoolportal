@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from 'react'
-import { BadgeCheck, CalendarClock, CheckCircle2, Clock, Search, XCircle } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Clock, Search, XCircle } from 'lucide-react'
 import { allLeaveKinds, hrLeaveStatuses, leaveKinds, type HRLeavePortalRequest, type HRLeaveStatus, type PortalRequest, type RequestKind } from './portalData'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
@@ -129,7 +129,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
   )
 }
 
-function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: HRLeavePortalRequest[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1050px] text-left">
@@ -291,7 +291,7 @@ function getHrLeaveStatusLabel(status: HRLeaveStatus | 'All') {
   return status
 }
 
-function isLeaveApplication(request: PortalRequest) {
+function isLeaveApplication(request: PortalRequest): request is HRLeavePortalRequest {
   return allLeaveKinds.includes(request.kind)
 }
 
