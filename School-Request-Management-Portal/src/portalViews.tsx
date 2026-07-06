@@ -757,7 +757,7 @@ export function Dashboard() {
           )}
           {!['registrar', 'supply', 'adminOffice', 'hr', 'employee', 'admin'].includes(user.role) && activeView === 'Overview' && <OverviewView announcements={visibleAnnouncements} counts={counts} onView={setActiveView} requests={visibleRequests} user={user} />}
           {['admin', 'registrar'].includes(user.role) && activeView === 'Announcements' && <AnnouncementsManager announcements={announcements} onCreate={addAnnouncement} onDelete={deleteAnnouncement} onUpdate={updateAnnouncement} user={user} />}
-          {activeView === 'Request Document' && <RequestDocumentView onSubmit={addRequest} user={user} />}
+          {['Request Form', 'Request Document'].includes(activeView) && <RequestDocumentView existingRequests={requestList} onSubmit={addRequest} user={user} />}
           {user.role !== 'employee' && activeView === 'Reserve Facility' && <ReserveFacilityView existingRequests={requestList} onSubmit={addRequest} user={user} />}
           {user.role !== 'employee' && activeView === 'Room Availability' && <RoomAvailabilityView requests={requestList} />}
           {user.role !== 'employee' && activeView === 'My Requests' && <MyRequestsView requests={visibleRequests} onView={(request) => setModal({ type: 'viewRequest', request })} />}
@@ -804,7 +804,7 @@ function OverviewView({ announcements, counts, onView, requests, user }: { annou
             <p className="mt-2 text-xl font-medium text-white/85">{user.department} - Student ID 2022-00451</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => onView('Request Document')} className="inline-flex h-14 items-center gap-3 rounded-md bg-[#4cbb17] px-7 text-lg font-semibold text-black hover:bg-[#4cbb17]">
+            <button onClick={() => onView('Request Form')} className="inline-flex h-14 items-center gap-3 rounded-md bg-[#4cbb17] px-7 text-lg font-semibold text-black hover:bg-[#4cbb17]">
               <Plus size={20} />
               New Request
             </button>
@@ -824,7 +824,7 @@ function OverviewView({ announcements, counts, onView, requests, user }: { annou
       </section>
 
       <section className="grid gap-5 xl:grid-cols-3">
-        <ActionCard title="Request a document" subtitle="TOR, COE, or Exit Clearance" icon={FileText} tone="bg-[#228b22] text-white" onClick={() => onView('Request Document')} />
+        <ActionCard title="Request Form" subtitle="Documents, clearance, or facilities" icon={FileText} tone="bg-[#228b22] text-white" onClick={() => onView('Request Form')} />
         <ActionCard title="Reserve a facility" subtitle="Rooms, labs, AVRs" icon={Building2} tone="bg-[#2f8d73] text-white" onClick={() => onView('Reserve Facility')} highlighted />
         <ActionCard title="Track my requests" subtitle="View status and remarks" icon={PackageCheck} tone="bg-[#4cbb17] text-black" onClick={() => onView('My Requests')} />
       </section>
@@ -1376,30 +1376,87 @@ function LeaveTypeDistributionPanel({ requests }: { requests: PortalRequest[] })
   )
 }
 
-function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalRequest) => void; user: User }) {
-  const [kind, setKind] = useState<RegistrarRequestKind>('COE Request')
-  const [studentId, setStudentId] = useState('')
-  const [yearLevel, setYearLevel] = useState('')
-  const [semester, setSemester] = useState('')
-  const [schoolYear, setSchoolYear] = useState('2026-2027')
-  const [program, setProgram] = useState('Bachelor of Science in Entrepreneurship')
-  const [major, setMajor] = useState('major in Heating, Ventilating, Airconditioning, and Refrigeration Technology')
+type StudentRequestSelection = RegistrarRequestKind | 'Facility Reservation'
+
+const registrarRequestOptions: { description: string; kind: RegistrarRequestKind; label: string; tone: string }[] = [
+  { kind: 'TOR Request', label: 'TOR Request', description: 'Official transcript for transfer, board exam, or employment requirements.', tone: 'bg-[#228b22] text-white' },
+  { kind: 'COE Request', label: 'COE Request', description: 'Certification of enrollment for scholarships, visas, and school requirements.', tone: 'bg-emerald-100 text-emerald-900' },
+  { kind: 'Certificate of Registration', label: 'Certificate of Registration', description: 'Official registration record for the current term.', tone: 'bg-stone-100 text-stone-800' },
+  { kind: 'Certificate of Grades', label: 'Certificate of Grades', description: 'Certified grade record for a term or school year.', tone: 'bg-amber-100 text-amber-900' },
+  { kind: 'Certificate of Credit Units', label: 'Certificate of Credit Units', description: 'Certification of credited academic units.', tone: 'bg-sky-100 text-sky-900' },
+  { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Subject', description: 'Request a subject schedule change due to a conflict.', tone: 'bg-rose-100 text-rose-900' },
+  { kind: 'Adding/Dropping of Subjects', label: 'Add/Drop Subjects', description: 'Request to add or drop enrolled subjects.', tone: 'bg-lime-100 text-lime-900' },
+  { kind: 'Exit Clearance', label: 'Exit Clearance', description: 'Required for graduation, transfer, or leave of absence.', tone: 'bg-slate-100 text-slate-900' },
+  { kind: 'Other Registrar Request', label: 'Other Registrar Request', description: 'Submit another Registrar-related request.', tone: 'bg-zinc-100 text-zinc-900' },
+]
+
+const studentRequestOptions: { description: string; icon: typeof FileText; kind: StudentRequestSelection; label: string; tone: string }[] = [
+  ...registrarRequestOptions.map((option) => ({ ...option, icon: option.kind === 'Exit Clearance' ? ShieldCheck : FileText })),
+  { kind: 'Facility Reservation', label: 'Facility Reservation', description: 'Reserve a room, laboratory, or campus facility for an approved activity.', icon: Building2, tone: 'bg-[#4cbb17] text-black' },
+]
+
+const yearLevelOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year']
+const semesterOptions = ['1st Semester', '2nd Semester']
+const schoolYearOptions = Array.from({ length: 8 }, (_, index) => `${2026 + index}–${2027 + index}`)
+const defaultSchoolYear = schoolYearOptions[0]
+const defaultStudentProgram = 'Bachelor of Science in Entrepreneurship'
+const defaultStudentMajor = 'major in Heating, Ventilating, Airconditioning, and Refrigeration Technology'
+
+function normalizeSchoolYear(value: string) {
+  return value.trim().replace('-', '–')
+}
+
+function RequestDocumentView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
+  const [selectedKind, setSelectedKind] = useState<StudentRequestSelection | null>(null)
+
+  if (!selectedKind) {
+    return (
+      <div className="space-y-6">
+        <PageIntro title="Request Form" description="Choose the request you want to submit. Each option opens only the fields needed for that request." icon={FileText} tone="bg-[#4cbb17]/15 text-[#228b22]" />
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {studentRequestOptions.map(({ description, icon: Icon, kind, label, tone }) => (
+            <button key={kind} type="button" onClick={() => setSelectedKind(kind)} className="group flex min-h-[190px] flex-col rounded-lg border border-[#e7e1db] bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#228b22] hover:shadow-md">
+              <span className={`mb-7 flex h-12 w-12 items-center justify-center rounded-md ${tone}`}>
+                <Icon size={22} />
+              </span>
+              <span className="text-xl font-bold text-slate-950">{label}</span>
+              <span className="mt-2 flex-1 text-slate-600">{description}</span>
+              <span className="mt-5 font-semibold text-[#228b22]">Open form</span>
+            </button>
+          ))}
+        </section>
+      </div>
+    )
+  }
+
+  if (selectedKind === 'Facility Reservation') {
+    return (
+      <div className="space-y-5">
+        <button type="button" onClick={() => setSelectedKind(null)} className="inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] bg-white px-4 font-semibold text-slate-700 hover:bg-stone-50">
+          Back to request forms
+        </button>
+        <ReserveFacilityView existingRequests={existingRequests} onSubmit={onSubmit} user={user} />
+      </div>
+    )
+  }
+
+  return <RegistrarRequestForm kind={selectedKind} onBack={() => setSelectedKind(null)} onSubmit={onSubmit} user={user} />
+}
+
+function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: RegistrarRequestKind; onBack: () => void; onSubmit: (request: PortalRequest) => void; user: User }) {
+  const profile = getStudentProfileDefaults(user)
+  const [yearLevel, setYearLevel] = useState(profile.yearLevel)
+  const [semester, setSemester] = useState('1st Semester')
+  const [schoolYear, setSchoolYear] = useState(defaultSchoolYear)
+  const [major, setMajor] = useState(profile.major || defaultStudentMajor)
   const [transferReason, setTransferReason] = useState('')
   const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(['Transcript of Records (TOR)'])
   const [purpose, setPurpose] = useState('')
   const [error, setError] = useState('')
-  const registrarDocuments: { kind: RegistrarRequestKind; label: string; description: string }[] = [
-    { kind: 'Certificate of Registration', label: 'Certificate of Registration', description: 'Official registration record for the current term.' },
-    { kind: 'COE Request', label: 'Certificate of Enrollment', description: 'Proof of current enrollment for scholarships, visas, and requirements.' },
-    { kind: 'Certificate of Grades', label: 'Certificate of Grades', description: 'Certified grade record for a term or school year.' },
-    { kind: 'Certificate of Credit Units', label: 'Certificate of Credit Units', description: 'Certification of credited academic units.' },
-    { kind: 'TOR Request', label: 'Transcript of Records', description: 'Official academic record for transfer or employment.' },
-    { kind: 'Change of Subject due to Conflict of Schedule', label: 'Change of Subject due to Conflict of Schedule', description: 'Request a subject schedule change due to a conflict.' },
-    { kind: 'Adding/Dropping of Subjects', label: 'Adding/Dropping of Subjects', description: 'Request to add or drop enrolled subjects.' },
-    { kind: 'Other Registrar Request', label: 'Other', description: 'Submit another Registrar-related request.' },
-    { kind: 'Exit Clearance', label: 'Exit Clearance', description: 'Required for graduation, transfer, or leave of absence.' },
-  ]
   const exitDocumentOptions = ['Transcript of Records (TOR)', 'Special Order (S.O)', 'CAV', 'Honorable Dismissal', 'Diploma', 'Good Moral Character', 'Authentication']
+  const program = profile.program
+  const needsExitDetails = kind === 'Exit Clearance'
+  const needsMajor = program === 'Bachelor of Technical-Vocational Teacher Education'
 
   const toggleExitDocument = (documentName: string) => {
     setExitRequestedDocs((current) => current.includes(documentName) ? current.filter((item) => item !== documentName) : [...current, documentName])
@@ -1407,113 +1464,92 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const requiredFields = [studentId, yearLevel, semester, schoolYear, program, purpose]
-    if (requiredFields.some((value) => !value.trim())) {
+    if (![profile.studentId, profile.studentName, program, yearLevel, semester, schoolYear, purpose].every((value) => value.trim())) {
       setError('Please complete all required fields before submitting.')
       return
     }
-    if (kind === 'Exit Clearance' && exitRequestedDocs.length === 0) {
+    if (needsExitDetails && exitRequestedDocs.length === 0) {
       setError('Please select at least one document for the exit clearance request.')
       return
     }
+
     onSubmit({
       id: `DR-2026-${Date.now().toString().slice(-3)}`,
       title: getDocumentTitle(kind),
       kind,
       ownerId: user.id,
-      owner: user.name,
+      owner: profile.studentName,
       office: 'Registrar',
       status: 'Pending',
       date: new Date().toISOString().slice(0, 10),
       time: '09:00',
       remarks: purpose.trim(),
-      studentId: studentId.trim(),
-      yearLevel: yearLevel.trim(),
-      semester: semester.trim(),
-      schoolYear: schoolYear.trim(),
+      studentId: profile.studentId,
+      yearLevel,
+      semester,
+      schoolYear: normalizeSchoolYear(schoolYear),
       program,
-      major: program === 'Bachelor of Technical-Vocational Teacher Education' ? major : '',
-      transferReason: kind === 'Exit Clearance' ? transferReason.trim() : '',
-      requestedDocs: kind === 'Exit Clearance' ? exitRequestedDocs : [getRegistrarRequestLabel(kind)],
+      major: needsMajor ? major : '',
+      transferReason: needsExitDetails ? transferReason.trim() : '',
+      requestedDocs: needsExitDetails ? exitRequestedDocs : [getRegistrarRequestLabel(kind)],
     })
-    setStudentId('')
-    setYearLevel('')
-    setSemester('')
+    setPurpose('')
     setTransferReason('')
     setExitRequestedDocs(['Transcript of Records (TOR)'])
-    setPurpose('')
     setError('')
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_485px]">
-      <PageIntro title="Registrar request form" description="Request certificates, enrollment records, grades, TOR, and other Registrar documents." icon={FileText} tone="bg-[#4cbb17]/15 text-[#228b22]" />
-      <section className="rounded-lg border border-[#e7e1db] bg-white p-7 xl:col-start-1">
-        <p className="mb-4 font-medium">Request for</p>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {registrarDocuments.map(({ description, kind: value, label }) => (
-            <button key={value} type="button" onClick={() => setKind(value)} className={`rounded-lg border p-5 text-left ${kind === value ? 'border-[#bd4448] bg-red-50/40 ring-1 ring-[#bd4448]' : 'border-[#e7e1db] hover:border-[#bd4448]'}`}>
-              <span className="mb-8 flex h-12 w-12 items-center justify-center rounded-md bg-[#228b22] text-white">
-                <FileText size={21} />
-              </span>
-              <span className="block text-xl font-bold">{label}</span>
-              <span className="mt-2 block text-slate-600">{description}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-      <aside className="space-y-5 xl:col-start-2 xl:row-start-2">
-        <InfoCard title="Processing time" lines={['TOR: 3-5 working days', 'COE: 1-2 working days', 'Exit Clearance: 5-7 working days']} />
-        <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
-          <div className="flex gap-4">
-            <span className="flex h-12 w-3 rounded-full bg-[#4cbb17]" />
-            <div>
-              <h3 className="text-xl font-bold text-[#5a3408]">Before submitting</h3>
-              <p className="mt-2 text-[#79572d]">Make sure you have no outstanding fees and your account is in good standing. Requests with unsettled balances will be flagged.</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-      <section className="rounded-lg border border-[#e7e1db] bg-white p-7 xl:col-start-1">
+    <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_420px]">
+      <div className="xl:col-span-2">
+        <button type="button" onClick={onBack} className="mb-5 inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] bg-white px-4 font-semibold text-slate-700 hover:bg-stone-50">
+          Back to request forms
+        </button>
+        <PageIntro title={`${getDocumentTitle(kind)} form`} description="Your student details are filled from your profile. Complete the remaining fields and submit for Registrar review." icon={kind === 'Exit Clearance' ? ShieldCheck : FileText} tone="bg-[#4cbb17]/15 text-[#228b22]" />
+      </div>
+
+      <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
         <div className="grid gap-5 md:grid-cols-2">
-          <label>
-            <span className="mb-2 block font-medium">Student ID #</span>
-            <input required value={studentId} onChange={(event) => setStudentId(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
-          </label>
+          <ReadOnlyField label="Student ID" value={profile.studentId} />
+          <ReadOnlyField label="Student Name" value={profile.studentName} />
+          <ReadOnlyField label="Program / Course" value={program} wide />
+          {needsMajor && (
+            <label>
+              <span className="mb-2 block font-medium">Major</span>
+              <select value={major} onChange={(event) => setMajor(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+                {['major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming'].map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </label>
+          )}
           <label>
             <span className="mb-2 block font-medium">Year Level</span>
-            <input required value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} placeholder="e.g. 3rd Year" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <select required value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              <option value="">Select year level</option>
+              {yearLevelOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">Semester</span>
-            <input required value={semester} onChange={(event) => setSemester(event.target.value)} placeholder="e.g. 1st Semester" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <select required value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {semesterOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">School Year</span>
-            <input required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required list="school-year-options" pattern="\d{4}[-–]\d{4}" value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} placeholder="2026–2027" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <datalist id="school-year-options">
+              {schoolYearOptions.map((item) => <option key={item} value={item} />)}
+            </datalist>
           </label>
         </div>
-        <label className="mt-5 block">
-          <span className="mb-2 block font-medium">Program</span>
-          <select value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
-            {['Bachelor of Early Childhood Education', 'Bachelor of Technical-Vocational Teacher Education', 'Bachelor of Science in Entrepreneurship'].map((item) => <option key={item}>{item}</option>)}
-          </select>
-        </label>
-        {program === 'Bachelor of Technical-Vocational Teacher Education' && (
-          <label className="mt-5 block">
-            <span className="mb-2 block font-medium">Major</span>
-            <select value={major} onChange={(event) => setMajor(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
-              {['major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming'].map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-        )}
-        {kind === 'Exit Clearance' && (
+
+        {needsExitDetails && (
           <div className="mt-5 rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
             <label className="block">
               <span className="mb-2 block font-medium">Reason for transfer</span>
               <input value={transferReason} onChange={(event) => setTransferReason(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
             </label>
-            <p className="mb-3 mt-5 font-medium">Request for</p>
+            <p className="mb-3 mt-5 font-medium">Documents requested</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {exitDocumentOptions.map((documentName) => (
                 <label key={documentName} className="flex items-center gap-3 rounded-md border border-[#e7e1db] bg-white p-3">
@@ -1524,6 +1560,7 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
             </div>
           </div>
         )}
+
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Purpose / reason</span>
           <textarea required value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. For scholarship renewal..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20" />
@@ -1531,14 +1568,50 @@ function RequestDocumentView({ onSubmit, user }: { onSubmit: (request: PortalReq
         <p className="mt-2 text-slate-500">{purpose.length} / 500 characters</p>
         {error && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-red-700">{error}</p>}
         <div className="mt-6 flex justify-end">
-          <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#228b22]">Submit request</button>
+          <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#1d7a1d]">Submit request</button>
         </div>
       </section>
+
+      <aside className="space-y-5">
+        <InfoCard title="Processing time" lines={['TOR: 3-5 working days', 'COE: 1-2 working days', 'Exit Clearance: 5-7 working days']} />
+        <div className="rounded-lg border border-[#e7e1db] bg-white p-7">
+          <div className="flex gap-4">
+            <span className="flex h-12 w-3 rounded-full bg-[#4cbb17]" />
+            <div>
+              <h3 className="text-xl font-bold text-[#5a3408]">Before submitting</h3>
+              <p className="mt-2 text-[#79572d]">Make sure your profile details are correct. The Registrar will use these details when preparing your request.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
     </form>
   )
 }
 
+function ReadOnlyField({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <label className={wide ? 'md:col-span-2' : undefined}>
+      <span className="mb-2 block font-medium">{label}</span>
+      <input readOnly value={value} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-stone-50 px-4 text-lg text-slate-700 outline-none" />
+    </label>
+  )
+}
+
+function getStudentProfileDefaults(user: User) {
+  const [programPart = '', yearPart = ''] = user.department.split(' - ')
+  const program = programPart.trim() || defaultStudentProgram
+  const yearLevel = yearLevelOptions.find((item) => yearPart.toLowerCase().includes(item.toLowerCase())) ?? ''
+  return {
+    studentId: user.id,
+    studentName: user.name,
+    program,
+    major: program === 'Bachelor of Technical-Vocational Teacher Education' ? defaultStudentMajor : '',
+    yearLevel,
+  }
+}
+
 function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
+  const profile = getStudentProfileDefaults(user)
   const [facility, setFacility] = useState(facilities[0][0])
   const [date, setDate] = useState(() => getTodayInputValue())
   const [start, setStart] = useState('09:00')
@@ -1576,7 +1649,7 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
       title: facility,
       kind: 'Facility Reservation',
       ownerId: user.id,
-      owner: user.name,
+      owner: profile.studentName,
       office: 'Admin Office',
       status: 'Pending',
       date,
@@ -1585,6 +1658,8 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
       facility,
       attendees,
       purpose: purpose.trim(),
+      studentId: profile.studentId,
+      program: profile.program,
     })
     setPurpose('')
     setError('')
@@ -1594,6 +1669,11 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_485px]">
       <PageIntro title="Reserve a facility" description="Book rooms, laboratories, audio-visual rooms, and other school facilities. The Admin Office reviews and approves reservations." icon={Building2} tone="bg-emerald-100 text-emerald-900" />
       <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
+        <div className="mb-6 grid gap-5 border-b border-[#e7e1db] pb-6 md:grid-cols-2">
+          <ReadOnlyField label="Student ID" value={profile.studentId} />
+          <ReadOnlyField label="Student Name" value={profile.studentName} />
+          <ReadOnlyField label="Program / Course" value={profile.program} wide />
+        </div>
         <label className="block">
           <span className="mb-2 block font-medium">Facility</span>
           <select value={facility} onChange={(event) => setFacility(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20">
