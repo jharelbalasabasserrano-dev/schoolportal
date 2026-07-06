@@ -564,18 +564,18 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: 210mm 297mm; margin: 8mm; }
+    @page { size: 210mm 297mm; margin: 5mm; }
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --page-margin: 8mm;
-      --printable-width: 194mm;
-      --printable-height: 281mm;
+      --page-margin: 5mm;
+      --printable-width: 200mm;
+      --printable-height: 287mm;
       --form-width: 186mm;
       --form-height: 273mm;
-      --form-scale: 1.0293;
-      --scaled-form-width: 191.45mm;
-      --scaled-form-height: 281mm;
+      --form-scale: 1.0513;
+      --scaled-form-width: 195.54mm;
+      --scaled-form-height: 287mm;
       --line-width: 1px;
       --half-width: 93mm;
       --heading-height: 28mm;
