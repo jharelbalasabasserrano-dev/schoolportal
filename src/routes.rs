@@ -82,6 +82,26 @@ fn verify_password(stored: &str, candidate: &str) -> bool {
     }
 }
 
+fn password_storage_kind(stored: &str) -> &'static str {
+    if stored.trim().is_empty() {
+        "empty"
+    } else if is_argon2_hash(stored) {
+        "argon2"
+    } else {
+        "legacy_plaintext"
+    }
+}
+
+fn log_auth_event(event: &str, fields: serde_json::Value) {
+    eprintln!(
+        "{}",
+        serde_json::json!({
+            "event": event,
+            "fields": fields,
+        })
+    );
+}
+
 fn request_message_from_row(row: PgRow) -> RequestMessage {
     let attachment_storage_path: Option<String> = row.get("attachment_storage_path");
     let attachment_name: Option<String> = row.get("attachment_name");
@@ -338,6 +358,25 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginPayload>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    let email = payload.email.trim().to_lowercase();
+    if email.is_empty() || payload.password.is_empty() {
+        log_auth_event(
+            "auth_login_rejected",
+            serde_json::json!({
+                "reason": "missing_credentials",
+                "email_present": !email.is_empty(),
+                "password_present": !payload.password.is_empty(),
+            }),
+        );
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Email and password are required.",
+                "code": "missing_credentials"
+            })),
+        ));
+    }
+
     let sql = r#"
         SELECT
             id,
@@ -346,29 +385,79 @@ pub async fn login(
             COALESCE(password_hash, '') AS password,
             role,
             department,
-            avatar_url
+            avatar_url,
+            COUNT(*) OVER() AS matched_count
         FROM app_users
         WHERE lower(email) = lower($1)
+        ORDER BY
+            CASE WHEN email = $1 THEN 0 ELSE 1 END,
+            updated_at DESC,
+            created_at DESC
+        LIMIT 1
         "#;
-    let params = serde_json::json!({ "email": payload.email });
+    let params = serde_json::json!({ "email": email });
     log_db_query("app_users", sql, params.clone());
-    let account = sqlx::query_as::<_, UserAccount>(sql)
-        .bind(payload.email.trim())
+    let row = sqlx::query(sql)
+        .bind(&email)
         .fetch_optional(&state.db)
         .await
         .map_err(|error| api_query_error("app_users", sql, params, error))?;
 
-    let Some(account) = account else {
+    let Some(row) = row else {
+        log_auth_event(
+            "auth_login_rejected",
+            serde_json::json!({
+                "reason": "user_not_found",
+                "email": email,
+            }),
+        );
         return Err((
             StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "Invalid email or password" })),
+            Json(serde_json::json!({
+                "error": "Invalid email or password",
+                "code": "invalid_credentials"
+            })),
         ));
     };
 
+    let matched_count: i64 = row.get("matched_count");
+    let account = UserAccount {
+        id: row.get("id"),
+        name: row.get("name"),
+        email: row.get("email"),
+        password: row.get("password"),
+        role: row.get("role"),
+        department: row.get("department"),
+        avatar_url: row.get("avatar_url"),
+    };
+
+    if matched_count > 1 {
+        log_auth_event(
+            "auth_login_email_duplicate",
+            serde_json::json!({
+                "email": email,
+                "matched_count": matched_count,
+                "selected_user_id": account.id,
+            }),
+        );
+    }
+
     if !verify_password(&account.password, &payload.password) {
+        log_auth_event(
+            "auth_login_rejected",
+            serde_json::json!({
+                "reason": "password_mismatch",
+                "email": email,
+                "user_id": account.id,
+                "password_storage": password_storage_kind(&account.password),
+            }),
+        );
         return Err((
             StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "Invalid email or password" })),
+            Json(serde_json::json!({
+                "error": "Invalid email or password",
+                "code": "invalid_credentials"
+            })),
         ));
     }
 
@@ -395,6 +484,16 @@ pub async fn login(
                 )
             })?;
     }
+
+    log_auth_event(
+        "auth_login_succeeded",
+        serde_json::json!({
+            "email": email,
+            "user_id": account.id,
+            "role": account.role,
+            "password_storage": password_storage_kind(&account.password),
+        }),
+    );
 
     Ok(Json(public_user(account)))
 }

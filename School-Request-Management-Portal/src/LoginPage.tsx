@@ -73,16 +73,16 @@ export function LoginPage() {
     setIsLoading(true);
 
     // Simulate network delay for better UX
-    const success = await new Promise<boolean>((resolve) => {
+    const result = await new Promise<{ ok: boolean; message?: string }>((resolve) => {
       setTimeout(() => {
         login(loginEmail.trim(), loginPassword, remember).then(resolve);
       }, 420);
     });
 
-    if (success) {
+    if (result.ok) {
       navigate('/dashboard');
     } else {
-      setFormError('Invalid credentials. Please check your email and password.');
+      setFormError(result.message || 'Invalid credentials. Please check your email and password.');
       setIsLoading(false);
     }
   };

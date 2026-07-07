@@ -9,7 +9,7 @@ type AuthContextValue = {
   addAccount: (account: Omit<User, 'id'>) => void
   deleteAccount: (id: string) => void
   updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
-  login: (email: string, password: string, remember: boolean) => Promise<boolean>
+  login: (email: string, password: string, remember: boolean) => Promise<{ ok: boolean; message?: string }>
   logout: () => void
   changePassword: (currentPassword: string, nextPassword: string) => Promise<{ ok: boolean; message?: string }>
   updateProfile: (updates: Pick<User, 'name' | 'department' | 'avatarUrl'>) => void
@@ -104,19 +104,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (remember) localStorage.setItem(storageKeys.user, updated.email)
         else localStorage.removeItem(storageKeys.user)
         setUser(updated)
-        return true
+        return { ok: true }
       } catch (error) {
         console.warn(error)
         const message = error instanceof Error ? error.message : ''
-        if (!message.startsWith('Cannot reach backend')) return false
+        if (!message.startsWith('Cannot reach backend')) return { ok: false, message }
       }
 
       const match = accounts.find((account) => account.email === normalizedEmail && account.password === password)
-      if (!match) return false
+      if (!match) return { ok: false, message: 'Invalid email or password' }
       if (remember) localStorage.setItem(storageKeys.user, match.email)
       else localStorage.removeItem(storageKeys.user)
       setUser(match)
-      return true
+      return { ok: true }
     },
     logout: () => {
       localStorage.removeItem(storageKeys.user)
