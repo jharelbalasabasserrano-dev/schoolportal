@@ -71,6 +71,13 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
   const [salary, setSalary] = useState('')
   const [communication, setCommunication] = useState('Not Requested')
   const [leaveDetail, setLeaveDetail] = useState('')
+  const [leaveVacationLocation, setLeaveVacationLocation] = useState<'Within the Philippines' | 'Abroad' | ''>('')
+  const [leaveVacationSpecify, setLeaveVacationSpecify] = useState('')
+  const [leaveSickLocation, setLeaveSickLocation] = useState<'In Hospital' | 'Out Patient' | ''>('')
+  const [leaveSickIllness, setLeaveSickIllness] = useState('')
+  const [leaveWomenIllness, setLeaveWomenIllness] = useState('')
+  const [leaveStudyPurpose, setLeaveStudyPurpose] = useState<'Completion of Master\'s Degree' | 'BAR/Board Examination Review' | ''>('')
+  const [leaveOtherPurpose, setLeaveOtherPurpose] = useState<'Monetization of Leave Credits' | 'Terminal Leave' | ''>('')
   const [customLeaveType, setCustomLeaveType] = useState('')
   const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>('Full Day')
   const [leaveTime, setLeaveTime] = useState('Morning (AM)')
@@ -104,12 +111,26 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
       inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
+      leaveVacationLocation,
+      leaveVacationSpecify: leaveVacationSpecify.trim(),
+      leaveSickLocation,
+      leaveSickIllness: leaveSickIllness.trim(),
+      leaveWomenIllness: leaveWomenIllness.trim(),
+      leaveStudyPurpose,
+      leaveOtherPurpose,
       customLeaveType: customLeaveTypeValue || undefined,
       leaveDuration,
       leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
     })
     setReason('')
     setLeaveDetail('')
+    setLeaveVacationLocation('')
+    setLeaveVacationSpecify('')
+    setLeaveSickLocation('')
+    setLeaveSickIllness('')
+    setLeaveWomenIllness('')
+    setLeaveStudyPurpose('')
+    setLeaveOtherPurpose('')
     setCustomLeaveType('')
   }
 
@@ -217,6 +238,78 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
           <span className="mb-2 block font-medium">6.B Details of Leave</span>
           <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder="Location, illness, study leave detail, or other purpose" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
+      </div>
+      <div className="mt-5 rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
+        <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">6.B Details of Leave</p>
+        <div className="mt-4 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+            <p className="font-semibold">In case of Vacation/Special Privilege Leave</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveVacationLocation === 'Within the Philippines'} onChange={(event) => setLeaveVacationLocation(event.target.checked ? 'Within the Philippines' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Within the Philippines
+              </label>
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveVacationLocation === 'Abroad'} onChange={(event) => setLeaveVacationLocation(event.target.checked ? 'Abroad' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Abroad
+              </label>
+            </div>
+            <label className="mt-3 block">
+              <span className="mb-2 block text-sm font-medium">Specify</span>
+              <input value={leaveVacationSpecify} onChange={(event) => setLeaveVacationSpecify(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+            </label>
+          </div>
+          <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+            <p className="font-semibold">In case of Sick Leave</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveSickLocation === 'In Hospital'} onChange={(event) => setLeaveSickLocation(event.target.checked ? 'In Hospital' : '')} className="h-4 w-4 accent-[#228b22]" />
+                In Hospital
+              </label>
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveSickLocation === 'Out Patient'} onChange={(event) => setLeaveSickLocation(event.target.checked ? 'Out Patient' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Out Patient
+              </label>
+            </div>
+            <label className="mt-3 block">
+              <span className="mb-2 block text-sm font-medium">Specify Illness</span>
+              <input value={leaveSickIllness} onChange={(event) => setLeaveSickIllness(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+            </label>
+          </div>
+          <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+            <p className="font-semibold">In case of Special Leave Benefits for Women</p>
+            <label className="mt-3 block">
+              <span className="mb-2 block text-sm font-medium">Specify Illness</span>
+              <input value={leaveWomenIllness} onChange={(event) => setLeaveWomenIllness(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+            </label>
+          </div>
+          <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+            <p className="font-semibold">In case of Study Leave</p>
+            <div className="mt-3 grid gap-3">
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveStudyPurpose === 'Completion of Master\'s Degree'} onChange={(event) => setLeaveStudyPurpose(event.target.checked ? 'Completion of Master\'s Degree' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Completion of Master's Degree
+              </label>
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveStudyPurpose === 'BAR/Board Examination Review'} onChange={(event) => setLeaveStudyPurpose(event.target.checked ? 'BAR/Board Examination Review' : '')} className="h-4 w-4 accent-[#228b22]" />
+                BAR/Board Examination Review
+              </label>
+            </div>
+          </div>
+          <div className="rounded-md border border-[#e7e1db] bg-white p-4 lg:col-span-2">
+            <p className="font-semibold">Other Purpose</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveOtherPurpose === 'Monetization of Leave Credits'} onChange={(event) => setLeaveOtherPurpose(event.target.checked ? 'Monetization of Leave Credits' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Monetization of Leave Credits
+              </label>
+              <label className="flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={leaveOtherPurpose === 'Terminal Leave'} onChange={(event) => setLeaveOtherPurpose(event.target.checked ? 'Terminal Leave' : '')} className="h-4 w-4 accent-[#228b22]" />
+                Terminal Leave
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
       <label className="mt-5 block">
         <span className="mb-2 block font-medium">Reason</span>

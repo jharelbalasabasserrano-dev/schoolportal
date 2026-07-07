@@ -2749,6 +2749,13 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
+  const leaveVacationLocation = request.leaveVacationLocation ?? (/abroad/i.test(leaveDetail) ? 'Abroad' : /philippines/i.test(leaveDetail) ? 'Within the Philippines' : '')
+  const leaveVacationSpecify = request.leaveVacationSpecify ?? leaveDetail
+  const leaveSickLocation = request.leaveSickLocation ?? (/hospital|in patient/i.test(leaveDetail) ? 'In Hospital' : /out patient|outpatient/i.test(leaveDetail) ? 'Out Patient' : '')
+  const leaveSickIllness = request.leaveSickIllness ?? leaveDetail
+  const leaveWomenIllness = request.leaveWomenIllness ?? leaveDetail
+  const leaveStudyPurpose = request.leaveStudyPurpose ?? (/master|degree/i.test(leaveDetail) ? 'Completion of Master\'s Degree' : /bar|board/i.test(leaveDetail) ? 'BAR/Board Examination Review' : '')
+  const leaveOtherPurpose = request.leaveOtherPurpose ?? (/monetization/i.test(leaveDetail) ? 'Monetization of Leave Credits' : /terminal/i.test(leaveDetail) ? 'Terminal Leave' : '')
   const disapprovalText = request.disapprovedDueTo ?? (request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : '')
   const approvedDaysWithPay = request.approvedDaysWithPay ?? (request.status === 'Approved' ? workingDays : '')
   const approvedDaysWithoutPay = request.approvedDaysWithoutPay ?? ''
@@ -2817,23 +2824,23 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
             <div className="px-[2mm] py-[1.5mm]">
               <p className="mb-[1mm] font-bold">6.B DETAILS OF LEAVE</p>
               <p className="italic">In case of Vacation/Special Privilege Leave:</p>
-              <OfficialCheck checked={/philippines/i.test(leaveDetail)} label="Within the Philippines" />
-              <OfficialLine label="Specify" value={leaveDetail} tight />
-              <OfficialCheck checked={/abroad/i.test(leaveDetail)} label="Abroad" />
-              <OfficialLine label="Specify" value={leaveDetail} tight />
+              <OfficialCheck checked={leaveVacationLocation === 'Within the Philippines'} label="Within the Philippines" />
+              <OfficialLine label="Specify" value={leaveVacationLocation === 'Within the Philippines' ? leaveVacationSpecify : ''} tight />
+              <OfficialCheck checked={leaveVacationLocation === 'Abroad'} label="Abroad" />
+              <OfficialLine label="Specify" value={leaveVacationLocation === 'Abroad' ? leaveVacationSpecify : ''} tight />
               <p className="mt-[1mm] italic">In case of Sick Leave:</p>
-              <OfficialCheck checked={/hospital|in patient/i.test(leaveDetail)} label="In Hospital" />
-              <OfficialLine label="Specify illness" value={leaveDetail} tight />
-              <OfficialCheck checked={/out patient|outpatient/i.test(leaveDetail)} label="Out Patient" />
-              <OfficialLine label="Specify illness" value={leaveDetail} tight />
+              <OfficialCheck checked={leaveSickLocation === 'In Hospital'} label="In Hospital" />
+              <OfficialLine label="Specify illness" value={leaveSickLocation === 'In Hospital' ? leaveSickIllness : ''} tight />
+              <OfficialCheck checked={leaveSickLocation === 'Out Patient'} label="Out Patient" />
+              <OfficialLine label="Specify illness" value={leaveSickLocation === 'Out Patient' ? leaveSickIllness : ''} tight />
               <p className="mt-[1mm] italic">In case of Special Leave Benefits for Women:</p>
-              <OfficialLine label="Specify illness" value={leaveDetail} tight />
+              <OfficialLine label="Specify illness" value={leaveWomenIllness} tight />
               <p className="mt-[1mm] italic">In case of Study Leave:</p>
-              <OfficialCheck checked={/master|degree/i.test(leaveDetail)} label="Completion of Master's Degree" />
-              <OfficialCheck checked={/bar|board/i.test(leaveDetail)} label="BAR/Board Examination Review" />
+              <OfficialCheck checked={leaveStudyPurpose === 'Completion of Master\'s Degree'} label="Completion of Master's Degree" />
+              <OfficialCheck checked={leaveStudyPurpose === 'BAR/Board Examination Review'} label="BAR/Board Examination Review" />
               <p className="mt-[1mm] italic">Other purpose:</p>
-              <OfficialCheck checked={/monetization/i.test(leaveDetail)} label="Monetization of Leave Credits" />
-              <OfficialCheck checked={/terminal/i.test(leaveDetail)} label="Terminal Leave" />
+              <OfficialCheck checked={leaveOtherPurpose === 'Monetization of Leave Credits'} label="Monetization of Leave Credits" />
+              <OfficialCheck checked={leaveOtherPurpose === 'Terminal Leave'} label="Terminal Leave" />
             </div>
             <div className="border-r border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
@@ -3304,6 +3311,13 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [endDate, setEndDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(request.time) ? request.time : request.date)
   const [communication, setCommunication] = useState(request.communication ?? 'Not Requested')
   const [leaveDetail, setLeaveDetail] = useState(request.leaveDetail ?? '')
+  const [leaveVacationLocation, setLeaveVacationLocation] = useState<HRLeavePortalRequest['leaveVacationLocation']>(request.leaveVacationLocation ?? '')
+  const [leaveVacationSpecify, setLeaveVacationSpecify] = useState(request.leaveVacationSpecify ?? '')
+  const [leaveSickLocation, setLeaveSickLocation] = useState<HRLeavePortalRequest['leaveSickLocation']>(request.leaveSickLocation ?? '')
+  const [leaveSickIllness, setLeaveSickIllness] = useState(request.leaveSickIllness ?? '')
+  const [leaveWomenIllness, setLeaveWomenIllness] = useState(request.leaveWomenIllness ?? '')
+  const [leaveStudyPurpose, setLeaveStudyPurpose] = useState<HRLeavePortalRequest['leaveStudyPurpose']>(request.leaveStudyPurpose ?? '')
+  const [leaveOtherPurpose, setLeaveOtherPurpose] = useState<HRLeavePortalRequest['leaveOtherPurpose']>(request.leaveOtherPurpose ?? '')
   const [customLeaveType, setCustomLeaveType] = useState(request.customLeaveType ?? '')
   const [leaveDuration, setLeaveDuration] = useState<'Full Day' | 'Half Day'>(request.leaveDuration ?? 'Full Day')
   const [leaveTime, setLeaveTime] = useState(request.leaveTime ?? 'Morning (AM)')
@@ -3341,6 +3355,13 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
     inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
     communication,
     leaveDetail,
+    leaveVacationLocation,
+    leaveVacationSpecify,
+    leaveSickLocation,
+    leaveSickIllness,
+    leaveWomenIllness,
+    leaveStudyPurpose,
+    leaveOtherPurpose,
     customLeaveType: customLeaveTypeValue || undefined,
     leaveDuration,
     leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
@@ -3380,6 +3401,13 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
       inclusiveDates: `${formatDate(startDate)} - ${formatDate(endDate)}`,
       communication,
       leaveDetail: leaveDetail.trim(),
+      leaveVacationLocation,
+      leaveVacationSpecify: leaveVacationSpecify.trim(),
+      leaveSickLocation,
+      leaveSickIllness: leaveSickIllness.trim(),
+      leaveWomenIllness: leaveWomenIllness.trim(),
+      leaveStudyPurpose,
+      leaveOtherPurpose,
       customLeaveType: customLeaveTypeValue || undefined,
       leaveDuration,
       leaveTime: leaveDuration === 'Half Day' ? leaveTime : undefined,
@@ -3518,6 +3546,78 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
                 <span className="mb-2 block font-medium">6.B Details of Leave</span>
                 <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
               </label>
+              <div className="sm:col-span-2 rounded-md border border-[#e7e1db] bg-stone-50 p-4">
+                <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">6.B Details of Leave - Official fields</p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+                    <p className="font-semibold">Vacation/Special Privilege Leave</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveVacationLocation === 'Within the Philippines'} onChange={(event) => setLeaveVacationLocation(event.target.checked ? 'Within the Philippines' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Within the Philippines
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveVacationLocation === 'Abroad'} onChange={(event) => setLeaveVacationLocation(event.target.checked ? 'Abroad' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Abroad
+                      </label>
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium">Specify</span>
+                      <input value={leaveVacationSpecify} onChange={(event) => setLeaveVacationSpecify(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                  </div>
+                  <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+                    <p className="font-semibold">Sick Leave</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveSickLocation === 'In Hospital'} onChange={(event) => setLeaveSickLocation(event.target.checked ? 'In Hospital' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        In Hospital
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveSickLocation === 'Out Patient'} onChange={(event) => setLeaveSickLocation(event.target.checked ? 'Out Patient' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Out Patient
+                      </label>
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium">Specify Illness</span>
+                      <input value={leaveSickIllness} onChange={(event) => setLeaveSickIllness(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                  </div>
+                  <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+                    <p className="font-semibold">Special Leave Benefits for Women</p>
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium">Specify Illness</span>
+                      <input value={leaveWomenIllness} onChange={(event) => setLeaveWomenIllness(event.target.value)} className="h-10 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+                    </label>
+                  </div>
+                  <div className="rounded-md border border-[#e7e1db] bg-white p-4">
+                    <p className="font-semibold">Study Leave</p>
+                    <div className="mt-3 grid gap-3">
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveStudyPurpose === 'Completion of Master\'s Degree'} onChange={(event) => setLeaveStudyPurpose(event.target.checked ? 'Completion of Master\'s Degree' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Completion of Master's Degree
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveStudyPurpose === 'BAR/Board Examination Review'} onChange={(event) => setLeaveStudyPurpose(event.target.checked ? 'BAR/Board Examination Review' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        BAR/Board Examination Review
+                      </label>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-[#e7e1db] bg-white p-4 lg:col-span-2">
+                    <p className="font-semibold">Other Purpose</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveOtherPurpose === 'Monetization of Leave Credits'} onChange={(event) => setLeaveOtherPurpose(event.target.checked ? 'Monetization of Leave Credits' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Monetization of Leave Credits
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={leaveOtherPurpose === 'Terminal Leave'} onChange={(event) => setLeaveOtherPurpose(event.target.checked ? 'Terminal Leave' : '')} className="h-4 w-4 accent-[#228b22]" />
+                        Terminal Leave
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <label className="sm:col-span-2">
                 <span className="mb-2 block font-medium">Reason</span>
                 <textarea value={reason} onChange={(event) => setReason(event.target.value.slice(0, 500))} rows={4} className="w-full rounded-md border border-[#d9d3cc] px-3 py-2 outline-none focus:border-[#228b22]" />

@@ -89,6 +89,13 @@ type BasePortalRequest = {
   inclusiveDates?: string
   communication?: string
   leaveDetail?: string
+  leaveVacationLocation?: 'Within the Philippines' | 'Abroad' | ''
+  leaveVacationSpecify?: string
+  leaveSickLocation?: 'In Hospital' | 'Out Patient' | ''
+  leaveSickIllness?: string
+  leaveWomenIllness?: string
+  leaveStudyPurpose?: 'Completion of Master\'s Degree' | 'BAR/Board Examination Review' | ''
+  leaveOtherPurpose?: 'Monetization of Leave Credits' | 'Terminal Leave' | ''
   customLeaveType?: string
   leaveDuration?: 'Full Day' | 'Half Day'
   leaveTime?: string

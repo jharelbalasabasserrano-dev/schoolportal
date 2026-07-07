@@ -123,6 +123,13 @@ pub async fn get_bootstrap_data(
             inclusive_dates,
             communication,
             leave_detail,
+            leave_vacation_location,
+            leave_vacation_specify,
+            leave_sick_location,
+            leave_sick_illness,
+            leave_women_illness,
+            leave_study_purpose,
+            leave_other_purpose,
             custom_leave_type,
             leave_duration,
             leave_time,
@@ -449,6 +456,8 @@ pub async fn sync_bootstrap_data(
                 program, major, transfer_reason, requested_docs, claim_release_date,
                 reference_number, received_date, received_time, received_by, released_by,
                 position, salary, working_days, inclusive_dates, communication, leave_detail,
+                leave_vacation_location, leave_vacation_specify, leave_sick_location, leave_sick_illness,
+                leave_women_illness, leave_study_purpose, leave_other_purpose,
                 custom_leave_type, leave_duration, leave_time,
                 filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
                 vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
@@ -459,8 +468,9 @@ pub async fn sync_bootstrap_data(
                 CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
                 $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                 $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-                $30, $31::numeric, $32, $33, $34, $35, $36, $37,
-                $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
+                $30, $31::numeric, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
+                $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55,
+                $56, $57, $58
             )
             "#;
         let params = serde_json::to_value(request).unwrap_or_else(|_| {
@@ -505,6 +515,13 @@ pub async fn sync_bootstrap_data(
             .bind(&request.inclusive_dates)
             .bind(&request.communication)
             .bind(&request.leave_detail)
+            .bind(&request.leave_vacation_location)
+            .bind(&request.leave_vacation_specify)
+            .bind(&request.leave_sick_location)
+            .bind(&request.leave_sick_illness)
+            .bind(&request.leave_women_illness)
+            .bind(&request.leave_study_purpose)
+            .bind(&request.leave_other_purpose)
             .bind(&request.custom_leave_type)
             .bind(&request.leave_duration)
             .bind(&request.leave_time)
@@ -803,6 +820,8 @@ pub async fn create_portal_request(
             program, major, transfer_reason, requested_docs, claim_release_date,
             reference_number, received_date, received_time, received_by, released_by,
             position, salary, working_days, inclusive_dates, communication, leave_detail,
+            leave_vacation_location, leave_vacation_specify, leave_sick_location, leave_sick_illness,
+            leave_women_illness, leave_study_purpose, leave_other_purpose,
             custom_leave_type, leave_duration, leave_time,
             filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
             vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
@@ -813,8 +832,9 @@ pub async fn create_portal_request(
             CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
             $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
             $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-            $30, $31::numeric, $32, $33, $34, $35, $36, $37,
-            $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51
+            $30, $31::numeric, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
+            $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55,
+            $56, $57, $58
         )
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -850,6 +870,13 @@ pub async fn create_portal_request(
             inclusive_dates = EXCLUDED.inclusive_dates,
             communication = EXCLUDED.communication,
             leave_detail = EXCLUDED.leave_detail,
+            leave_vacation_location = EXCLUDED.leave_vacation_location,
+            leave_vacation_specify = EXCLUDED.leave_vacation_specify,
+            leave_sick_location = EXCLUDED.leave_sick_location,
+            leave_sick_illness = EXCLUDED.leave_sick_illness,
+            leave_women_illness = EXCLUDED.leave_women_illness,
+            leave_study_purpose = EXCLUDED.leave_study_purpose,
+            leave_other_purpose = EXCLUDED.leave_other_purpose,
             custom_leave_type = EXCLUDED.custom_leave_type,
             leave_duration = EXCLUDED.leave_duration,
             leave_time = EXCLUDED.leave_time,
@@ -903,6 +930,13 @@ pub async fn create_portal_request(
             inclusive_dates,
             communication,
             leave_detail,
+            leave_vacation_location,
+            leave_vacation_specify,
+            leave_sick_location,
+            leave_sick_illness,
+            leave_women_illness,
+            leave_study_purpose,
+            leave_other_purpose,
             custom_leave_type,
             leave_duration,
             leave_time,
@@ -963,6 +997,13 @@ pub async fn create_portal_request(
         .bind(&request.inclusive_dates)
         .bind(&request.communication)
         .bind(&request.leave_detail)
+        .bind(&request.leave_vacation_location)
+        .bind(&request.leave_vacation_specify)
+        .bind(&request.leave_sick_location)
+        .bind(&request.leave_sick_illness)
+        .bind(&request.leave_women_illness)
+        .bind(&request.leave_study_purpose)
+        .bind(&request.leave_other_purpose)
         .bind(&request.custom_leave_type)
         .bind(&request.leave_duration)
         .bind(&request.leave_time)

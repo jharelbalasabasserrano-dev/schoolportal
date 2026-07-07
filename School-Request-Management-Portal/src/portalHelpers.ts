@@ -613,6 +613,13 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
+  const leaveVacationLocation = request.leaveVacationLocation ?? (/abroad/i.test(leaveDetail) ? 'Abroad' : /philippines/i.test(leaveDetail) ? 'Within the Philippines' : '')
+  const leaveVacationSpecify = request.leaveVacationSpecify ?? leaveDetail
+  const leaveSickLocation = request.leaveSickLocation ?? (/hospital|in patient/i.test(leaveDetail) ? 'In Hospital' : /out patient|outpatient/i.test(leaveDetail) ? 'Out Patient' : '')
+  const leaveSickIllness = request.leaveSickIllness ?? leaveDetail
+  const leaveWomenIllness = request.leaveWomenIllness ?? leaveDetail
+  const leaveStudyPurpose = request.leaveStudyPurpose ?? (/master|degree/i.test(leaveDetail) ? 'Completion of Master\'s Degree' : /bar|board/i.test(leaveDetail) ? 'BAR/Board Examination Review' : '')
+  const leaveOtherPurpose = request.leaveOtherPurpose ?? (/monetization/i.test(leaveDetail) ? 'Monetization of Leave Credits' : /terminal/i.test(leaveDetail) ? 'Terminal Leave' : '')
   const disapprovalText = request.disapprovedDueTo ?? (isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')
   const approvedDaysWithPay = request.approvedDaysWithPay ?? (request.status === 'Approved' ? workingDays : '')
   const approvedDaysWithoutPay = request.approvedDaysWithoutPay ?? ''
@@ -781,23 +788,23 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
               <div>
                 <p class="subhead">6.B Details of Leave</p>
                 <p class="italic">In case of Vacation/Special Privilege Leave:</p>
-                <div class="item">${checked(/philippines/i.test(leaveDetail))}<span>Within the Philippines</span></div>
-                ${line(leaveDetail, 'Specify')}
-                <div class="item">${checked(/abroad/i.test(leaveDetail))}<span>Abroad</span></div>
-                ${line(leaveDetail, 'Specify')}
+                <div class="item">${checked(leaveVacationLocation === 'Within the Philippines')}<span>Within the Philippines</span></div>
+                ${line(leaveVacationLocation === 'Within the Philippines' ? leaveVacationSpecify : '', 'Specify')}
+                <div class="item">${checked(leaveVacationLocation === 'Abroad')}<span>Abroad</span></div>
+                ${line(leaveVacationLocation === 'Abroad' ? leaveVacationSpecify : '', 'Specify')}
                 <p class="italic">In case of Sick Leave:</p>
-                <div class="item">${checked(/hospital|in patient/i.test(leaveDetail))}<span>In Hospital</span></div>
-                ${line(leaveDetail, 'Specify illness')}
-                <div class="item">${checked(/out patient|outpatient/i.test(leaveDetail))}<span>Out Patient</span></div>
-                ${line(leaveDetail, 'Specify illness')}
+                <div class="item">${checked(leaveSickLocation === 'In Hospital')}<span>In Hospital</span></div>
+                ${line(leaveSickLocation === 'In Hospital' ? leaveSickIllness : '', 'Specify illness')}
+                <div class="item">${checked(leaveSickLocation === 'Out Patient')}<span>Out Patient</span></div>
+                ${line(leaveSickLocation === 'Out Patient' ? leaveSickIllness : '', 'Specify illness')}
                 <p class="italic">In case of Special Leave Benefits for Women:</p>
-                ${line(leaveDetail, 'Specify illness')}
+                ${line(leaveWomenIllness, 'Specify illness')}
                 <p class="italic">In case of Study Leave:</p>
-                <div class="item">${checked(/master|degree/i.test(leaveDetail))}<span>Completion of Master's Degree</span></div>
-                <div class="item">${checked(/bar|board/i.test(leaveDetail))}<span>BAR/Board Examination Review</span></div>
+                <div class="item">${checked(leaveStudyPurpose === 'Completion of Master\'s Degree')}<span>Completion of Master's Degree</span></div>
+                <div class="item">${checked(leaveStudyPurpose === 'BAR/Board Examination Review')}<span>BAR/Board Examination Review</span></div>
                 <p class="italic">Other purpose:</p>
-                <div class="item">${checked(/monetization/i.test(leaveDetail))}<span>Monetization of Leave Credits</span></div>
-                <div class="item">${checked(/terminal/i.test(leaveDetail))}<span>Terminal Leave</span></div>
+                <div class="item">${checked(leaveOtherPurpose === 'Monetization of Leave Credits')}<span>Monetization of Leave Credits</span></div>
+                <div class="item">${checked(leaveOtherPurpose === 'Terminal Leave')}<span>Terminal Leave</span></div>
               </div>
             </div>
             <div class="cell column grid-bottom">
