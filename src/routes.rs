@@ -1,11 +1,11 @@
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
-};
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
 };
 use chrono::{NaiveDate, Utc};
 use sqlx::{PgPool, Row, postgres::PgRow};
@@ -57,7 +57,9 @@ fn is_argon2_hash(value: &str) -> bool {
     value.starts_with("$argon2")
 }
 
-fn hash_password_if_needed(password: &str) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+fn hash_password_if_needed(
+    password: &str,
+) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
     if is_argon2_hash(password) {
         Ok(password.to_string())
     } else {
@@ -372,7 +374,8 @@ pub async fn login(
 
     if !is_argon2_hash(&account.password) {
         let upgraded_hash = hash_password(&payload.password)?;
-        let upgrade_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
+        let upgrade_sql =
+            "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
         log_db_query(
             "app_users",
             upgrade_sql,
@@ -400,7 +403,7 @@ pub async fn change_password(
     State(state): State<AppState>,
     Path(account_id): Path<String>,
     Json(payload): Json<ChangePasswordPayload>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
     if payload.new_password.len() < 8 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -414,7 +417,14 @@ pub async fn change_password(
         .bind(&account_id)
         .fetch_optional(&state.db)
         .await
-        .map_err(|error| api_query_error("app_users", sql, serde_json::json!({ "id": account_id }), error))?;
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                sql,
+                serde_json::json!({ "id": account_id }),
+                error,
+            )
+        })?;
 
     let Some(row) = row else {
         return Err((
@@ -431,6 +441,15 @@ pub async fn change_password(
         ));
     }
 
+    if payload.current_password == payload.new_password {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(
+                serde_json::json!({ "error": "New password must be different from the current password." }),
+            ),
+        ));
+    }
+
     let next_hash = hash_password(&payload.new_password)?;
     let update_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
     log_db_query(
@@ -438,9 +457,9 @@ pub async fn change_password(
         update_sql,
         serde_json::json!({ "id": account_id, "password_hash": "[redacted]" }),
     );
-    sqlx::query(update_sql)
+    let updated = sqlx::query(update_sql)
         .bind(&account_id)
-        .bind(next_hash)
+        .bind(&next_hash)
         .execute(&state.db)
         .await
         .map_err(|error| {
@@ -452,7 +471,60 @@ pub async fn change_password(
             )
         })?;
 
-    Ok(Json(serde_json::json!({ "status": "password-updated" })))
+    if updated.rows_affected() != 1 {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "User not found" })),
+        ));
+    }
+
+    let verify_sql = r#"
+        SELECT
+            id,
+            name,
+            email,
+            COALESCE(password_hash, '') AS password,
+            role,
+            department,
+            avatar_url
+        FROM app_users
+        WHERE id = $1
+        "#;
+    log_db_query(
+        "app_users",
+        verify_sql,
+        serde_json::json!({ "id": account_id }),
+    );
+    let saved_account = sqlx::query_as::<_, UserAccount>(verify_sql)
+        .bind(&account_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                verify_sql,
+                serde_json::json!({ "id": account_id }),
+                error,
+            )
+        })?;
+
+    let Some(saved_account) = saved_account else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "User not found" })),
+        ));
+    };
+
+    if !verify_password(&saved_account.password, &payload.new_password)
+        || verify_password(&saved_account.password, &payload.current_password)
+    {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "Password update could not be verified." })),
+        ));
+    }
+
+    Ok(Json(public_user(saved_account)))
 }
 
 pub async fn sync_bootstrap_data(

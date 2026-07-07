@@ -2441,6 +2441,10 @@ function ChangePasswordModal({ changePassword, onClose }: { changePassword: (cur
       setError('New password must be at least 8 characters.')
       return
     }
+    if (currentPassword === nextPassword) {
+      setError('New password must be different from the current password.')
+      return
+    }
     if (nextPassword !== confirmPassword) {
       setError('New passwords do not match.')
       return

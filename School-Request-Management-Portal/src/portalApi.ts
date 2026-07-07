@@ -284,6 +284,7 @@ export async function changeAccountPassword(id: string, currentPassword: string,
     throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
   })
   if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to change password (${response.status})`))
+  return response.json() as Promise<User>
 }
 
 export async function deleteAccount(id: string) {

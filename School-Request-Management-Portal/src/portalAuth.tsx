@@ -125,19 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     changePassword: async (currentPassword, nextPassword) => {
       if (!user) return { ok: false, message: 'You must be signed in to change your password.' }
       try {
-        await changeAccountPassword(user.id, currentPassword, nextPassword)
-        const updated = { ...user, password: '' }
+        const savedUser = await changeAccountPassword(user.id, currentPassword, nextPassword)
+        const verifiedUser = await authenticateAccount(savedUser.email, nextPassword)
+        const updated = { ...verifiedUser, password: '' }
         setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
         setUser(updated)
         return { ok: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to change password.'
-        if (message.startsWith('Cannot reach backend') && user.password && user.password === currentPassword) {
-          const updated = { ...user, password: nextPassword }
-          setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
-          setUser(updated)
-          return { ok: true }
-        }
         return { ok: false, message }
       }
     },
