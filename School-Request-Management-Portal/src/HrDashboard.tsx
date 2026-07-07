@@ -6,7 +6,9 @@ type IconComponent = ComponentType<{ size?: number; className?: string }>
 
 const deniedLeaveLabel = 'Disapproved'
 
-export default function HrDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest) => void; requests: PortalRequest[] }) {
+type HRLeaveActionMode = 'edit' | 'print'
+
+export default function HrDashboard({ activeView, onReview, requests }: { activeView: string; onReview: (request: PortalRequest, mode?: HRLeaveActionMode) => void; requests: PortalRequest[] }) {
   const [typeFilter, setTypeFilter] = useState<RequestKind | 'All'>('All')
   const [statusFilter, setStatusFilter] = useState<HRLeaveStatus | 'All'>('All')
   const [query, setQuery] = useState('')
@@ -129,7 +131,7 @@ export default function HrDashboard({ activeView, onReview, requests }: { active
   )
 }
 
-function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest) => void; requests: HRLeavePortalRequest[] }) {
+function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: PortalRequest, mode?: HRLeaveActionMode) => void; requests: HRLeavePortalRequest[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1050px] text-left">
@@ -154,7 +156,10 @@ function LeaveApplicationsTable({ onReview, requests }: { onReview: (request: Po
               <td className="max-w-[420px] truncate px-7 py-5 text-xl text-slate-600">{request.remarks}</td>
               <td className="px-7 py-5"><StatusPill status={request.status} /></td>
               <td className="px-7 py-5 text-right">
-                <button onClick={() => onReview(request)} className="font-semibold text-[#228b22]">Review</button>
+                <div className="flex flex-col items-end gap-2 xl:flex-row xl:justify-end">
+                  <button onClick={() => onReview(request, 'edit')} className="rounded-md border border-[#228b22] px-3 py-2 text-sm font-semibold text-[#228b22] hover:bg-[#228b22]/5">Edit Leave Form</button>
+                  <button onClick={() => onReview(request, 'print')} className="rounded-md bg-[#228b22] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1b751b]">Print Leave Form</button>
+                </div>
               </td>
             </tr>
           ))}

@@ -48,10 +48,12 @@ import StatusBreakdownPanel from './StatusBreakdownPanel'
 import { getAttachmentErrorMessage, isSupabaseRealtimeEnabled, loadReadNotificationIds, markNotificationReadInSupabase, markNotificationUnreadInSupabase, messageFromRealtimePayload, refreshMessageAttachmentUrl, refreshMessageAttachmentUrls, requireAttachmentAccessUrl, supabase, uploadMessageAttachment } from './portalSupabase'
 
 type ActiveModal =
-  | { type: 'viewRequest'; request: PortalRequest }
+  | { hrLeaveMode?: HRLeaveModalMode; type: 'viewRequest'; request: PortalRequest }
   | { type: 'decision'; request: PortalRequest; status: PortalRequest['status'] }
   | { type: 'users' }
   | null
+
+type HRLeaveModalMode = 'edit' | 'print'
 
 type MessageToast = {
   body: string
@@ -748,7 +750,7 @@ export function Dashboard() {
             <AdminOfficeDashboard activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
           {user.role === 'hr' && ['Overview', 'Leave Applications', 'Reports'].includes(activeView) && (
-            <HrDashboard activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
+            <HrDashboard activeView={activeView} onReview={(request, hrLeaveMode = 'edit') => setModal({ type: 'viewRequest', request, hrLeaveMode })} requests={visibleRequests} />
           )}
           {user.role === 'employee' && ['Overview', 'File Leave', 'Request Supplies', 'Reserve Facility', 'My Requests', 'Room Availability'].includes(activeView) && (
             <EmployeeDashboard activeView={activeView} announcements={visibleAnnouncements} existingRequests={requestList} onSubmit={addRequest} onView={setActiveView} onViewRequest={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} user={user} />
@@ -772,7 +774,7 @@ export function Dashboard() {
       {modal?.type === 'viewRequest' && user.role === 'registrar' && isRegistrarRequest(modal.request) && <RegistrarReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'supply' && isSupplyRequest(modal.request) && <SupplyReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'adminOffice' && isFacilityRequest(modal.request) && <FacilityReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && user.role === 'hr' && isHRLeaveRequest(modal.request) && <LeaveReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
+      {modal?.type === 'viewRequest' && user.role === 'hr' && isHRLeaveRequest(modal.request) && <LeaveReviewModal initialMode={modal.hrLeaveMode ?? 'edit'} onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && !['registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
       {modal?.type === 'decision' && <DecisionModal request={modal.request} status={modal.status} onClose={() => setModal(null)} onSubmit={updateRequestStatus} />}
       {modal?.type === 'users' && <UsersModal onClose={() => setModal(null)} />}
@@ -3302,7 +3304,8 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
   )
 }
 
-function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void; onSubmit: (requestId: string, status: HRLeaveStatus, remarks: string, updates?: Partial<HRLeavePortalRequest>) => void; request: HRLeavePortalRequest }) {
+function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initialMode: HRLeaveModalMode; onClose: () => void; onSubmit: (requestId: string, status: HRLeaveStatus, remarks: string, updates?: Partial<HRLeavePortalRequest>) => void; request: HRLeavePortalRequest }) {
+  const [mode, setMode] = useState<HRLeaveModalMode>(initialMode)
   const [kind, setKind] = useState<LeaveRequestKind>(request.kind)
   const [officeDepartment, setOfficeDepartment] = useState(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')
   const [filedDate, setFiledDate] = useState(request.filedDate ?? request.date)
@@ -3441,7 +3444,40 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   }
 
   return (
-    <Modal title="Review Leave Application" onClose={onClose} wide>
+    <Modal title={mode === 'edit' ? 'Edit Leave Form' : 'Print Leave Form'} onClose={onClose} wide>
+      <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#e7e1db] bg-stone-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{request.id}</p>
+          <h3 className="mt-2 text-2xl font-bold">{getLeaveTypeLabel(request.kind, request.customLeaveType)} - {request.owner}</h3>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={() => setMode('edit')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-md border px-4 font-semibold ${mode === 'edit' ? 'border-[#228b22] bg-[#228b22] text-white' : 'border-[#228b22] bg-white text-[#228b22]'}`}>
+            <Save size={17} />
+            Edit Leave Form
+          </button>
+          <button type="button" onClick={() => setMode('print')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-md border px-4 font-semibold ${mode === 'print' ? 'border-[#228b22] bg-[#228b22] text-white' : 'border-[#228b22] bg-white text-[#228b22]'}`}>
+            <Printer size={17} />
+            Print Leave Form
+          </button>
+        </div>
+      </div>
+      {mode === 'print' ? (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xl font-bold">Read-only print preview</h3>
+                <p className="text-slate-500">This view uses the latest saved Leave Application information.</p>
+              </div>
+              <button type="button" onClick={() => printLeaveApplicationForm(request)} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
+                <Printer size={17} />
+                Print form
+              </button>
+            </div>
+            <LeaveApplicationPrintForm request={request} />
+          </div>
+        </div>
+      ) : (
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <div className="rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
@@ -3659,19 +3695,6 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
               </table>
             </div>
           </div>
-          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-xl font-bold">Printable leave application</h3>
-                <p className="text-slate-500">Civil Service Form No. 6 format.</p>
-              </div>
-              <button type="button" onClick={() => printLeaveApplicationForm(editedRequest)} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
-                <Printer size={17} />
-                Print form
-              </button>
-            </div>
-            <LeaveApplicationPrintForm request={editedRequest} />
-          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Employee', request.owner],
@@ -3730,7 +3753,10 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
           <div className="space-y-3">
             <button disabled={kind === 'Other Leave' && !customLeaveTypeValue} onClick={saveFormChanges} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#228b22] font-semibold text-[#228b22] disabled:cursor-not-allowed disabled:opacity-45">
               <Save size={18} />
-              Save form edits
+              Save
+            </button>
+            <button onClick={onClose} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3cc] font-semibold text-slate-700 hover:bg-stone-50">
+              Cancel
             </button>
             <button disabled={request.status === 'Approved' || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Approved', 'Leave application approved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <CheckCircle2 size={18} />
@@ -3744,6 +3770,7 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved leave applications are reflected immediately in HR reports and status totals.</p>
         </aside>
       </div>
+      )}
     </Modal>
   )
 }
