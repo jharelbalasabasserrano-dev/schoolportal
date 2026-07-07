@@ -31,6 +31,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import ccdLogo from './assets/ccd-logo.png'
 import davaocityseal from './assets/davao-city-seal.png'
 import AdminOfficeDashboard from './AdminOfficeDashboard'
@@ -165,6 +166,10 @@ function isUnreadForUser(message: Message, currentUser: User, requests: PortalRe
 
 export function Dashboard() {
   const { user, logout, accounts } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { requestId: routeRequestId } = useParams()
+  const routeActiveView = (location.state as { activeView?: string } | null)?.activeView
   const [requestList, setRequestList] = useState<PortalRequest[]>(() => {
     const stored = readStored<PortalRequest[]>(storageKeys.requests, [])
     const merged = stored.map(normalizeRequestStatus)
@@ -218,7 +223,7 @@ export function Dashboard() {
     return merged
   })
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [activeView, setActiveView] = useState('Overview')
+  const [activeView, setActiveView] = useState(routeActiveView ?? (routeRequestId ? 'Leave Applications' : 'Overview'))
   const [modal, setModal] = useState<ActiveModal>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -278,6 +283,14 @@ export function Dashboard() {
   useEffect(() => {
     requestBrowserNotificationPermission()
   }, [])
+
+  useEffect(() => {
+    if (routeRequestId) setActiveView('Leave Applications')
+  }, [routeRequestId])
+
+  useEffect(() => {
+    if (routeActiveView) setActiveView(routeActiveView)
+  }, [routeActiveView])
 
   useEffect(() => {
     if (!user || !isSupabaseRealtimeEnabled()) return undefined
@@ -509,6 +522,18 @@ export function Dashboard() {
   ]
   const unreadCount = notifications.filter((item) => !item.read).length
   const visibleAnnouncements = announcements.filter((announcement) => !announcement.audience || announcement.audience === 'all' || announcement.audience === user.role)
+  const hrLeaveEditRequest = user.role === 'hr' && routeRequestId
+    ? requestList.find((request): request is HRLeavePortalRequest => request.id === routeRequestId && isHRLeaveRequest(request))
+    : undefined
+  const isHrLeaveEditPage = user.role === 'hr' && Boolean(routeRequestId)
+  const closeHrLeaveEditPage = () => {
+    setActiveView('Leave Applications')
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+    navigate('/dashboard', { replace: true, state: { activeView: 'Leave Applications' } })
+  }
   const markAllNotificationsRead = () => {
     const nextRead = Object.fromEntries(notificationItems.map((item) => [item.id, true]))
     setNotificationRead(nextRead)
@@ -685,7 +710,7 @@ export function Dashboard() {
           <div className="portal-nav-list space-y-1.5">
             {getNavItems(user.role).map((item) => {
               const Icon = item.icon
-              const selected = activeView === item.label
+              const selected = activeView === item.label || (isHrLeaveEditPage && item.label === 'Leave Applications')
               return (
                 <button key={item.label} onClick={() => { setActiveView(item.label); setSidebarOpen(false) }} className={`portal-nav-item flex h-12 w-full items-center gap-3 rounded-md px-3 text-left font-medium ${selected ? 'is-active text-white' : 'text-white/88'}`}>
                   <Icon className="portal-nav-icon" size={20} />
@@ -718,7 +743,7 @@ export function Dashboard() {
             </button>
             <div>
               <p className="text-sm font-semibold uppercase tracking-[.16em] text-slate-500">{roleMeta[user.role].label} Dashboard</p>
-              <h1 className="text-2xl font-bold leading-tight">{activeView}</h1>
+              <h1 className="text-2xl font-bold leading-tight">{isHrLeaveEditPage ? 'Edit Leave Form' : activeView}</h1>
             </div>
           </div>
           <div className="relative flex items-center gap-2 sm:gap-4">
@@ -749,8 +774,35 @@ export function Dashboard() {
           {user.role === 'adminOffice' && ['Overview', 'Facility Reservations', 'Reports'].includes(activeView) && (
             <AdminOfficeDashboard activeView={activeView} onReview={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} />
           )}
-          {user.role === 'hr' && ['Overview', 'Leave Applications', 'Reports'].includes(activeView) && (
-            <HrDashboard activeView={activeView} onReview={(request, hrLeaveMode = 'edit') => setModal({ type: 'viewRequest', request, hrLeaveMode })} requests={visibleRequests} />
+          {hrLeaveEditRequest ? (
+            <LeaveReviewModal
+              initialMode="edit"
+              onClose={closeHrLeaveEditPage}
+              onSubmit={(requestId, status, remarks, updates) => {
+                updateRequestStatus(requestId, status, remarks, updates)
+                setActiveView('Leave Applications')
+                navigate('/dashboard', { replace: true, state: { activeView: 'Leave Applications' } })
+              }}
+              request={hrLeaveEditRequest}
+            />
+          ) : isHrLeaveEditPage ? (
+            <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
+              <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">Leave request not available</p>
+              <h2 className="mt-2 text-3xl font-bold">Edit Leave Form</h2>
+              <p className="mt-2 text-slate-600">The leave application could not be found or is not available for HR editing.</p>
+              <button type="button" onClick={() => { setActiveView('Leave Applications'); navigate('/dashboard', { replace: true, state: { activeView: 'Leave Applications' } }) }} className="mt-5 inline-flex h-11 items-center justify-center rounded-md bg-[#228b22] px-4 font-semibold text-white">
+                Back to Leave Requests
+              </button>
+            </section>
+          ) : user.role === 'hr' && ['Overview', 'Leave Applications', 'Reports'].includes(activeView) && (
+            <HrDashboard activeView={activeView} onReview={(request, hrLeaveMode = 'edit') => {
+              if (hrLeaveMode === 'edit' && isHRLeaveRequest(request)) {
+                setActiveView('Leave Applications')
+                navigate(`/dashboard/hr/leave/${encodeURIComponent(request.id)}/edit`, { state: { activeView: 'Leave Applications' } })
+                return
+              }
+              setModal({ type: 'viewRequest', request, hrLeaveMode })
+            }} requests={visibleRequests} />
           )}
           {user.role === 'employee' && ['Overview', 'File Leave', 'Request Supplies', 'Reserve Facility', 'My Requests', 'Room Availability'].includes(activeView) && (
             <EmployeeDashboard activeView={activeView} announcements={visibleAnnouncements} existingRequests={requestList} onSubmit={addRequest} onView={setActiveView} onViewRequest={(request) => setModal({ type: 'viewRequest', request })} requests={visibleRequests} user={user} />
@@ -3305,7 +3357,7 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
 }
 
 function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initialMode: HRLeaveModalMode; onClose: () => void; onSubmit: (requestId: string, status: HRLeaveStatus, remarks: string, updates?: Partial<HRLeavePortalRequest>) => void; request: HRLeavePortalRequest }) {
-  const [mode, setMode] = useState<HRLeaveModalMode>(initialMode)
+  const mode = initialMode
   const [kind, setKind] = useState<LeaveRequestKind>(request.kind)
   const [officeDepartment, setOfficeDepartment] = useState(request.officeDepartment ?? 'CITY COLLEGE OF DAVAO')
   const [filedDate, setFiledDate] = useState(request.filedDate ?? request.date)
@@ -3443,25 +3495,9 @@ function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initial
     })
   }
 
-  return (
-    <Modal title={mode === 'edit' ? 'Edit Leave Form' : 'Print Leave Form'} onClose={onClose} wide>
-      <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#e7e1db] bg-stone-50 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{request.id}</p>
-          <h3 className="mt-2 text-2xl font-bold">{getLeaveTypeLabel(request.kind, request.customLeaveType)} - {request.owner}</h3>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={() => setMode('edit')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-md border px-4 font-semibold ${mode === 'edit' ? 'border-[#228b22] bg-[#228b22] text-white' : 'border-[#228b22] bg-white text-[#228b22]'}`}>
-            <Save size={17} />
-            Edit Leave Form
-          </button>
-          <button type="button" onClick={() => setMode('print')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-md border px-4 font-semibold ${mode === 'print' ? 'border-[#228b22] bg-[#228b22] text-white' : 'border-[#228b22] bg-white text-[#228b22]'}`}>
-            <Printer size={17} />
-            Print Leave Form
-          </button>
-        </div>
-      </div>
-      {mode === 'print' ? (
+  if (mode === 'print') {
+    return (
+      <Modal title="Print Leave Form" onClose={onClose} wide>
         <div className="space-y-4">
           <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3477,7 +3513,22 @@ function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initial
             <LeaveApplicationPrintForm request={request} />
           </div>
         </div>
-      ) : (
+      </Modal>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 rounded-lg border border-[#e7e1db] bg-stone-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{request.id}</p>
+          <h2 className="mt-2 text-3xl font-bold">Edit Leave Form</h2>
+          <p className="mt-1 text-slate-600">{leaveTitle} - {request.owner}</p>
+        </div>
+        <button type="button" onClick={onClose} className="inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] px-4 font-semibold text-slate-700 hover:bg-white">
+          Cancel
+        </button>
+      </div>
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <div className="rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
@@ -3749,11 +3800,11 @@ function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initial
           </div>
         </div>
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-5">
-          <h3 className="mb-4 text-xl font-bold">Decision</h3>
+          <h3 className="mb-4 text-xl font-bold">Form Actions</h3>
           <div className="space-y-3">
             <button disabled={kind === 'Other Leave' && !customLeaveTypeValue} onClick={saveFormChanges} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#228b22] font-semibold text-[#228b22] disabled:cursor-not-allowed disabled:opacity-45">
               <Save size={18} />
-              Save
+              Save Changes
             </button>
             <button onClick={onClose} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3cc] font-semibold text-slate-700 hover:bg-stone-50">
               Cancel
@@ -3770,8 +3821,16 @@ function LeaveReviewModal({ initialMode, onClose, onSubmit, request }: { initial
           <p className="mt-5 rounded-md bg-stone-50 p-3 text-sm text-slate-600">Approved leave applications are reflected immediately in HR reports and status totals.</p>
         </aside>
       </div>
-      )}
-    </Modal>
+      <div className="flex flex-col-reverse gap-3 rounded-lg border border-[#e7e1db] bg-white p-5 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onClose} className="inline-flex h-12 items-center justify-center rounded-md border border-[#d9d3cc] px-6 font-semibold text-slate-700 hover:bg-stone-50">
+          Cancel
+        </button>
+        <button type="button" disabled={kind === 'Other Leave' && !customLeaveTypeValue} onClick={saveFormChanges} className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#228b22] px-6 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
+          <Save size={18} />
+          Save Changes
+        </button>
+      </div>
+    </div>
   )
 }
 
