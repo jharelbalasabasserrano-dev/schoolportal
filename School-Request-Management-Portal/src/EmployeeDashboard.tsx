@@ -1,8 +1,7 @@
 import { Building2, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers3, PackageCheck, Plus, Printer, Send, XCircle } from 'lucide-react'
-import { useState, type FormEvent, type ReactNode } from 'react'
-import ccdLogo from './assets/ccd-logo.png'
+import { useState, type FormEvent } from 'react'
 import { facilities, leaveKinds, type Announcement, type LeaveRequestKind, type PortalRequest, type User } from './portalData'
-import { createLeaveReferenceNumber, formatDate, formatShortDate, getCivilServiceLeaveLabel, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
+import { createLeaveReferenceNumber, formatDate, formatShortDate, getCounts, getDateDuration, getEmployeeRequestDetails, getEmployeeRequestTitle, getEmployeeRequestType, getEmployeeTypeTone, getLeaveTypeIcon, getLeaveTypeLabel, hasFacilityConflict, isEmployeePortalRequest, isLeaveApplication, printFacilityBookingForm, printLeaveApplicationForm } from './portalHelpers'
 import { AnnouncementsPanel, MetricCard, StatusPill } from './portalComponents'
 import { RoomAvailabilityView } from './portalViews'
 
@@ -115,185 +114,120 @@ function EmployeeFileLeaveView({ onSubmit, user }: { onSubmit: (request: PortalR
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <div className="rounded-lg border border-[#d9d3cc] bg-white p-4 shadow-sm sm:p-6">
-        <div className="overflow-x-auto">
-          <div className="mx-auto min-w-[760px] max-w-[980px] border border-black bg-white font-serif text-sm text-black">
-            <div className="relative min-h-[132px] border-b border-black p-4 text-center">
-              <div className="absolute left-4 top-4 text-left text-xs font-bold leading-tight">
-                <p>Civil Service Form No. 6</p>
-                <p>Revised 2020</p>
-              </div>
-              <img src={ccdLogo} alt="City College of Davao logo" className="absolute left-[25%] top-4 h-14 w-14 object-contain" />
-              <p className="font-bold">Republic of the Philippines</p>
-              <p className="font-bold">CITY GOVERNMENT OF DAVAO</p>
-              <p className="font-bold">DAVAO CITY</p>
-              <h2 className="mt-4 text-2xl font-extrabold underline underline-offset-4">APPLICATION FOR LEAVE</h2>
-              <div className="absolute right-4 top-4 w-56 border-2 border-black p-2 text-left text-xs">
-                <p className="text-center text-[11px] font-extrabold">CITY COLLEGE OF DAVAO</p>
-                <p className="text-center text-lg font-extrabold tracking-[.2em]">RECEIVED</p>
-                <p className="mt-2 border-b border-black">Date:</p>
-                <p className="mt-1 border-b border-black">Time:</p>
-                <p className="mt-1 border-b border-black">By:</p>
-                <p className="mt-2 font-mono text-[11px]">Employee ID: {user.id}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[24%_34%_16%_14%_12%] border-b border-black">
-              <FormCell label="1. Office/Department">
-                <input value={officeDepartment} onChange={(event) => setOfficeDepartment(event.target.value)} className="official-input" />
-              </FormCell>
-              <FormCell label="2. Name (Last, First, Middle)">
-                <input value={user.name} readOnly className="official-input bg-stone-50" />
-              </FormCell>
-              <FormCell label="3. Date of Filing">
-                <input type="date" value={filedDate} onChange={(event) => setFiledDate(event.target.value)} className="official-input" />
-              </FormCell>
-              <FormCell label="4. Position">
-                <input value={position} onChange={(event) => setPosition(event.target.value)} className="official-input" />
-              </FormCell>
-              <FormCell label="5. Salary" last>
-                <input value={salary} onChange={(event) => setSalary(event.target.value)} className="official-input" />
-              </FormCell>
-            </div>
-
-            <p className="border-b border-black py-2 text-center font-extrabold">6. DETAILS OF APPLICATION</p>
-            <div className="grid grid-cols-2">
-              <div className="border-r border-black p-4">
-                <p className="mb-3 font-extrabold">6.A TYPE OF LEAVE TO BE AVAILED OF</p>
-                <div className="space-y-2">
-                  {leaveKinds.map((item) => (
-                    <label key={item} className="flex items-start gap-2">
-                      <input type="radio" checked={kind === item} onChange={() => setKind(item)} className="mt-1 h-4 w-4 accent-[#228b22]" />
-                      <span>{getCivilServiceLeaveLabel(item) || getLeaveTypeLabel(item)}</span>
-                    </label>
-                  ))}
-                </div>
-                {kind === 'Other Leave' && (
-                  <label className="mt-3 block">
-                    <span className="text-xs font-bold uppercase">Specify</span>
-                    <input required value={customLeaveType} onChange={(event) => setCustomLeaveType(event.target.value)} className="official-input mt-1" />
-                  </label>
-                )}
-              </div>
-              <div className="p-4">
-                <p className="mb-3 font-extrabold">6.B DETAILS OF LEAVE</p>
-                <p className="italic">In case of Vacation/Special Privilege Leave, Sick Leave, Study Leave, or other purpose:</p>
-                <textarea value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} rows={6} placeholder="Location, illness, study leave detail, or other purpose" className="mt-3 w-full border border-black px-3 py-2 font-sans text-sm outline-none focus:ring-1 focus:ring-[#228b22]" />
-                <label className="mt-4 block">
-                  <span className="mb-1 block font-bold">Reason / Purpose</span>
-                  <textarea required value={reason} onChange={(event) => setReason(event.target.value.slice(0, 500))} rows={5} className="w-full border border-black px-3 py-2 font-sans text-sm outline-none focus:ring-1 focus:ring-[#228b22]" />
-                </label>
-                <p className="mt-1 text-right font-sans text-xs text-slate-500">{reason.length} / 500</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 border-t border-black">
-              <div className="space-y-3 border-r border-black p-4">
-                <p className="font-extrabold">6.C NUMBER OF WORKING DAYS APPLIED FOR</p>
-                <div className="grid grid-cols-3 gap-3 font-sans">
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold">Start date</span>
-                    <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="official-input" />
-                  </label>
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold">End date</span>
-                    <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="official-input" />
-                  </label>
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold">Working days</span>
-                    <input value={`${duration} day(s)`} readOnly className="official-input bg-stone-50" />
-                  </label>
-                </div>
-                <p className="font-extrabold">INCLUSIVE DATES</p>
-                <p className="border-b border-black py-1 text-center font-semibold">{formatDate(startDate)} - {formatDate(endDate)}</p>
-                <div className="grid grid-cols-2 gap-3 font-sans">
-                  <label>
-                    <span className="mb-1 block text-xs font-semibold">Leave duration</span>
-                    <select value={leaveDuration} onChange={(event) => setLeaveDuration(event.target.value as 'Full Day' | 'Half Day')} className="official-input">
-                      <option>Full Day</option>
-                      <option>Half Day</option>
-                    </select>
-                  </label>
-                  {leaveDuration === 'Half Day' && (
-                    <label>
-                      <span className="mb-1 block text-xs font-semibold">Half-day time</span>
-                      <select value={leaveTime} onChange={(event) => setLeaveTime(event.target.value)} className="official-input">
-                        <option>Morning (AM)</option>
-                        <option>Afternoon (PM)</option>
-                      </select>
-                    </label>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-3 p-4">
-                <p className="font-extrabold">6.D COMMUTATION</p>
-                <label className="flex items-center gap-2"><input type="radio" checked={communication === 'Requested'} onChange={() => setCommunication('Requested')} className="h-4 w-4 accent-[#228b22]" /> Requested</label>
-                <label className="flex items-center gap-2"><input type="radio" checked={communication === 'Not Requested'} onChange={() => setCommunication('Not Requested')} className="h-4 w-4 accent-[#228b22]" /> Not Requested</label>
-                <div className="pt-10 text-center">
-                  <p className="border-b border-black font-semibold">{user.name}</p>
-                  <p className="mt-1 text-xs">Signature of Applicant</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="border-y border-black py-2 text-center font-extrabold">7. DETAILS OF ACTION ON APPLICATION</p>
-            <div className="grid grid-cols-2">
-              <div className="border-r border-black p-4">
-                <p className="font-extrabold">7.A CERTIFICATION OF LEAVE CREDITS</p>
-                <table className="mt-3 w-full border-collapse text-center text-xs">
-                  <thead>
-                    <tr>
-                      <th className="border border-black p-2" />
-                      <th className="border border-black p-2">Vacation Leave</th>
-                      <th className="border border-black p-2">Sick Leave</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {['Total Earned', 'Less this application', 'Balance'].map((row) => (
-                      <tr key={row}>
-                        <td className="border border-black p-2 text-left font-bold">{row}</td>
-                        <td className="border border-black p-2">&nbsp;</td>
-                        <td className="border border-black p-2">&nbsp;</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="p-4">
-                <p className="font-extrabold">7.B RECOMMENDATION</p>
-                <label className="mt-2 flex items-center gap-2"><input disabled type="checkbox" /> For approval</label>
-                <label className="mt-2 flex items-center gap-2"><input disabled type="checkbox" /> For disapproval due to</label>
-                <p className="mt-5 border-b border-black">&nbsp;</p>
-              </div>
-              <div className="border-r border-t border-black p-4">
-                <p className="font-extrabold">7.C APPROVED FOR:</p>
-                <p className="mt-3 border-b border-black">days with pay</p>
-                <p className="mt-3 border-b border-black">days without pay</p>
-                <p className="mt-3 border-b border-black">others (Specify)</p>
-              </div>
-              <div className="border-t border-black p-4">
-                <p className="font-extrabold">7.D DISAPPROVED DUE TO:</p>
-                <p className="mt-5 border-b border-black">&nbsp;</p>
-              </div>
-            </div>
+    <form onSubmit={submit} className="rounded-lg border border-[#e7e1db] bg-white p-7">
+      <div className="mb-6 rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
+        <div className="mb-4">
+          <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">Application for Leave</p>
+          <h2 className="mt-1 text-2xl font-bold">Civil Service Form No. 6</h2>
+        </div>
+        <div className="grid gap-5 md:grid-cols-2">
+          <label>
+            <span className="mb-2 block font-medium">1. Office/Department</span>
+            <input value={officeDepartment} onChange={(event) => setOfficeDepartment(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">2. Name</span>
+            <input value={user.name} readOnly className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg text-slate-700 outline-none" />
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">3. Date of Filing</span>
+            <input type="date" value={filedDate} onChange={(event) => setFiledDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+          <div className="rounded-md border border-[#e7e1db] bg-white px-4 py-3">
+            <p className="text-sm font-semibold uppercase tracking-[.12em] text-slate-500">Signature of Applicant</p>
+            <p className="mt-2 text-lg font-semibold">{user.name}</p>
           </div>
         </div>
-        <button className="mt-6 inline-flex h-14 items-center gap-3 rounded-md bg-[#228b22] px-7 font-sans text-lg font-semibold text-white hover:bg-[#228b22]">
-          <Send size={19} />
-          Submit leave application
-        </button>
       </div>
+      <div className="leave-type-nav rounded-lg border border-[#e7e1db] bg-stone-50 p-4">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">6.A Type of Leave to be Availed Of</p>
+            <p className="mt-1 text-sm text-slate-600">Choose the leave category for this application.</p>
+          </div>
+          <div className="rounded-lg border border-[#e7e1db] bg-white px-4 py-2 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[.12em] text-slate-500">Selected</p>
+            <p className="mt-1 font-bold text-[#228b22]">{title}</p>
+          </div>
+        </div>
+        <div className="leave-type-scroll flex gap-3 overflow-x-auto pb-2">
+          {leaveKinds.map((item) => {
+            const selected = kind === item
+            const Icon = getLeaveTypeIcon(item)
+            return (
+              <button key={item} type="button" onClick={() => setKind(item)} className={`leave-type-tab min-w-[210px] rounded-lg border p-4 text-left ${selected ? 'is-active border-[#228b22] bg-[#228b22] text-white' : 'border-[#e7e1db] bg-white text-slate-700 hover:border-[#4cbb17]'}`}>
+                <span className={`mb-4 flex h-11 w-11 items-center justify-center rounded-md ${selected ? 'bg-white/18 text-white' : 'bg-stone-100 text-[#228b22]'}`}><Icon size={20} /></span>
+                <span className="block text-sm font-bold leading-snug">{getLeaveTypeLabel(item)}</span>
+                <span className={`mt-3 block text-xs leading-5 ${selected ? 'text-white/75' : 'text-slate-500'}`}>Civil Service Form No. 6</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      {kind === 'Other Leave' && (
+        <label className="mt-5 block">
+          <span className="mb-2 block font-medium">Specify leave type</span>
+          <input required value={customLeaveType} onChange={(event) => setCustomLeaveType(event.target.value)} placeholder="Enter custom leave type" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+      )}
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
+        <label>
+          <span className="mb-2 block font-medium">4. Position</span>
+          <input value={position} onChange={(event) => setPosition(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+        <label>
+          <span className="mb-2 block font-medium">5. Salary</span>
+          <input value={salary} onChange={(event) => setSalary(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+        <label>
+          <span className="mb-2 block font-medium">Inclusive dates - Start</span>
+          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+        <label>
+          <span className="mb-2 block font-medium">Leave Duration</span>
+          <select value={leaveDuration} onChange={(event) => setLeaveDuration(event.target.value as 'Full Day' | 'Half Day')} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <option>Full Day</option>
+            <option>Half Day</option>
+          </select>
+        </label>
+        <label>
+          <span className="mb-2 block font-medium">Inclusive dates - End</span>
+          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+        {leaveDuration === 'Half Day' && (
+          <label>
+            <span className="mb-2 block font-medium">Time</span>
+            <select value={leaveTime} onChange={(event) => setLeaveTime(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              <option>Morning (AM)</option>
+              <option>Afternoon (PM)</option>
+            </select>
+          </label>
+        )}
+      </div>
+      <p className="mt-4 text-slate-600">6.C Number of working days applied for: <span className="font-semibold">{duration} day(s)</span></p>
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        <label>
+          <span className="mb-2 block font-medium">6.D Communication</span>
+          <select value={communication} onChange={(event) => setCommunication(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <option>Not Requested</option>
+            <option>Requested</option>
+          </select>
+        </label>
+        <label>
+          <span className="mb-2 block font-medium">6.B Details of Leave</span>
+          <input value={leaveDetail} onChange={(event) => setLeaveDetail(event.target.value)} placeholder="Location, illness, study leave detail, or other purpose" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+        </label>
+      </div>
+      <label className="mt-5 block">
+        <span className="mb-2 block font-medium">Reason</span>
+        <textarea value={reason} onChange={(event) => setReason(event.target.value.slice(0, 500))} rows={5} placeholder="Describe the reason for your leave..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22]" />
+      </label>
+      <p className="mt-2 text-slate-500">{reason.length} / 500</p>
+      <button className="mt-6 inline-flex h-14 items-center gap-3 rounded-md bg-[#228b22] px-7 text-lg font-semibold text-white hover:bg-[#228b22]">
+        <Send size={19} />
+        Submit leave application
+      </button>
     </form>
-  )
-}
-
-function FormCell({ children, label, last = false }: { children: ReactNode; label: string; last?: boolean }) {
-  return (
-    <label className={`block p-3 ${last ? '' : 'border-r border-black'}`}>
-      <span className="mb-2 block text-xs font-extrabold uppercase">{label}</span>
-      {children}
-    </label>
   )
 }
 

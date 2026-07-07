@@ -98,6 +98,11 @@ type BasePortalRequest = {
   sickLeaveTotalEarned?: string
   sickLeaveLess?: string
   sickLeaveBalance?: string
+  leaveRecommendation?: 'For approval' | 'For disapproval' | ''
+  approvedDaysWithPay?: string
+  approvedDaysWithoutPay?: string
+  approvedOther?: string
+  disapprovedDueTo?: string
   hrRemarks?: string
   updatedBy?: string
 }
