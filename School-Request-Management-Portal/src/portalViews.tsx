@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import ccdLogo from './assets/ccd-logo.png'
+import davaocityseal from './assets/davao-city-seal.png'
 import AdminOfficeDashboard from './AdminOfficeDashboard'
 import EmployeeDashboard from './EmployeeDashboard'
 import HrDashboard from './HrDashboard'
@@ -2773,7 +2774,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
           <p>Civil Service Form No. 6</p>
           <p>Revised 2020</p>
         </div>
-        <img src={ccdLogo} alt="City College of Davao logo" style={{ left: 'calc(50% - 48mm)' }} className="absolute top-[3mm] h-[15mm] w-[15mm] object-contain" />
+        <img src={davaocityseal} alt="Davao City seal" style={{ left: 'calc(50% - 48mm)' }} className="absolute top-[3mm] h-[15mm] w-[15mm] object-contain" />
         <div className="absolute left-1/2 top-[3mm] w-[92mm] -translate-x-1/2 text-center">
           <p className="text-[10px] font-bold">Republic of the Philippines</p>
           <p className="mt-[1mm] text-[11px] font-bold">CITY GOVERNMENT OF DAVAO</p>

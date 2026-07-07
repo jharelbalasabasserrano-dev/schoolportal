@@ -726,7 +726,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     <div class="inner">
       <div class="form-heading">
         <div class="form-label">Civil Service Form No. 6<br>Revised 2020</div>
-        <img class="logo" src="${ccdLogo}" alt="City College of Davao logo">
+        <img class="logo" src="${davaocityseal}" alt="Davao City seal">
         <div class="title-block">
           <div class="republic">Republic of the Philippines</div>
           <div class="government">CITY GOVERNMENT OF DAVAO</div>
