@@ -75,7 +75,7 @@ export function LoginPage() {
     // Simulate network delay for better UX
     const success = await new Promise<boolean>((resolve) => {
       setTimeout(() => {
-        resolve(login(loginEmail.trim(), loginPassword, remember));
+        login(loginEmail.trim(), loginPassword, remember).then(resolve);
       }, 420);
     });
 

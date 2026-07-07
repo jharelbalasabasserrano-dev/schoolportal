@@ -242,6 +242,21 @@ export async function createAccount(account: User) {
   return response.json() as Promise<User>
 }
 
+export async function authenticateAccount(email: string, password: string) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to sign in (${response.status})`))
+  return response.json() as Promise<User>
+}
+
 export async function updateAccount(id: string, updates: Omit<User, 'id' | 'password'>) {
   const response = await fetchWithTimeout(`${apiBaseUrl}/api/accounts/${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -255,6 +270,20 @@ export async function updateAccount(id: string, updates: Omit<User, 'id' | 'pass
   })
   if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to update user (${response.status})`))
   return response.json() as Promise<User>
+}
+
+export async function changeAccountPassword(id: string, currentPassword: string, newPassword: string) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/api/accounts/${encodeURIComponent(id)}/password`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  }).catch((error) => {
+    const errorMessage = isTimeoutError(error)
+      ? `request timed out after ${requestTimeoutMs / 1000} seconds`
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Cannot reach backend${apiBaseUrl ? ` at ${apiBaseUrl}` : ''}: ${errorMessage}`)
+  })
+  if (!response.ok) throw new Error(await getErrorMessage(response, `Failed to change password (${response.status})`))
 }
 
 export async function deleteAccount(id: string) {

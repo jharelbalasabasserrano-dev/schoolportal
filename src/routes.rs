@@ -3,14 +3,19 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use chrono::{NaiveDate, Utc};
 use sqlx::{PgPool, Row, postgres::PgRow};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::models::{
-    Announcement, BootstrapData, ExitClearanceRequest, PortalRequest, ReadMessagePayload,
-    RequestMessage, StockMovement, SubmissionResponse, SupplierInfo, SupplyCategory, SupplyItem,
-    UpdateUserAccount, UserAccount,
+    Announcement, BootstrapData, ChangePasswordPayload, ExitClearanceRequest, LoginPayload,
+    PortalRequest, ReadMessagePayload, RequestMessage, StockMovement, SubmissionResponse,
+    SupplierInfo, SupplyCategory, SupplyItem, UpdateUserAccount, UserAccount,
 };
 
 #[derive(Clone)]
@@ -25,6 +30,54 @@ pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Val
         "status": "running",
         "database": state.db_status,
     }))
+}
+
+fn public_user(mut account: UserAccount) -> UserAccount {
+    account.password.clear();
+    account
+}
+
+fn hash_password(password: &str) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to hash password",
+                    "message": error.to_string()
+                })),
+            )
+        })
+}
+
+fn is_argon2_hash(value: &str) -> bool {
+    value.starts_with("$argon2")
+}
+
+fn hash_password_if_needed(password: &str) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
+    if is_argon2_hash(password) {
+        Ok(password.to_string())
+    } else {
+        hash_password(password)
+    }
+}
+
+fn verify_password(stored: &str, candidate: &str) -> bool {
+    if is_argon2_hash(stored) {
+        PasswordHash::new(stored)
+            .ok()
+            .and_then(|parsed| {
+                Argon2::default()
+                    .verify_password(candidate.as_bytes(), &parsed)
+                    .ok()
+            })
+            .is_some()
+    } else {
+        stored == candidate
+    }
 }
 
 fn request_message_from_row(row: PgRow) -> RequestMessage {
@@ -74,7 +127,7 @@ pub async fn get_bootstrap_data(
             id,
             name,
             email,
-            COALESCE(password_hash, '') AS password,
+            '' AS password,
             role,
             department,
             avatar_url
@@ -279,10 +332,142 @@ pub async fn get_bootstrap_data(
     }))
 }
 
+pub async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginPayload>,
+) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    let sql = r#"
+        SELECT
+            id,
+            name,
+            email,
+            COALESCE(password_hash, '') AS password,
+            role,
+            department,
+            avatar_url
+        FROM app_users
+        WHERE lower(email) = lower($1)
+        "#;
+    let params = serde_json::json!({ "email": payload.email });
+    log_db_query("app_users", sql, params.clone());
+    let account = sqlx::query_as::<_, UserAccount>(sql)
+        .bind(payload.email.trim())
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    let Some(account) = account else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Invalid email or password" })),
+        ));
+    };
+
+    if !verify_password(&account.password, &payload.password) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Invalid email or password" })),
+        ));
+    }
+
+    if !is_argon2_hash(&account.password) {
+        let upgraded_hash = hash_password(&payload.password)?;
+        let upgrade_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
+        log_db_query(
+            "app_users",
+            upgrade_sql,
+            serde_json::json!({ "id": account.id, "password_hash": "[redacted]" }),
+        );
+        sqlx::query(upgrade_sql)
+            .bind(&account.id)
+            .bind(upgraded_hash)
+            .execute(&state.db)
+            .await
+            .map_err(|error| {
+                api_query_error(
+                    "app_users",
+                    upgrade_sql,
+                    serde_json::json!({ "id": account.id, "password_hash": "[redacted]" }),
+                    error,
+                )
+            })?;
+    }
+
+    Ok(Json(public_user(account)))
+}
+
+pub async fn change_password(
+    State(state): State<AppState>,
+    Path(account_id): Path<String>,
+    Json(payload): Json<ChangePasswordPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if payload.new_password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "New password must be at least 8 characters." })),
+        ));
+    }
+
+    let sql = "SELECT COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
+    log_db_query("app_users", sql, serde_json::json!({ "id": account_id }));
+    let row = sqlx::query(sql)
+        .bind(&account_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, serde_json::json!({ "id": account_id }), error))?;
+
+    let Some(row) = row else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "User not found" })),
+        ));
+    };
+
+    let current_hash: String = row.get("password_hash");
+    if !verify_password(&current_hash, &payload.current_password) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Current password is incorrect." })),
+        ));
+    }
+
+    let next_hash = hash_password(&payload.new_password)?;
+    let update_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
+    log_db_query(
+        "app_users",
+        update_sql,
+        serde_json::json!({ "id": account_id, "password_hash": "[redacted]" }),
+    );
+    sqlx::query(update_sql)
+        .bind(&account_id)
+        .bind(next_hash)
+        .execute(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                update_sql,
+                serde_json::json!({ "id": account_id, "password_hash": "[redacted]" }),
+                error,
+            )
+        })?;
+
+    Ok(Json(serde_json::json!({ "status": "password-updated" })))
+}
+
 pub async fn sync_bootstrap_data(
     State(state): State<AppState>,
     Json(payload): Json<BootstrapData>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let existing_passwords: HashMap<String, String> = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, COALESCE(password_hash, '') FROM app_users",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(api_error)?
+    .into_iter()
+    .collect();
+
     let mut tx = state.db.begin().await.map_err(api_error)?;
 
     let sql = "DELETE FROM request_messages";
@@ -335,6 +520,14 @@ pub async fn sync_bootstrap_data(
         .map_err(|error| api_query_error("app_users", sql, serde_json::json!({}), error))?;
 
     for account in &payload.accounts {
+        let password_to_store = if account.password.trim().is_empty() {
+            match existing_passwords.get(&account.id) {
+                Some(existing) => existing.clone(),
+                None => hash_password(&Uuid::new_v4().to_string())?,
+            }
+        } else {
+            hash_password_if_needed(&account.password)?
+        };
         let sql = r#"
             INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -353,7 +546,7 @@ pub async fn sync_bootstrap_data(
             .bind(&account.id)
             .bind(&account.name)
             .bind(&account.email)
-            .bind(&account.password)
+            .bind(&password_to_store)
             .bind(&account.role)
             .bind(&account.department)
             .bind(&account.avatar_url)
@@ -681,6 +874,14 @@ pub async fn create_account(
     State(state): State<AppState>,
     Json(account): Json<UserAccount>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    if account.password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Password must be at least 8 characters." })),
+        ));
+    }
+
+    let password_hash = hash_password_if_needed(&account.password)?;
     let sql = r#"
         INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -696,7 +897,7 @@ pub async fn create_account(
             id,
             name,
             email,
-            COALESCE(password_hash, '') AS password,
+            '' AS password,
             role,
             department,
             avatar_url
@@ -715,7 +916,7 @@ pub async fn create_account(
         .bind(&account.id)
         .bind(&account.name)
         .bind(&account.email)
-        .bind(&account.password)
+        .bind(password_hash)
         .bind(&account.role)
         .bind(&account.department)
         .bind(&account.avatar_url)
@@ -723,7 +924,7 @@ pub async fn create_account(
         .await
         .map_err(|error| api_query_error("app_users", sql, params, error))?;
 
-    Ok(Json(saved))
+    Ok(Json(public_user(saved)))
 }
 
 pub async fn update_account(
@@ -745,7 +946,7 @@ pub async fn update_account(
             id,
             name,
             email,
-            COALESCE(password_hash, '') AS password,
+            '' AS password,
             role,
             department,
             avatar_url

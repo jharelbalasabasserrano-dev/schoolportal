@@ -39,6 +39,20 @@ pub struct UpdateUserAccount {
     pub avatar_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginPayload {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordPayload {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct PortalRequest {

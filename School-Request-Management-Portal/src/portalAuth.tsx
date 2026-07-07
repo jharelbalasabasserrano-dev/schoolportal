@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { createAccount as createAccountInDatabase, deleteAccount as deleteAccountInDatabase, loadBootstrapData, updateAccount as updateAccountInDatabase } from './portalApi'
+import { authenticateAccount, changeAccountPassword, createAccount as createAccountInDatabase, deleteAccount as deleteAccountInDatabase, loadBootstrapData, updateAccount as updateAccountInDatabase } from './portalApi'
 import { initialUsers, storageKeys, type User } from './portalData'
 
 type AuthContextValue = {
@@ -9,9 +9,9 @@ type AuthContextValue = {
   addAccount: (account: Omit<User, 'id'>) => void
   deleteAccount: (id: string) => void
   updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
-  login: (email: string, password: string, remember: boolean) => boolean
+  login: (email: string, password: string, remember: boolean) => Promise<boolean>
   logout: () => void
-  changePassword: (currentPassword: string, nextPassword: string) => boolean
+  changePassword: (currentPassword: string, nextPassword: string) => Promise<{ ok: boolean; message?: string }>
   updateProfile: (updates: Pick<User, 'name' | 'department' | 'avatarUrl'>) => void
 }
 
@@ -95,8 +95,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
     },
     user,
-    login: (email, password, remember) => {
-      const match = accounts.find((account) => account.email === email.trim().toLowerCase() && account.password === password)
+    login: async (email, password, remember) => {
+      const normalizedEmail = email.trim().toLowerCase()
+      try {
+        const authenticated = await authenticateAccount(normalizedEmail, password)
+        const updated = { ...authenticated, password: '' }
+        setAccounts((current) => current.map((account) => account.id === updated.id ? updated : account))
+        if (remember) localStorage.setItem(storageKeys.user, updated.email)
+        else localStorage.removeItem(storageKeys.user)
+        setUser(updated)
+        return true
+      } catch (error) {
+        console.warn(error)
+        const message = error instanceof Error ? error.message : ''
+        if (!message.startsWith('Cannot reach backend')) return false
+      }
+
+      const match = accounts.find((account) => account.email === normalizedEmail && account.password === password)
       if (!match) return false
       if (remember) localStorage.setItem(storageKeys.user, match.email)
       else localStorage.removeItem(storageKeys.user)
@@ -107,12 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(storageKeys.user)
       setUser(null)
     },
-    changePassword: (currentPassword, nextPassword) => {
-      if (!user || user.password !== currentPassword) return false
-      const updated = { ...user, password: nextPassword }
-      setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
-      setUser(updated)
-      return true
+    changePassword: async (currentPassword, nextPassword) => {
+      if (!user) return { ok: false, message: 'You must be signed in to change your password.' }
+      try {
+        await changeAccountPassword(user.id, currentPassword, nextPassword)
+        const updated = { ...user, password: '' }
+        setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
+        setUser(updated)
+        return { ok: true }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to change password.'
+        if (message.startsWith('Cannot reach backend') && user.password && user.password === currentPassword) {
+          const updated = { ...user, password: nextPassword }
+          setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
+          setUser(updated)
+          return { ok: true }
+        }
+        return { ok: false, message }
+      }
     },
     updateProfile: (updates) => {
       if (!user) return

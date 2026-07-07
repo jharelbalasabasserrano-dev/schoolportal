@@ -2422,7 +2422,7 @@ function ProfileView() {
   )
 }
 
-function ChangePasswordModal({ changePassword, onClose }: { changePassword: (currentPassword: string, nextPassword: string) => boolean; onClose: () => void }) {
+function ChangePasswordModal({ changePassword, onClose }: { changePassword: (currentPassword: string, nextPassword: string) => Promise<{ ok: boolean; message?: string }>; onClose: () => void }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [nextPassword, setNextPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -2430,9 +2430,13 @@ function ChangePasswordModal({ changePassword, onClose }: { changePassword: (cur
   const [showNext, setShowNext] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setError('')
+    setSuccess('')
     if (nextPassword.length < 8) {
       setError('New password must be at least 8 characters.')
       return
@@ -2441,11 +2445,18 @@ function ChangePasswordModal({ changePassword, onClose }: { changePassword: (cur
       setError('New passwords do not match.')
       return
     }
-    if (!changePassword(currentPassword, nextPassword)) {
-      setError('Current password is incorrect.')
+    setSaving(true)
+    const result = await changePassword(currentPassword, nextPassword)
+    setSaving(false)
+    if (!result.ok) {
+      setError(result.message || 'Unable to change password.')
       return
     }
-    onClose()
+    setCurrentPassword('')
+    setNextPassword('')
+    setConfirmPassword('')
+    setSuccess('Password updated. Use your new password the next time you sign in.')
+    window.setTimeout(onClose, 1200)
   }
 
   return (
@@ -2466,11 +2477,12 @@ function ChangePasswordModal({ changePassword, onClose }: { changePassword: (cur
           <PasswordField label="Confirm new password" show={showConfirm} setShow={setShowConfirm} value={confirmPassword} onChange={setConfirmPassword} icon={Lock} />
         </div>
         {error && <p className="mt-5 rounded-md bg-red-50 px-4 py-3 text-red-700">{error}</p>}
+        {success && <p className="mt-5 rounded-md bg-emerald-50 px-4 py-3 text-emerald-700">{success}</p>}
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <button type="button" onClick={onClose} className="h-14 rounded-md border border-[#d9d3cc] text-lg font-semibold hover:bg-stone-50">Cancel</button>
-          <button className="inline-flex h-14 items-center justify-center gap-3 rounded-md bg-[#228b22] text-lg font-semibold text-white hover:bg-[#228b22]">
+          <button type="button" disabled={saving} onClick={onClose} className="h-14 rounded-md border border-[#d9d3cc] text-lg font-semibold hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+          <button disabled={saving || Boolean(success)} className="inline-flex h-14 items-center justify-center gap-3 rounded-md bg-[#228b22] text-lg font-semibold text-white hover:bg-[#228b22] disabled:cursor-not-allowed disabled:opacity-60">
             <CheckCircle2 size={20} />
-            Update password
+            {saving ? 'Updating...' : 'Update password'}
           </button>
         </div>
       </form>
