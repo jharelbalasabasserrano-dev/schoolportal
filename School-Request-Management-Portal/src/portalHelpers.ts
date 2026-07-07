@@ -1,6 +1,7 @@
 import { BadgeCheck, Bell, Building2, CalendarClock, CheckCircle2, Clock, FileText, Home, Info, Layers3, Megaphone, MessageSquare, PackageCheck, Save, ShieldCheck, User as UserIcon, UsersRound, XCircle } from 'lucide-react'
 import ccdLogo from './assets/ccd-logo.png'
-import { allLeaveKinds, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, messageAttachmentCache, registrarStatuses, studentRequestKinds, supplyStatuses, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+import davaocityseal from './assets/davao-city-seal.png'
+import { academicProgramOptions, allLeaveKinds, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, messageAttachmentCache, registrarStatuses, studentRequestKinds, supplyStatuses, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarStatus, type RequestKind, type Role, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
 
 const legacyDisapprovedStatus = 'Re' + 'jected'
 export type RequestModule = 'registrar' | 'hrLeave' | 'supply' | 'facility'
@@ -43,7 +44,7 @@ function normalizeOfficeValue(office: string) {
 export function getNavItems(role: Role) {
   const student = [
     { label: 'Overview', icon: Home },
-    { label: 'Request Document', icon: FileText },
+    { label: 'Request Form', icon: FileText },
     { label: 'Reserve Facility', icon: Building2 },
     { label: 'Room Availability', icon: CalendarClock },
     { label: 'My Requests', icon: PackageCheck },
@@ -437,9 +438,7 @@ export function stripAttachmentDataForStorage(message: Message) {
 }
 
 export function getRegistrarRequestPrintHtml(request: PortalRequest) {
-  const programOptions = ['Bachelor of Early Childhood Education', 'Bachelor of Technical-Vocational Teacher Education', 'major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming', 'Bachelor of Science in Entrepreneurship']
   const requestOptions = ['Certificate of Registration', 'Certificate of Enrollment', 'Certificate of Grades', 'Certificate of Credit Units', 'Transcript of Records (TOR)', 'Change of Subject due to Conflict of Schedule', 'Adding/Dropping of Subjects', 'Other']
-  const selectedPrograms = [request.program ?? '', request.major ?? '']
   const check = (selected: string | string[], option: string) => `<span class="box">${(Array.isArray(selected) ? selected : [selected]).includes(option) ? 'x' : ''}</span>`
 
   return `<!doctype html>
@@ -491,7 +490,7 @@ export function getRegistrarRequestPrintHtml(request: PortalRequest) {
     ${printRow('School Year', request.schoolYear ?? '')}
     <section class="group">
       <p class="group-title">PROGRAM:</p>
-      ${programOptions.map((option) => `<div class="item">${check(selectedPrograms, option)} ${escapeHtml(option)}</div>`).join('')}
+      ${academicProgramOptions.map((option) => `<div class="item">${check(request.program ?? '', option)} ${escapeHtml(option)}</div>`).join('')}
     </section>
     <section class="group">
       <p class="group-title">Request for:</p>
@@ -557,7 +556,7 @@ export function getExitClearancePrintHtml(request: PortalRequest) {
   <main class="sheet">
     <header class="letterhead">
       <div class="ref">Reference Number<strong>${escapeHtml(getExitClearanceReferenceNumber(request))}</strong></div>
-      <img class="logo" src="${ccdLogo}" alt="City College of Davao seal">
+      <img class="logo" src="${davaocityseal}" alt="City College of Davao seal">
       <div class="republic">Republic of the Philippines</div>
       <div class="college">City College of Davao</div>
       <div class="address">Km. 10 Catalanun Pequeno, Davao City</div>
@@ -956,6 +955,10 @@ export function getFacilityBookingPrintHtml(request: PortalRequest) {
     </header>
     <h1>School Facility Booking Form</h1>
     ${printRow('Date', formatDate(request.date))}
+    ${printRow('Student ID #', request.studentId ?? '')}
+    ${printRow('Program', formatProgramWithMajor(request))}
+    ${printRow('Semester', request.semester ?? '')}
+    ${printRow('School Year', request.schoolYear ?? '')}
     ${printRow('Purpose/Objective', purpose)}
     ${printRow('Time', request.time.replace('-', ' - '))}
     <p class="label">Venue (pls check one):</p>

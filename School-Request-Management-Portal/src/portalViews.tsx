@@ -38,7 +38,7 @@ import HrDashboard from './HrDashboard'
 import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
-import { documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+import { academicProgramOptions, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
 import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
@@ -794,6 +794,8 @@ export function Dashboard() {
 }
 
 function OverviewView({ announcements, counts, onView, requests, user }: { announcements: Announcement[]; counts: Record<string, number>; onView: (view: string) => void; requests: PortalRequest[]; user: User }) {
+  const profile = getStudentProfileDefaults(user)
+
   return (
     <div className="space-y-8">
       <section className="rounded-lg bg-[linear-gradient(100deg,#228b22,#228b22_56%,#4cbb17)] p-7 text-white shadow-sm">
@@ -801,7 +803,7 @@ function OverviewView({ announcements, counts, onView, requests, user }: { annou
           <div>
             <p className="mb-2 font-semibold uppercase tracking-[.08em] text-white/75">Wednesday, June 3</p>
             <h2 className="text-4xl font-bold">Hi, {user.name.split(' ')[0]}</h2>
-            <p className="mt-2 text-xl font-medium text-white/85">{user.department} - Student ID 2022-00451</p>
+            <p className="mt-2 text-xl font-medium text-white/85">{profile.program} - Student ID {profile.studentId}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button onClick={() => onView('Request Form')} className="inline-flex h-14 items-center gap-3 rounded-md bg-[#4cbb17] px-7 text-lg font-semibold text-black hover:bg-[#4cbb17]">
@@ -1396,14 +1398,15 @@ const studentRequestOptions: { description: string; icon: typeof FileText; kind:
 ]
 
 const yearLevelOptions = ['1st Year', '2nd Year', '3rd Year', '4th Year']
-const semesterOptions = ['1st Semester', '2nd Semester']
-const schoolYearOptions = Array.from({ length: 8 }, (_, index) => `${2026 + index}–${2027 + index}`)
-const defaultSchoolYear = schoolYearOptions[0]
-const defaultStudentProgram = 'Bachelor of Science in Entrepreneurship'
-const defaultStudentMajor = 'major in Heating, Ventilating, Airconditioning, and Refrigeration Technology'
+const semesterOptions = ['1st Semester', '2nd Semester', 'Summer']
+const schoolYearOptionCount = 8
+const defaultStudentProgram = academicProgramOptions[0]
 
-function normalizeSchoolYear(value: string) {
-  return value.trim().replace('-', '–')
+function createSchoolYearOptions(startYear = new Date().getFullYear()) {
+  return Array.from({ length: schoolYearOptionCount }, (_, index) => {
+    const year = startYear + index
+    return `${year}–${year + 1}`
+  })
 }
 
 function RequestDocumentView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
@@ -1445,18 +1448,17 @@ function RequestDocumentView({ existingRequests, onSubmit, user }: { existingReq
 
 function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: RegistrarRequestKind; onBack: () => void; onSubmit: (request: PortalRequest) => void; user: User }) {
   const profile = getStudentProfileDefaults(user)
+  const schoolYearOptions = createSchoolYearOptions()
   const [yearLevel, setYearLevel] = useState(profile.yearLevel)
   const [semester, setSemester] = useState('1st Semester')
-  const [schoolYear, setSchoolYear] = useState(defaultSchoolYear)
-  const [major, setMajor] = useState(profile.major || defaultStudentMajor)
+  const [schoolYear, setSchoolYear] = useState(schoolYearOptions[0])
+  const [program, setProgram] = useState<string>(profile.program)
   const [transferReason, setTransferReason] = useState('')
   const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(['Transcript of Records (TOR)'])
   const [purpose, setPurpose] = useState('')
   const [error, setError] = useState('')
   const exitDocumentOptions = ['Transcript of Records (TOR)', 'Special Order (S.O)', 'CAV', 'Honorable Dismissal', 'Diploma', 'Good Moral Character', 'Authentication']
-  const program = profile.program
   const needsExitDetails = kind === 'Exit Clearance'
-  const needsMajor = program === 'Bachelor of Technical-Vocational Teacher Education'
 
   const toggleExitDocument = (documentName: string) => {
     setExitRequestedDocs((current) => current.includes(documentName) ? current.filter((item) => item !== documentName) : [...current, documentName])
@@ -1487,9 +1489,9 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
       studentId: profile.studentId,
       yearLevel,
       semester,
-      schoolYear: normalizeSchoolYear(schoolYear),
+      schoolYear,
       program,
-      major: needsMajor ? major : '',
+      major: '',
       transferReason: needsExitDetails ? transferReason.trim() : '',
       requestedDocs: needsExitDetails ? exitRequestedDocs : [getRegistrarRequestLabel(kind)],
     })
@@ -1512,15 +1514,12 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
         <div className="grid gap-5 md:grid-cols-2">
           <ReadOnlyField label="Student ID" value={profile.studentId} />
           <ReadOnlyField label="Student Name" value={profile.studentName} />
-          <ReadOnlyField label="Program / Course" value={program} wide />
-          {needsMajor && (
-            <label>
-              <span className="mb-2 block font-medium">Major</span>
-              <select value={major} onChange={(event) => setMajor(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
-                {['major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming'].map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </label>
-          )}
+          <label className="md:col-span-2">
+            <span className="mb-2 block font-medium">Program / Course</span>
+            <select required value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {academicProgramOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
           <label>
             <span className="mb-2 block font-medium">Year Level</span>
             <select required value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
@@ -1536,10 +1535,9 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
           </label>
           <label>
             <span className="mb-2 block font-medium">School Year</span>
-            <input required list="school-year-options" pattern="\d{4}[-–]\d{4}" value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} placeholder="2026–2027" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
-            <datalist id="school-year-options">
-              {schoolYearOptions.map((item) => <option key={item} value={item} />)}
-            </datalist>
+            <select required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {schoolYearOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
           </label>
         </div>
 
@@ -1599,19 +1597,31 @@ function ReadOnlyField({ label, value, wide = false }: { label: string; value: s
 
 function getStudentProfileDefaults(user: User) {
   const [programPart = '', yearPart = ''] = user.department.split(' - ')
-  const program = programPart.trim() || defaultStudentProgram
+  const profileProgram = normalizeStudentProgram(programPart)
   const yearLevel = yearLevelOptions.find((item) => yearPart.toLowerCase().includes(item.toLowerCase())) ?? ''
   return {
     studentId: user.id,
     studentName: user.name,
-    program,
-    major: program === 'Bachelor of Technical-Vocational Teacher Education' ? defaultStudentMajor : '',
+    program: profileProgram,
     yearLevel,
   }
 }
 
+function normalizeStudentProgram(value: string) {
+  const normalized = value.trim().toLowerCase()
+  if (normalized.includes('entrepreneur')) return 'Entrepreneurship'
+  if (normalized.includes('early childhood')) return 'Early Childhood Education'
+  if (normalized.includes('computer programming')) return 'BTVTED – Major in Computer Programming'
+  if (normalized.includes('hvacr') || normalized.includes('heating') || normalized.includes('ventilating') || normalized.includes('refrigeration')) return 'BTVTED – Major in HVACR Technology'
+  return academicProgramOptions.find((option) => option.toLowerCase() === normalized) ?? defaultStudentProgram
+}
+
 function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
   const profile = getStudentProfileDefaults(user)
+  const schoolYearOptions = createSchoolYearOptions()
+  const [program, setProgram] = useState<string>(profile.program)
+  const [semester, setSemester] = useState('1st Semester')
+  const [schoolYear, setSchoolYear] = useState(schoolYearOptions[0])
   const [facility, setFacility] = useState(facilities[0][0])
   const [date, setDate] = useState(() => getTodayInputValue())
   const [start, setStart] = useState('09:00')
@@ -1659,7 +1669,9 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
       attendees,
       purpose: purpose.trim(),
       studentId: profile.studentId,
-      program: profile.program,
+      program,
+      semester,
+      schoolYear,
     })
     setPurpose('')
     setError('')
@@ -1672,7 +1684,24 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
         <div className="mb-6 grid gap-5 border-b border-[#e7e1db] pb-6 md:grid-cols-2">
           <ReadOnlyField label="Student ID" value={profile.studentId} />
           <ReadOnlyField label="Student Name" value={profile.studentName} />
-          <ReadOnlyField label="Program / Course" value={profile.program} wide />
+          <label className="md:col-span-2">
+            <span className="mb-2 block font-medium">Program / Course</span>
+            <select required value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {academicProgramOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">Semester</span>
+            <select required value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {semesterOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="mb-2 block font-medium">School Year</span>
+            <select required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+              {schoolYearOptions.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
         </div>
         <label className="block">
           <span className="mb-2 block font-medium">Facility</span>
@@ -2206,6 +2235,8 @@ function ProfileView() {
 
   if (!user) return null
 
+  const academicProfile = getStudentProfileDefaults(user)
+
   const submitProfile = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!editingProfile) return
@@ -2297,9 +2328,9 @@ function ProfileView() {
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-7">
           <h3 className="mb-6 text-xl font-bold">Academic info</h3>
           {[
-            ['Student ID', '2022-00451'],
-            ['Program', 'BS Computer Science'],
-            ['Year Level', '3rd Year'],
+            ['Student ID', academicProfile.studentId],
+            ['Program', academicProfile.program],
+            ['Year Level', academicProfile.yearLevel || 'Not set'],
           ].map(([label, value]) => (
             <div key={label} className="mb-6">
               <p className="text-sm font-semibold uppercase tracking-[.14em] text-slate-500">{label}</p>
@@ -2554,6 +2585,10 @@ function RequestDetailsModal({ onClose, request }: { onClose: () => void; reques
           ['Title', request.title],
           ['Type', request.kind],
           ['Requester', request.owner],
+          ['Student ID', request.studentId ?? 'Not applicable'],
+          ['Program', formatProgramWithMajor(request) || 'Not applicable'],
+          ['Semester', request.semester ?? 'Not applicable'],
+          ['School Year', request.schoolYear ?? 'Not applicable'],
           ['Office', request.office],
           ['Schedule', `${request.date} at ${request.time}`],
           ['Facility', request.facility ?? 'Not applicable'],
@@ -2622,7 +2657,6 @@ function RequestDetailsModal({ onClose, request }: { onClose: () => void; reques
 }
 
 function RegistrarRequestPrintForm({ request }: { request: PortalRequest }) {
-  const programOptions = ['Bachelor of Early Childhood Education', 'Bachelor of Technical-Vocational Teacher Education', 'major in Heating, Ventilating, Airconditioning, and Refrigeration Technology', 'major in Computer Programming', 'Bachelor of Science in Entrepreneurship']
   const requestOptions: { kind: RequestKind; label: string }[] = [
     { kind: 'Certificate of Registration', label: 'Certificate of Registration' },
     { kind: 'COE Request', label: 'Certificate of Enrollment' },
@@ -2652,7 +2686,7 @@ function RegistrarRequestPrintForm({ request }: { request: PortalRequest }) {
         <PrintLine label="Semester" value={request.semester ?? ''} />
         <PrintLine label="School Year" value={request.schoolYear ?? ''} />
 
-        <PrintCheckGroup title="Program" options={programOptions} selected={[request.program ?? '', request.major ?? '']} />
+        <PrintCheckGroup title="Program" options={[...academicProgramOptions]} selected={request.program ?? ''} />
         <PrintCheckGroup title="Request for" options={requestOptions.map((item) => item.label)} selected={getRegistrarRequestLabel(request.kind)} />
 
         <PrintLine label="Purpose/Reason" value={request.remarks} />
@@ -3006,6 +3040,10 @@ function FacilityBookingPrintForm({ request }: { request: PortalRequest }) {
 
       <div className="space-y-4 text-[15px]">
         <PrintLine label="Date" value={formatDate(request.date)} />
+        <PrintLine label="Student ID #" value={request.studentId ?? ''} />
+        <PrintLine label="Program" value={formatProgramWithMajor(request)} />
+        <PrintLine label="Semester" value={request.semester ?? ''} />
+        <PrintLine label="School Year" value={request.schoolYear ?? ''} />
         <PrintLine label="Purpose/Objective" value={purpose} />
         <PrintLine label="Time" value={request.time.replace('-', ' - ')} />
 
@@ -3078,6 +3116,10 @@ function RegistrarReviewModal({ onClose, onSubmit, request }: { onClose: () => v
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Student', request.owner],
+              ['Student ID', request.studentId ?? 'Not provided'],
+              ['Program', formatProgramWithMajor(request) || 'Not provided'],
+              ['Semester', request.semester ?? 'Not provided'],
+              ['School Year', request.schoolYear ?? 'Not provided'],
               ['Type', getDocumentTitle(request.kind)],
               ['Copies', String(getCopiesForRequest(request))],
               ['Submitted', formatShortDate(request.date)],
@@ -3208,6 +3250,10 @@ function FacilityReviewModal({ onClose, onSubmit, request }: { onClose: () => vo
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Requester', request.owner],
+              ['Student ID', request.studentId ?? 'Not provided'],
+              ['Program', formatProgramWithMajor(request) || 'Not provided'],
+              ['Semester', request.semester ?? 'Not provided'],
+              ['School Year', request.schoolYear ?? 'Not provided'],
               ['Facility type', getFacilityType(request.facility)],
               ['Schedule', `${formatShortDate(request.date)} - ${request.time.replace('-', ' - ')}`],
               ['Attendees', String(getAttendeeCount(request))],

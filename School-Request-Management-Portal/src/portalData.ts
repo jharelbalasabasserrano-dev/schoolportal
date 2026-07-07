@@ -151,6 +151,13 @@ export type MessageAttachment = {
 
 export const messageAttachmentCache = new Map<string, MessageAttachment>()
 
+export const academicProgramOptions = [
+  'Entrepreneurship',
+  'Early Childhood Education',
+  'BTVTED – Major in Computer Programming',
+  'BTVTED – Major in HVACR Technology',
+] as const
+
 export type SupplyItem = {
   id: string
   name: string
@@ -233,7 +240,7 @@ export const facilities = [
 ]
 
 export const initialUsers: User[] = [
-  { id: 'stu-01', name: 'Maria Clara Santos', email: 'maria.santos@student.edu', password: 'password123', role: 'student', department: 'BS Computer Science - 3rd Year' },
+  { id: 'stu-01', name: 'Maria Clara Santos', email: 'maria.santos@student.edu', password: 'password123', role: 'student', department: 'BTVTED – Major in Computer Programming - 3rd Year' },
   { id: 'reg-01', name: 'Atty. Ramon Villanueva', email: 'registrar@edu.portal', password: 'password123', role: 'registrar', department: 'Registrar Office' },
   { id: 'sup-01', name: 'Liza Mendoza', email: 'supply@edu.portal', password: 'password123', role: 'supply', department: 'Supply Office' },
   { id: 'fac-01', name: 'Facilities Office', email: 'facilities@edu.portal', password: 'password123', role: 'adminOffice', department: 'Admin Office' },
@@ -243,14 +250,14 @@ export const initialUsers: User[] = [
 ]
 
 export const initialRequests: PortalRequest[] = [
-  { id: 'FR-2026-102', title: 'Computer Lab 4 reservation', kind: 'Facility Reservation', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Admin Office', status: 'Pending', date: '2026-06-18', time: '09:00-11:30', remarks: 'Thesis defense rehearsal', facility: 'Computer Lab 4' },
-  { id: 'DR-2026-002', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Pending', date: '2026-05-28', time: '10:30', remarks: 'Scholarship renewal requirement' },
-  { id: 'FR-2026-101', title: 'AVR 2 - Engineering Building', kind: 'Facility Reservation', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Admin Office', status: 'Approved', date: '2026-06-10', time: '13:00-15:00', remarks: 'Thesis presentation dry run', facility: 'AVR 2 - Engineering Building', updatedBy: 'Facilities Office' },
+  { id: 'FR-2026-102', title: 'Computer Lab 4 reservation', kind: 'Facility Reservation', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Admin Office', status: 'Pending', date: '2026-06-18', time: '09:00-11:30', remarks: 'Thesis defense rehearsal', facility: 'Computer Lab 4', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
+  { id: 'DR-2026-002', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Pending', date: '2026-05-28', time: '10:30', remarks: 'Scholarship renewal requirement', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
+  { id: 'FR-2026-101', title: 'AVR 2 - Engineering Building', kind: 'Facility Reservation', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Admin Office', status: 'Approved', date: '2026-06-10', time: '13:00-15:00', remarks: 'Thesis presentation dry run', facility: 'AVR 2 - Engineering Building', updatedBy: 'Facilities Office', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
   { id: 'FR-2026-103', title: 'AVR 2 - Engineering Building', kind: 'Facility Reservation', ownerId: 'stu-02', owner: 'Other Student', office: 'Admin Office', status: 'Approved', date: '2026-06-10', time: '10:00-12:00', remarks: 'Student organization seminar', facility: 'AVR 2 - Engineering Building', updatedBy: 'Facilities Office' },
   { id: 'FR-2026-104', title: 'Conference Room A', kind: 'Facility Reservation', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Admin Office', status: 'Approved', date: '2026-06-15', time: '14:00-16:00', remarks: 'Department curriculum planning', facility: 'Conference Room A', updatedBy: 'Facilities Office' },
-  { id: 'DR-2026-001', title: 'TOR', kind: 'TOR Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'On Process', date: '2026-05-12', time: '09:00', remarks: 'Application for graduate studies abroad', updatedBy: 'Ms. Reyes' },
-  { id: 'DR-2026-003', title: 'Exit Clearance', kind: 'Exit Clearance', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Ready for Pick Up', date: '2026-04-15', time: '13:00', remarks: 'Internship endorsement', updatedBy: 'Ms. Reyes' },
-  { id: 'DR-2026-004', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Disapproved', date: '2026-03-02', time: '11:00', remarks: 'Visa application supporting document', updatedBy: 'Ms. Reyes' },
+  { id: 'DR-2026-001', title: 'TOR', kind: 'TOR Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'On Process', date: '2026-05-12', time: '09:00', remarks: 'Application for graduate studies abroad', updatedBy: 'Ms. Reyes', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
+  { id: 'DR-2026-003', title: 'Exit Clearance', kind: 'Exit Clearance', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Ready for Pick Up', date: '2026-04-15', time: '13:00', remarks: 'Internship endorsement', updatedBy: 'Ms. Reyes', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
+  { id: 'DR-2026-004', title: 'COE', kind: 'COE Request', ownerId: 'stu-01', owner: 'Maria Clara Santos', office: 'Registrar', status: 'Disapproved', date: '2026-03-02', time: '11:00', remarks: 'Visa application supporting document', updatedBy: 'Ms. Reyes', studentId: 'stu-01', program: 'BTVTED – Major in Computer Programming', yearLevel: '3rd Year', semester: '1st Semester', schoolYear: '2026–2027' },
   { id: 'SR-2026-301', title: 'Bond paper, markers, and printer ink', kind: 'Supply Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Pending', date: '2026-05-28', time: '08:30', remarks: 'For midterm examination printing and lecture materials' },
   { id: 'SR-2026-302', title: 'Extension cords and USB flash drives', kind: 'Inventory Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Approved', date: '2026-05-10', time: '10:00', remarks: 'Lab equipment for incoming 2nd semester classes', updatedBy: 'Liza Mendoza' },
   { id: 'SR-2026-303', title: 'Sticky notes and manila folders', kind: 'Supply Request', ownerId: 'emp-01', owner: 'Prof. Joseph Reyes', office: 'Supply Office', status: 'Disapproved', date: '2026-04-02', time: '09:00', remarks: 'Office organization supplies', updatedBy: 'Liza Mendoza' },
