@@ -18,6 +18,7 @@ import {
   MessageSquare,
   PackageCheck,
   Paperclip,
+  Pencil,
   Plus,
   Printer,
   Search,
@@ -581,6 +582,27 @@ export function Dashboard() {
     pendingRequestSavesRef.current.set(requestToSave.id, save)
   }
 
+  const saveStudentRequestChanges = (request: PortalRequest) => {
+    const currentRequest = requestList.find((item) => item.id === request.id)
+    if (!currentRequest || currentRequest.ownerId !== user.id || currentRequest.status !== 'Pending') return false
+    const requestToSave = { ...currentRequest, ...request, status: currentRequest.status }
+    setRequestList((current) => current.map((item) => item.id === requestToSave.id ? requestToSave : item))
+    createPortalRequest(requestToSave)
+      .then((saved) => {
+        setRequestList((current) => current.map((item) => item.id === saved.id ? saved : item))
+      })
+      .catch((error) => {
+        console.error('[portal request] Student request update failed', {
+          requestId: requestToSave.id,
+          ownerId: requestToSave.ownerId,
+          kind: requestToSave.kind,
+          error,
+        })
+      })
+    setModal(null)
+    return true
+  }
+
   const updateRequestStatus = (requestId: string, status: PortalRequest['status'], remarks: string, updates: Partial<PortalRequest> = {}) => {
     const currentRequest = requestList.find((request) => request.id === requestId)
     const requestToSave: PortalRequest | undefined = (() => {
@@ -827,7 +849,8 @@ export function Dashboard() {
       {modal?.type === 'viewRequest' && user.role === 'supply' && isSupplyRequest(modal.request) && <SupplyReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'adminOffice' && isFacilityRequest(modal.request) && <FacilityReviewModal onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
       {modal?.type === 'viewRequest' && user.role === 'hr' && isHRLeaveRequest(modal.request) && <LeaveReviewModal initialMode={modal.hrLeaveMode ?? 'edit'} onClose={() => setModal(null)} onSubmit={updateRequestStatus} request={modal.request} />}
-      {modal?.type === 'viewRequest' && !['registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
+      {modal?.type === 'viewRequest' && user.role === 'student' && <StudentRequestModal existingRequests={requestList} onClose={() => setModal(null)} onSave={saveStudentRequestChanges} request={requestList.find((request) => request.id === modal.request.id) ?? modal.request} user={user} />}
+      {modal?.type === 'viewRequest' && !['student', 'registrar', 'supply', 'adminOffice', 'hr'].includes(user.role) && <RequestDetailsModal request={modal.request} onClose={() => setModal(null)} />}
       {modal?.type === 'decision' && <DecisionModal request={modal.request} status={modal.status} onClose={() => setModal(null)} onSubmit={updateRequestStatus} />}
       {modal?.type === 'users' && <UsersModal onClose={() => setModal(null)} />}
       <div className="fixed bottom-4 right-4 z-[70] flex w-[min(390px,calc(100vw-32px))] flex-col gap-3">
@@ -1434,6 +1457,7 @@ function LeaveTypeDistributionPanel({ requests }: { requests: PortalRequest[] })
 }
 
 type StudentRequestSelection = RegistrarRequestKind | 'Facility Reservation'
+type StudentRequestFormMode = 'create' | 'view' | 'edit'
 
 const registrarRequestOptions: { description: string; kind: RegistrarRequestKind; label: string; tone: string }[] = [
   { kind: 'TOR Request', label: 'TOR Request', description: 'Official transcript for transfer, board exam, or employment requirements.', tone: 'bg-[#228b22] text-white' },
@@ -1501,27 +1525,32 @@ function RequestDocumentView({ existingRequests, onSubmit, user }: { existingReq
   return <RegistrarRequestForm kind={selectedKind} onBack={() => setSelectedKind(null)} onSubmit={onSubmit} user={user} />
 }
 
-function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: RegistrarRequestKind; onBack: () => void; onSubmit: (request: PortalRequest) => void; user: User }) {
+function RegistrarRequestForm({ existingRequest, kind, mode = 'create', onBack, onSubmit, user }: { existingRequest?: RegistrarPortalRequest; kind: RegistrarRequestKind; mode?: StudentRequestFormMode; onBack: () => void; onSubmit: (request: PortalRequest) => void; user: User }) {
   const profile = getStudentProfileDefaults(user)
   const schoolYearOptions = createSchoolYearOptions()
-  const [yearLevel, setYearLevel] = useState(profile.yearLevel)
-  const [semester, setSemester] = useState('1st Semester')
-  const [schoolYear, setSchoolYear] = useState(schoolYearOptions[0])
-  const [program, setProgram] = useState<string>(profile.program)
-  const [transferReason, setTransferReason] = useState('')
-  const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(['Transcript of Records (TOR)'])
-  const [purpose, setPurpose] = useState('')
+  const [yearLevel, setYearLevel] = useState(existingRequest?.yearLevel ?? profile.yearLevel)
+  const [semester, setSemester] = useState(existingRequest?.semester ?? '1st Semester')
+  const [schoolYear, setSchoolYear] = useState(existingRequest?.schoolYear ?? schoolYearOptions[0])
+  const [program, setProgram] = useState<string>(existingRequest?.program ?? profile.program)
+  const [transferReason, setTransferReason] = useState(existingRequest?.transferReason ?? '')
+  const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(existingRequest?.requestedDocs?.length ? existingRequest.requestedDocs : ['Transcript of Records (TOR)'])
+  const [purpose, setPurpose] = useState(existingRequest?.remarks ?? '')
   const [error, setError] = useState('')
   const exitDocumentOptions = ['Transcript of Records (TOR)', 'Special Order (S.O)', 'CAV', 'Honorable Dismissal', 'Diploma', 'Good Moral Character', 'Authentication']
   const needsExitDetails = kind === 'Exit Clearance'
+  const isReadOnly = mode === 'view' || (existingRequest ? existingRequest.status !== 'Pending' : false)
+  const studentId = existingRequest?.studentId ?? profile.studentId
+  const studentName = existingRequest?.owner ?? profile.studentName
 
   const toggleExitDocument = (documentName: string) => {
+    if (isReadOnly) return
     setExitRequestedDocs((current) => current.includes(documentName) ? current.filter((item) => item !== documentName) : [...current, documentName])
   }
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (![profile.studentId, profile.studentName, program, yearLevel, semester, schoolYear, purpose].every((value) => value.trim())) {
+    if (isReadOnly) return
+    if (![studentId, studentName, program, yearLevel, semester, schoolYear, purpose].every((value) => value.trim())) {
       setError('Please complete all required fields before submitting.')
       return
     }
@@ -1531,17 +1560,18 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
     }
 
     onSubmit({
-      id: `DR-2026-${Date.now().toString().slice(-3)}`,
-      title: getDocumentTitle(kind),
+      ...(existingRequest ?? {}),
+      id: existingRequest?.id ?? `DR-2026-${Date.now().toString().slice(-3)}`,
+      title: existingRequest?.title ?? getDocumentTitle(kind),
       kind,
       ownerId: user.id,
-      owner: profile.studentName,
+      owner: studentName,
       office: 'Registrar',
-      status: 'Pending',
-      date: new Date().toISOString().slice(0, 10),
-      time: '09:00',
+      status: existingRequest?.status ?? 'Pending',
+      date: existingRequest?.date ?? new Date().toISOString().slice(0, 10),
+      time: existingRequest?.time ?? '09:00',
       remarks: purpose.trim(),
-      studentId: profile.studentId,
+      studentId,
       yearLevel,
       semester,
       schoolYear,
@@ -1560,37 +1590,37 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_420px]">
       <div className="xl:col-span-2">
         <button type="button" onClick={onBack} className="mb-5 inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] bg-white px-4 font-semibold text-slate-700 hover:bg-stone-50">
-          Back to request forms
+          {mode === 'create' ? 'Back to request forms' : 'Cancel'}
         </button>
-        <PageIntro title={`${getDocumentTitle(kind)} form`} description="Your student details are filled from your profile. Complete the remaining fields and submit for Registrar review." icon={kind === 'Exit Clearance' ? ShieldCheck : FileText} tone="bg-[#4cbb17]/15 text-[#228b22]" />
+        <PageIntro title={`${getDocumentTitle(kind)} form`} description={mode === 'view' ? 'Review the full request form exactly as submitted.' : mode === 'edit' ? 'Correct the request details before the office starts processing it.' : 'Your student details are filled from your profile. Complete the remaining fields and submit for Registrar review.'} icon={kind === 'Exit Clearance' ? ShieldCheck : FileText} tone="bg-[#4cbb17]/15 text-[#228b22]" />
       </div>
 
       <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
         <div className="grid gap-5 md:grid-cols-2">
-          <ReadOnlyField label="Student ID" value={profile.studentId} />
-          <ReadOnlyField label="Student Name" value={profile.studentName} />
+          <ReadOnlyField label="Student ID" value={studentId} />
+          <ReadOnlyField label="Student Name" value={studentName} />
           <label className="md:col-span-2">
             <span className="mb-2 block font-medium">Program / Course</span>
-            <select required value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {academicProgramOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">Year Level</span>
-            <select required value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={yearLevel} onChange={(event) => setYearLevel(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               <option value="">Select year level</option>
               {yearLevelOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">Semester</span>
-            <select required value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {semesterOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">School Year</span>
-            <select required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {schoolYearOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
@@ -1600,13 +1630,13 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
           <div className="mt-5 rounded-lg border border-[#e7e1db] bg-stone-50 p-5">
             <label className="block">
               <span className="mb-2 block font-medium">Reason for transfer</span>
-              <input value={transferReason} onChange={(event) => setTransferReason(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22]" />
+              <input disabled={isReadOnly} value={transferReason} onChange={(event) => setTransferReason(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] bg-white px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700" />
             </label>
             <p className="mb-3 mt-5 font-medium">Documents requested</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {exitDocumentOptions.map((documentName) => (
                 <label key={documentName} className="flex items-center gap-3 rounded-md border border-[#e7e1db] bg-white p-3">
-                  <input type="checkbox" checked={exitRequestedDocs.includes(documentName)} onChange={() => toggleExitDocument(documentName)} />
+                  <input type="checkbox" disabled={isReadOnly} checked={exitRequestedDocs.includes(documentName)} onChange={() => toggleExitDocument(documentName)} />
                   <span>{documentName}</span>
                 </label>
               ))}
@@ -1616,13 +1646,17 @@ function RegistrarRequestForm({ kind, onBack, onSubmit, user }: { kind: Registra
 
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Purpose / reason</span>
-          <textarea required value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. For scholarship renewal..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20" />
+          <textarea required readOnly={isReadOnly} value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. For scholarship renewal..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20 read-only:bg-stone-50 read-only:text-slate-700" />
         </label>
         <p className="mt-2 text-slate-500">{purpose.length} / 500 characters</p>
         {error && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-red-700">{error}</p>}
-        <div className="mt-6 flex justify-end">
-          <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#1d7a1d]">Submit request</button>
-        </div>
+        {mode === 'view' && existingRequest?.status !== 'Pending' && <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 font-medium text-amber-800">This request can no longer be edited because it is already being processed.</p>}
+        {mode !== 'view' && (
+          <div className="mt-6 flex justify-end gap-3">
+            {mode === 'edit' && <button type="button" onClick={onBack} className="rounded-md border border-[#d9d3cc] px-7 py-3 text-lg font-medium">Cancel</button>}
+            <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#1d7a1d]">{mode === 'edit' ? 'Save Changes' : 'Submit request'}</button>
+          </div>
+        )}
       </section>
 
       <aside className="space-y-5">
@@ -1671,23 +1705,28 @@ function normalizeStudentProgram(value: string) {
   return academicProgramOptions.find((option) => option.toLowerCase() === normalized) ?? defaultStudentProgram
 }
 
-function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingRequests: PortalRequest[]; onSubmit: (request: PortalRequest) => void; user: User }) {
+function ReserveFacilityView({ existingRequest, existingRequests, mode = 'create', onBack, onSubmit, user }: { existingRequest?: FacilityPortalRequest; existingRequests: PortalRequest[]; mode?: StudentRequestFormMode; onBack?: () => void; onSubmit: (request: PortalRequest) => void; user: User }) {
   const profile = getStudentProfileDefaults(user)
   const schoolYearOptions = createSchoolYearOptions()
-  const [program, setProgram] = useState<string>(profile.program)
-  const [semester, setSemester] = useState('1st Semester')
-  const [schoolYear, setSchoolYear] = useState(schoolYearOptions[0])
-  const [facility, setFacility] = useState(facilities[0][0])
-  const [date, setDate] = useState(() => getTodayInputValue())
-  const [start, setStart] = useState('09:00')
-  const [end, setEnd] = useState('11:00')
-  const [attendees, setAttendees] = useState(10)
-  const [purpose, setPurpose] = useState('')
+  const [initialStart = '09:00', initialEnd = '11:00'] = (existingRequest?.time ?? '09:00-11:00').split('-')
+  const [program, setProgram] = useState<string>(existingRequest?.program ?? profile.program)
+  const [semester, setSemester] = useState(existingRequest?.semester ?? '1st Semester')
+  const [schoolYear, setSchoolYear] = useState(existingRequest?.schoolYear ?? schoolYearOptions[0])
+  const [facility, setFacility] = useState(existingRequest?.facility ?? facilities[0][0])
+  const [date, setDate] = useState(() => existingRequest?.date ?? getTodayInputValue())
+  const [start, setStart] = useState(initialStart)
+  const [end, setEnd] = useState(initialEnd)
+  const [attendees, setAttendees] = useState(existingRequest?.attendees ?? 10)
+  const [purpose, setPurpose] = useState(existingRequest?.purpose ?? existingRequest?.remarks ?? '')
   const [error, setError] = useState('')
-  const upcoming = existingRequests.filter((request) => request.facility === facility && request.status !== 'Disapproved')
+  const isReadOnly = mode === 'view' || (existingRequest ? existingRequest.status !== 'Pending' : false)
+  const studentId = existingRequest?.studentId ?? profile.studentId
+  const studentName = existingRequest?.owner ?? profile.studentName
+  const upcoming = existingRequests.filter((request) => request.id !== existingRequest?.id && request.facility === facility && request.status !== 'Disapproved')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isReadOnly) return
     const today = getTodayInputValue()
     if (date < today) {
       setError('Please choose today or a future date.')
@@ -1705,25 +1744,26 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
       setError('Please enter the purpose or activity for this reservation.')
       return
     }
-    if (hasFacilityConflict(existingRequests, date, `${start}-${end}`, facility)) {
+    if (hasFacilityConflict(existingRequests.filter((request) => request.id !== existingRequest?.id), date, `${start}-${end}`, facility)) {
       setError(`${facility} already has a booking for that schedule.`)
       return
     }
     onSubmit({
-      id: `FR-2026-${Date.now().toString().slice(-3)}`,
+      ...(existingRequest ?? {}),
+      id: existingRequest?.id ?? `FR-2026-${Date.now().toString().slice(-3)}`,
       title: facility,
       kind: 'Facility Reservation',
       ownerId: user.id,
-      owner: profile.studentName,
+      owner: studentName,
       office: 'Admin Office',
-      status: 'Pending',
+      status: existingRequest?.status ?? 'Pending',
       date,
       time: `${start}-${end}`,
       remarks: purpose.trim(),
       facility,
       attendees,
       purpose: purpose.trim(),
-      studentId: profile.studentId,
+      studentId,
       program,
       semester,
       schoolYear,
@@ -1734,33 +1774,40 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
 
   return (
     <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_485px]">
-      <PageIntro title="Reserve a facility" description="Book rooms, laboratories, audio-visual rooms, and other school facilities. The Admin Office reviews and approves reservations." icon={Building2} tone="bg-emerald-100 text-emerald-900" />
+      {mode !== 'create' && onBack && (
+        <div className="xl:col-span-2">
+          <button type="button" onClick={onBack} className="inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] bg-white px-4 font-semibold text-slate-700 hover:bg-stone-50">
+            Cancel
+          </button>
+        </div>
+      )}
+      <PageIntro title="Reserve a facility" description={mode === 'view' ? 'Review the full reservation form exactly as submitted.' : mode === 'edit' ? 'Correct the reservation details before the Admin Office starts processing it.' : 'Book rooms, laboratories, audio-visual rooms, and other school facilities. The Admin Office reviews and approves reservations.'} icon={Building2} tone="bg-emerald-100 text-emerald-900" />
       <section className="rounded-lg border border-[#e7e1db] bg-white p-7">
         <div className="mb-6 grid gap-5 border-b border-[#e7e1db] pb-6 md:grid-cols-2">
-          <ReadOnlyField label="Student ID" value={profile.studentId} />
-          <ReadOnlyField label="Student Name" value={profile.studentName} />
+          <ReadOnlyField label="Student ID" value={studentId} />
+          <ReadOnlyField label="Student Name" value={studentName} />
           <label className="md:col-span-2">
             <span className="mb-2 block font-medium">Program / Course</span>
-            <select required value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={program} onChange={(event) => setProgram(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {academicProgramOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">Semester</span>
-            <select required value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={semester} onChange={(event) => setSemester(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {semesterOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           <label>
             <span className="mb-2 block font-medium">School Year</span>
-            <select required value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]">
+            <select required disabled={isReadOnly} value={schoolYear} onChange={(event) => setSchoolYear(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] disabled:bg-stone-50 disabled:text-slate-700">
               {schoolYearOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
         </div>
         <label className="block">
           <span className="mb-2 block font-medium">Facility</span>
-          <select value={facility} onChange={(event) => setFacility(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20">
+          <select disabled={isReadOnly} value={facility} onChange={(event) => setFacility(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] focus:ring-4 focus:ring-[#4cbb17]/20 disabled:bg-stone-50 disabled:text-slate-700">
             {facilities.map(([name, type]) => <option key={name} value={name}>{name} - {type}</option>)}
           </select>
         </label>
@@ -1768,31 +1815,35 @@ function ReserveFacilityView({ existingRequests, onSubmit, user }: { existingReq
         <div className="mt-5 grid gap-5 lg:grid-cols-3">
           <label>
             <span className="mb-2 block font-medium">Date</span>
-            <input required type="date" min={getTodayInputValue()} value={date} onChange={(event) => setDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required readOnly={isReadOnly} type="date" min={getTodayInputValue()} value={date} onChange={(event) => setDate(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] read-only:bg-stone-50 read-only:text-slate-700" />
           </label>
           <label>
             <span className="mb-2 block font-medium">Start time</span>
-            <input required type="time" value={start} onChange={(event) => setStart(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required readOnly={isReadOnly} type="time" value={start} onChange={(event) => setStart(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] read-only:bg-stone-50 read-only:text-slate-700" />
           </label>
           <label>
             <span className="mb-2 block font-medium">End time</span>
-            <input required type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+            <input required readOnly={isReadOnly} type="time" value={end} onChange={(event) => setEnd(event.target.value)} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] read-only:bg-stone-50 read-only:text-slate-700" />
           </label>
         </div>
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Expected attendees</span>
-          <input required type="number" min={1} value={attendees} onChange={(event) => setAttendees(Number(event.target.value))} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          <input required readOnly={isReadOnly} type="number" min={1} value={attendees} onChange={(event) => setAttendees(Number(event.target.value))} className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22] read-only:bg-stone-50 read-only:text-slate-700" />
         </label>
         <label className="mt-5 block">
           <span className="mb-2 block font-medium">Purpose / activity</span>
-          <textarea required value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. Thesis defense rehearsal, org meeting, workshop..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22]" />
+          <textarea required readOnly={isReadOnly} value={purpose} onChange={(event) => setPurpose(event.target.value.slice(0, 500))} rows={6} placeholder="e.g. Thesis defense rehearsal, org meeting, workshop..." className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 text-lg outline-none focus:border-[#228b22] read-only:bg-stone-50 read-only:text-slate-700" />
         </label>
         <p className="mt-2 text-slate-500">{purpose.length} / 500 characters</p>
         {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-red-700">{error}</p>}
-        <div className="mt-6 flex justify-end gap-3 border-t border-[#e7e1db] pt-4">
-          <button type="button" onClick={() => setPurpose('')} className="rounded-md border border-[#d9d3cc] px-7 py-3 text-lg font-medium">Reset</button>
-          <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#228b22]">Submit reservation</button>
-        </div>
+        {mode === 'view' && existingRequest?.status !== 'Pending' && <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 font-medium text-amber-800">This request can no longer be edited because it is already being processed.</p>}
+        {mode !== 'view' && (
+          <div className="mt-6 flex justify-end gap-3 border-t border-[#e7e1db] pt-4">
+            {mode === 'edit' && onBack && <button type="button" onClick={onBack} className="rounded-md border border-[#d9d3cc] px-7 py-3 text-lg font-medium">Cancel</button>}
+            {mode === 'create' && <button type="button" onClick={() => setPurpose('')} className="rounded-md border border-[#d9d3cc] px-7 py-3 text-lg font-medium">Reset</button>}
+            <button className="rounded-md bg-[#228b22] px-7 py-3 text-lg font-semibold text-white hover:bg-[#228b22]">{mode === 'edit' ? 'Save Changes' : 'Submit reservation'}</button>
+          </div>
+        )}
       </section>
       <aside className="rounded-lg border border-[#e7e1db] bg-white p-7">
         <div className="mb-10 flex items-start justify-between">
@@ -2639,6 +2690,92 @@ function RequestsWorkspace({ canApprove, onDecision, onView, requests }: { canAp
         </table>
       </div>
     </section>
+  )
+}
+
+function StudentRequestModal({ existingRequests, onClose, onSave, request, user }: { existingRequests: PortalRequest[]; onClose: () => void; onSave: (request: PortalRequest) => boolean; request: PortalRequest; user: User }) {
+  const [mode, setMode] = useState<StudentRequestFormMode>('view')
+  const canEdit = request.ownerId === user.id && request.status === 'Pending'
+  const readOnlyMessage = 'This request can no longer be edited because it is already being processed.'
+
+  useEffect(() => {
+    if (!canEdit) setMode('view')
+  }, [canEdit, request.status])
+
+  const saveChanges = (updatedRequest: PortalRequest) => {
+    const saved = onSave(updatedRequest)
+    if (saved) setMode('view')
+  }
+
+  return (
+    <Modal title="Student Request" onClose={onClose} wide>
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 rounded-lg border border-[#e7e1db] bg-stone-50 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-mono text-sm font-semibold text-[#228b22]">{request.referenceNumber ?? request.id}</p>
+            <h3 className="mt-1 text-2xl font-bold">{request.kind === 'Facility Reservation' ? request.facility : request.title}</h3>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusPill status={request.status} />
+              <span className="text-sm font-medium text-slate-600">{request.office}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {mode === 'view' && canEdit && (
+              <button type="button" onClick={() => setMode('edit')} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
+                <Pencil size={16} />
+                Edit
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="inline-flex h-11 items-center justify-center rounded-md border border-[#d9d3cc] bg-white px-4 font-semibold text-slate-700 hover:bg-stone-50">
+              Close
+            </button>
+          </div>
+        </div>
+
+        {!canEdit && <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 font-medium text-amber-800">{readOnlyMessage}</p>}
+
+        {isRegistrarRequest(request) && (
+          <RegistrarRequestForm
+            existingRequest={request}
+            kind={request.kind}
+            mode={mode}
+            onBack={mode === 'edit' ? () => setMode('view') : onClose}
+            onSubmit={saveChanges}
+            user={user}
+          />
+        )}
+
+        {isFacilityRequest(request) && (
+          <ReserveFacilityView
+            existingRequest={request}
+            existingRequests={existingRequests}
+            mode={mode}
+            onBack={mode === 'edit' ? () => setMode('view') : onClose}
+            onSubmit={saveChanges}
+            user={user}
+          />
+        )}
+
+        {!isRegistrarRequest(request) && !isFacilityRequest(request) && (
+          <div className="space-y-3">
+            {[
+              ['Request ID', request.id],
+              ['Title', request.title],
+              ['Type', request.kind],
+              ['Office', request.office],
+              ['Submitted', formatDate(request.date)],
+              ['Status', request.status],
+              ['Details', request.remarks],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[130px_1fr] gap-3 rounded-md bg-stone-50 px-4 py-3">
+                <span className="font-medium text-slate-600">{label}</span>
+                <span>{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
