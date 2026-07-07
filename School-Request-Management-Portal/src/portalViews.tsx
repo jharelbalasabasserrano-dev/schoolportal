@@ -2745,10 +2745,14 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   const leaveType = getCivilServiceLeaveLabel(request.kind)
   const leaveTypes = getCivilServiceLeaveTypes()
-  const recommendation = request.status === 'Disapproved' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const recommendation = request.leaveRecommendation ?? (request.status === 'Disapproved' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
+  const disapprovalText = request.disapprovedDueTo ?? (request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : '')
+  const approvedDaysWithPay = request.approvedDaysWithPay ?? (request.status === 'Approved' ? workingDays : '')
+  const approvedDaysWithoutPay = request.approvedDaysWithoutPay ?? ''
+  const approvedOther = request.approvedOther ?? ''
   const leaveCreditRows = [
     ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
     ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
@@ -2872,7 +2876,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <p className="font-bold">7.B RECOMMENDATION</p>
               <OfficialCheck checked={recommendation === 'For approval'} label="For approval" />
               <OfficialCheck checked={recommendation === 'For disapproval'} label="For disapproval due to" />
-              <OfficialLine value={request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : ''} />
+              <OfficialLine value={recommendation === 'For disapproval' ? disapprovalText : ''} />
               <div className="mt-[8mm] text-center">
                 <p className="border-b border-black px-[2mm]">{request.updatedBy ?? ''}</p>
                 <p className="mt-[1mm] text-[8.5px]">Authorized Officer</p>
@@ -2880,13 +2884,13 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
             </div>
             <div className="border-r border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.C APPROVED FOR:</p>
-              <OfficialLine label="days with pay" value={request.status === 'Approved' ? workingDays : ''} tight />
-              <OfficialLine label="days without pay" value="" tight />
-              <OfficialLine label="others (Specify)" value="" tight />
+              <OfficialLine label="days with pay" value={approvedDaysWithPay} tight />
+              <OfficialLine label="days without pay" value={approvedDaysWithoutPay} tight />
+              <OfficialLine label="others (Specify)" value={approvedOther} tight />
             </div>
             <div className="border-t border-black px-[2mm] py-[1.5mm]">
               <p className="font-bold">7.D DISAPPROVED DUE TO:</p>
-              <OfficialLine value={request.status === 'Disapproved' ? request.hrRemarks ?? request.remarks : ''} />
+              <OfficialLine value={disapprovalText} />
             </div>
           </div>
           <div className="mx-auto h-[16mm] w-[86mm] px-[2mm] pt-[2mm] text-center">
@@ -3314,6 +3318,11 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
   const [sickLeaveTotalEarned, setSickLeaveTotalEarned] = useState(request.sickLeaveTotalEarned ?? '')
   const [sickLeaveLess, setSickLeaveLess] = useState(request.sickLeaveLess ?? '')
   const [sickLeaveBalance, setSickLeaveBalance] = useState(request.sickLeaveBalance ?? '')
+  const [leaveRecommendation, setLeaveRecommendation] = useState<NonNullable<HRLeavePortalRequest['leaveRecommendation']>>(request.leaveRecommendation ?? (request.status === 'Disapproved' ? 'For disapproval' : request.status === 'Approved' ? 'For approval' : ''))
+  const [approvedDaysWithPay, setApprovedDaysWithPay] = useState(request.approvedDaysWithPay ?? (request.status === 'Approved' ? String(request.workingDays ?? getDateDuration(request.date, request.time)) : ''))
+  const [approvedDaysWithoutPay, setApprovedDaysWithoutPay] = useState(request.approvedDaysWithoutPay ?? '')
+  const [approvedOther, setApprovedOther] = useState(request.approvedOther ?? '')
+  const [disapprovedDueTo, setDisapprovedDueTo] = useState(request.disapprovedDueTo ?? (request.status === 'Disapproved' ? request.hrRemarks ?? '' : ''))
   const workingDays = leaveDuration === 'Half Day' ? 0.5 : getDateDuration(startDate, endDate)
   const customLeaveTypeValue = kind === 'Other Leave' ? customLeaveType.trim() : ''
   const leaveTitle = getLeaveTypeLabel(kind, customLeaveTypeValue)
@@ -3345,11 +3354,19 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
     sickLeaveTotalEarned,
     sickLeaveLess,
     sickLeaveBalance,
+    leaveRecommendation,
+    approvedDaysWithPay,
+    approvedDaysWithoutPay,
+    approvedOther,
+    disapprovedDueTo,
     hrRemarks,
   }
 
-  const submitDecision = (status: HRLeaveStatus, fallbackRemarks: string) => {
-    onSubmit(request.id, status, hrRemarks.trim() || fallbackRemarks, {
+  const getFormUpdates = (nextStatus: HRLeaveStatus): Partial<HRLeavePortalRequest> => {
+    const nextRecommendation = leaveRecommendation || (nextStatus === 'Approved' ? 'For approval' : nextStatus === 'Disapproved' ? 'For disapproval' : '')
+    const nextApprovedDaysWithPay = approvedDaysWithPay.trim() || (nextStatus === 'Approved' ? String(workingDays) : '')
+    const nextDisapprovedDueTo = disapprovedDueTo.trim() || (nextStatus === 'Disapproved' ? hrRemarks.trim() || 'Leave application disapproved by HR Office.' : '')
+    return {
       title: leaveTitle,
       kind,
       date: startDate,
@@ -3376,6 +3393,21 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
       sickLeaveTotalEarned: sickLeaveTotalEarned.trim(),
       sickLeaveLess: sickLeaveLess.trim(),
       sickLeaveBalance: sickLeaveBalance.trim(),
+      leaveRecommendation: nextRecommendation,
+      approvedDaysWithPay: nextApprovedDaysWithPay,
+      approvedDaysWithoutPay: approvedDaysWithoutPay.trim(),
+      approvedOther: approvedOther.trim(),
+      disapprovedDueTo: nextDisapprovedDueTo,
+    }
+  }
+
+  const saveFormChanges = () => {
+    onSubmit(request.id, request.status, hrRemarks.trim() || request.hrRemarks || request.remarks, getFormUpdates(request.status))
+  }
+
+  const submitDecision = (status: HRLeaveStatus, fallbackRemarks: string) => {
+    onSubmit(request.id, status, hrRemarks.trim() || fallbackRemarks, {
+      ...getFormUpdates(status),
     })
   }
 
@@ -3559,10 +3591,46 @@ function LeaveReviewModal({ onClose, onSubmit, request }: { onClose: () => void;
             <span className="mb-2 block font-medium">HR remarks</span>
             <textarea value={hrRemarks} onChange={(event) => setHrRemarks(event.target.value)} rows={5} className="w-full rounded-md border border-[#d9d3cc] px-4 py-3 outline-none focus:border-[#228b22]" />
           </label>
+          <div className="rounded-lg border border-[#e7e1db] bg-white p-5">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold">7.B to 7.D HR action</h3>
+              <p className="text-slate-500">These values are saved to the official Leave Application and used by the print/PDF output.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">7.B Recommendation</span>
+                <select value={leaveRecommendation} onChange={(event) => setLeaveRecommendation(event.target.value as NonNullable<HRLeavePortalRequest['leaveRecommendation']>)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
+                  <option value="">No recommendation yet</option>
+                  <option value="For approval">For approval</option>
+                  <option value="For disapproval">For disapproval</option>
+                </select>
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">7.C Days with pay</span>
+                <input value={approvedDaysWithPay} onChange={(event) => setApprovedDaysWithPay(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label>
+                <span className="mb-2 block font-medium">7.C Days without pay</span>
+                <input value={approvedDaysWithoutPay} onChange={(event) => setApprovedDaysWithoutPay(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">7.C Others</span>
+                <input value={approvedOther} onChange={(event) => setApprovedOther(event.target.value)} className="h-12 w-full rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="mb-2 block font-medium">7.D Disapproved due to</span>
+                <textarea value={disapprovedDueTo} onChange={(event) => setDisapprovedDueTo(event.target.value)} rows={3} className="w-full rounded-md border border-[#d9d3cc] px-3 py-2 outline-none focus:border-[#228b22]" />
+              </label>
+            </div>
+          </div>
         </div>
         <aside className="rounded-lg border border-[#e7e1db] bg-white p-5">
           <h3 className="mb-4 text-xl font-bold">Decision</h3>
           <div className="space-y-3">
+            <button disabled={kind === 'Other Leave' && !customLeaveTypeValue} onClick={saveFormChanges} className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#228b22] font-semibold text-[#228b22] disabled:cursor-not-allowed disabled:opacity-45">
+              <Save size={18} />
+              Save form edits
+            </button>
             <button disabled={request.status === 'Approved' || (kind === 'Other Leave' && !customLeaveTypeValue)} onClick={() => submitDecision('Approved', 'Leave application approved by HR Office.')} className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">
               <CheckCircle2 size={18} />
               Approve

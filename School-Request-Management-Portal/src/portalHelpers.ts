@@ -609,10 +609,14 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const checked = (value: boolean) => `<span class="box">${value ? 'x' : ''}</span>`
   const line = (value = '', label = '') => `<div class="line-row ${label ? '' : 'line-row-full'}">${label ? `<span>${escapeHtml(label)}</span>` : ''}<span class="line">${escapeHtml(value)}</span></div>`
   const leaveType = getCivilServiceLeaveLabel(request.kind)
-  const recommendation = isLeaveDisapproved(request) ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval'
+  const recommendation = request.leaveRecommendation ?? (isLeaveDisapproved(request) ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
   const leaveDetail = request.leaveDetail ?? ''
+  const disapprovalText = request.disapprovedDueTo ?? (isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')
+  const approvedDaysWithPay = request.approvedDaysWithPay ?? (request.status === 'Approved' ? workingDays : '')
+  const approvedDaysWithoutPay = request.approvedDaysWithoutPay ?? ''
+  const approvedOther = request.approvedOther ?? ''
   const leaveCreditRows = [
     ['Total Earned', request.vacationLeaveTotalEarned ?? '', request.sickLeaveTotalEarned ?? ''],
     ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
@@ -831,18 +835,18 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
               <p class="subhead">7.B Recommendation</p>
               <div class="item">${check(recommendation, 'For approval')}<span>For approval</span></div>
               <div class="item">${check(recommendation, 'For disapproval')}<span>For disapproval due to</span></div>
-              ${line(isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')}
+              ${line(recommendation === 'For disapproval' ? disapprovalText : '')}
               <div class="signature"><span class="line">${escapeHtml(request.updatedBy ?? '')}</span><p>Authorized Officer</p></div>
             </div>
             <div class="cell grid-bottom">
               <p class="subhead">7.C Approved For:</p>
-              ${line(request.status === 'Approved' ? workingDays : '', 'days with pay')}
-              ${line('', 'days without pay')}
-              ${line('', 'others (Specify)')}
+              ${line(approvedDaysWithPay, 'days with pay')}
+              ${line(approvedDaysWithoutPay, 'days without pay')}
+              ${line(approvedOther, 'others (Specify)')}
             </div>
             <div class="cell grid-right grid-bottom">
               <p class="subhead">7.D Disapproved Due To:</p>
-              ${line(isLeaveDisapproved(request) ? request.hrRemarks ?? request.remarks : '')}
+              ${line(disapprovalText)}
             </div>
           </div>
         </section>
