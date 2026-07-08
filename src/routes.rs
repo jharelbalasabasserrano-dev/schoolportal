@@ -218,6 +218,9 @@ pub async fn get_bootstrap_data(
             sick_leave_balance,
             hr_recommendation,
             approved_for,
+            approved_days_with_pay,
+            approved_days_without_pay,
+            approved_other,
             disapproved_due_to,
             hr_remarks,
             updated_by
@@ -1235,6 +1238,9 @@ pub async fn create_portal_request(
             details.sick_leave_balance,
             details.hr_recommendation,
             details.approved_for,
+            details.approved_days_with_pay,
+            details.approved_days_without_pay,
+            details.approved_other,
             details.disapproved_due_to,
             details.hr_remarks,
             details.updated_by
@@ -1480,15 +1486,47 @@ pub async fn submit_exit_clearance(
 ) -> Result<Json<SubmissionResponse>, (StatusCode, Json<serde_json::Value>)> {
     let id = Uuid::new_v4();
     let now = Utc::now();
+    let request_id = id.to_string();
 
     let reference_number = format!("EXIT-{}-{}", now.format("%Y%m%d"), rand::random::<u16>());
     let tracking_number = format!("TRK-CCD-{}-{}", now.format("%Y%m%d"), rand::random::<u16>());
     let requested_docs = payload.requested_docs.join(", ");
 
-    sqlx::query(
-        r#"
+    let mut tx = state.db.begin().await.map_err(api_error)?;
+
+    let request_payload = serde_json::json!({
+        "id": request_id,
+        "title": "Exit Clearance",
+        "kind": "Exit Clearance",
+        "ownerId": payload.id_number,
+        "owner": payload.student_name,
+        "office": "Registrar",
+        "status": "Pending",
+        "date": now.format("%Y-%m-%d").to_string(),
+        "time": now.format("%H:%M").to_string(),
+        "remarks": payload.purpose,
+        "studentId": payload.id_number,
+        "program": payload.program,
+        "yearLevel": payload.year_level,
+        "semester": payload.semester,
+        "schoolYear": payload.acad_year,
+        "transferReason": payload.reason_transfer,
+        "requestedDocs": &payload.requested_docs,
+        "purpose": payload.purpose,
+        "referenceNumber": reference_number,
+    });
+    let upsert_sql = "SELECT upsert_portal_request($1::jsonb)";
+    log_db_query("request_records", upsert_sql, request_payload.clone());
+    sqlx::query(upsert_sql)
+        .bind(request_payload.clone())
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| api_query_error("request_records", upsert_sql, request_payload, error))?;
+
+    let sql = r#"
         INSERT INTO exit_clearance_requests (
             id,
+            request_id,
             reference_number,
             tracking_number,
             student_name,
@@ -1503,37 +1541,63 @@ pub async fn submit_exit_clearance(
             status
         )
         VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
         )
-        "#,
-    )
-    .bind(id)
-    .bind(&reference_number)
-    .bind(&tracking_number)
-    .bind(&payload.student_name)
-    .bind(&payload.id_number)
-    .bind(&payload.program)
-    .bind(&payload.year_level)
-    .bind(&payload.acad_year)
-    .bind(&payload.semester)
-    .bind(&payload.reason_transfer)
-    .bind(&requested_docs)
-    .bind(&payload.purpose)
-    .bind("Pending")
-    .execute(&state.db)
-    .await
-    .map_err(|error| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "error": "Submission failed",
-                "message": error.to_string()
-            })),
-        )
-    })?;
+        ON CONFLICT (id) DO UPDATE SET
+            request_id = EXCLUDED.request_id,
+            reference_number = EXCLUDED.reference_number,
+            tracking_number = EXCLUDED.tracking_number,
+            student_name = EXCLUDED.student_name,
+            id_number = EXCLUDED.id_number,
+            program = EXCLUDED.program,
+            year_level = EXCLUDED.year_level,
+            acad_year = EXCLUDED.acad_year,
+            semester = EXCLUDED.semester,
+            reason_transfer = EXCLUDED.reason_transfer,
+            requested_docs = EXCLUDED.requested_docs,
+            purpose = EXCLUDED.purpose,
+            status = EXCLUDED.status
+        "#;
+    let params = serde_json::json!({
+        "id": id,
+        "request_id": request_id,
+        "reference_number": reference_number,
+        "tracking_number": tracking_number,
+        "student_name": payload.student_name,
+        "id_number": payload.id_number,
+        "program": payload.program,
+        "year_level": payload.year_level,
+        "acad_year": payload.acad_year,
+        "semester": payload.semester,
+        "reason_transfer": payload.reason_transfer,
+        "requested_docs": requested_docs,
+        "purpose": payload.purpose,
+        "status": "Pending",
+    });
+    log_db_query("exit_clearance_requests", sql, params.clone());
+    sqlx::query(sql)
+        .bind(id)
+        .bind(&request_id)
+        .bind(&reference_number)
+        .bind(&tracking_number)
+        .bind(&payload.student_name)
+        .bind(&payload.id_number)
+        .bind(&payload.program)
+        .bind(&payload.year_level)
+        .bind(&payload.acad_year)
+        .bind(&payload.semester)
+        .bind(&payload.reason_transfer)
+        .bind(&requested_docs)
+        .bind(&payload.purpose)
+        .bind("Pending")
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| api_query_error("exit_clearance_requests", sql, params, error))?;
+
+    tx.commit().await.map_err(api_error)?;
 
     Ok(Json(SubmissionResponse {
-        id: id.to_string(),
+        id: request_id,
         reference_number,
         tracking_number,
         status: "Pending".to_string(),
@@ -1565,7 +1629,10 @@ fn api_error(error: sqlx::Error) -> (StatusCode, Json<serde_json::Value>) {
 fn database_error_title(error: &sqlx::Error) -> &'static str {
     match error {
         sqlx::Error::Database(database_error)
-            if database_error.code().as_deref() == Some("42703") =>
+            if matches!(
+                database_error.code().as_deref(),
+                Some("42703" | "42P01")
+            ) =>
         {
             "Database schema mismatch"
         }
@@ -1577,11 +1644,26 @@ fn db_error_details(error: &sqlx::Error) -> serde_json::Value {
     match error {
         sqlx::Error::Database(database_error) => serde_json::json!({
             "code": database_error.code(),
-            "constraint": database_error.constraint(),
             "table": database_error.table(),
+            "constraint": database_error.constraint(),
+            "missing_identifier": missing_schema_identifier(database_error.message()),
             "message": database_error.message(),
         }),
         _ => serde_json::json!({}),
+    }
+}
+
+fn missing_schema_identifier(message: &str) -> Option<String> {
+    let quoted = message
+        .split('"')
+        .nth(1)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string);
+
+    if message.contains("does not exist") {
+        quoted
+    } else {
+        None
     }
 }
 

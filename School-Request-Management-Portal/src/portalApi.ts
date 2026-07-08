@@ -24,7 +24,12 @@ const bootstrapRetryDelayMs = 1500
 let bootstrapLoadPromise: Promise<BootstrapData> | null = null
 
 type ApiPortalRequest = PortalRequest & {
+  approvedFor?: string
+  approvedDaysWithPay?: string
+  approvedDaysWithoutPay?: string
+  approvedOther?: string
   filingDate?: string
+  hrRecommendation?: string
   vacationLeaveEarned?: string
   sickLeaveEarned?: string
 }
@@ -63,9 +68,18 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+function toLeaveRecommendation(value: string | undefined): 'For approval' | 'For disapproval' | '' | undefined {
+  if (value === 'For approval' || value === 'For disapproval' || value === '') return value
+  return undefined
+}
+
 function fromApiRequest(request: ApiPortalRequest): PortalRequest {
   return normalizeRequestStatus({
     ...request,
+    leaveRecommendation: request.leaveRecommendation ?? toLeaveRecommendation(request.hrRecommendation),
+    approvedDaysWithPay: request.approvedDaysWithPay ?? request.approvedFor,
+    approvedDaysWithoutPay: request.approvedDaysWithoutPay,
+    approvedOther: request.approvedOther,
     filedDate: request.filedDate ?? request.filingDate,
     vacationLeaveTotalEarned: request.vacationLeaveTotalEarned ?? request.vacationLeaveEarned,
     sickLeaveTotalEarned: request.sickLeaveTotalEarned ?? request.sickLeaveEarned,
@@ -78,6 +92,11 @@ function toApiRequest(request: PortalRequest): ApiPortalRequest {
     ...normalized,
     date: toApiDate(normalized.date) ?? new Date().toISOString().slice(0, 10),
     filingDate: toApiDate(normalized.filedDate),
+    hrRecommendation: normalized.leaveRecommendation,
+    approvedFor: normalized.approvedDaysWithPay,
+    approvedDaysWithPay: normalized.approvedDaysWithPay,
+    approvedDaysWithoutPay: normalized.approvedDaysWithoutPay,
+    approvedOther: normalized.approvedOther,
     vacationLeaveEarned: normalized.vacationLeaveTotalEarned,
     sickLeaveEarned: normalized.sickLeaveTotalEarned,
   }
