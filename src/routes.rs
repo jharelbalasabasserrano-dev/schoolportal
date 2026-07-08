@@ -161,8 +161,7 @@ pub async fn get_bootstrap_data(
     .await
     .map_err(api_error)?;
 
-    let requests = sqlx::query_as::<_, PortalRequest>(
-        r#"
+    let requests_sql = r#"
         SELECT
             id,
             title,
@@ -171,8 +170,8 @@ pub async fn get_bootstrap_data(
             owner,
             office,
             status,
-            request_date::text AS date,
-            request_time AS time,
+            date,
+            time,
             remarks,
             facility,
             attendees,
@@ -224,11 +223,18 @@ pub async fn get_bootstrap_data(
             updated_by
         FROM portal_request_details
         ORDER BY date::date DESC, id DESC
-        "#,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(api_error)?;
+        "#;
+    let requests = sqlx::query_as::<_, PortalRequest>(requests_sql)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "portal_request_details",
+                requests_sql,
+                serde_json::json!({}),
+                error,
+            )
+        })?;
 
     let message_rows = sqlx::query(
         r#"
@@ -1535,13 +1541,48 @@ pub async fn submit_exit_clearance(
 }
 
 fn api_error(error: sqlx::Error) -> (StatusCode, Json<serde_json::Value>) {
+    let details = db_error_details(&error);
+    eprintln!(
+        "{}",
+        serde_json::json!({
+            "event": "database_error",
+            "message": error.to_string(),
+            "details": details,
+            "debug": format!("{error:?}"),
+        })
+    );
+
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(serde_json::json!({
-            "error": "Database operation failed",
-            "message": error.to_string()
+            "error": database_error_title(&error),
+            "message": error.to_string(),
+            "details": details,
         })),
     )
+}
+
+fn database_error_title(error: &sqlx::Error) -> &'static str {
+    match error {
+        sqlx::Error::Database(database_error)
+            if database_error.code().as_deref() == Some("42703") =>
+        {
+            "Database schema mismatch"
+        }
+        _ => "Database operation failed",
+    }
+}
+
+fn db_error_details(error: &sqlx::Error) -> serde_json::Value {
+    match error {
+        sqlx::Error::Database(database_error) => serde_json::json!({
+            "code": database_error.code(),
+            "constraint": database_error.constraint(),
+            "table": database_error.table(),
+            "message": database_error.message(),
+        }),
+        _ => serde_json::json!({}),
+    }
 }
 
 fn log_db_query(table: &str, sql: &str, params: serde_json::Value) {
@@ -1570,6 +1611,7 @@ fn api_query_error(
             "sql": sql.trim(),
             "params": params,
             "message": error.to_string(),
+            "details": db_error_details(&error),
             "debug": format!("{error:?}"),
         })
     );
@@ -1577,9 +1619,10 @@ fn api_query_error(
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(serde_json::json!({
-            "error": "Database operation failed",
+            "error": database_error_title(&error),
             "table": table,
             "message": error.to_string(),
+            "details": db_error_details(&error),
         })),
     )
 }

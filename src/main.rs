@@ -3,7 +3,7 @@ mod limiter;
 mod models;
 mod routes;
 
-const EMBEDDED_MIGRATIONS_VERSION: &str = "20260627000000";
+const EMBEDDED_MIGRATIONS_VERSION: &str = "20260708010000";
 
 use axum::{
     Router,
@@ -37,10 +37,7 @@ async fn main() {
         .route("/api/exit-clearance", post(submit_exit_clearance))
         .route("/api/auth/login", post(login))
         .route("/api/accounts", post(create_account))
-        .route(
-            "/api/accounts/{id}/password",
-            patch(change_password),
-        )
+        .route("/api/accounts/{id}/password", patch(change_password))
         .route(
             "/api/accounts/{id}",
             patch(update_account).delete(delete_account),
