@@ -653,22 +653,22 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: 210mm 297mm; margin: 5mm; }
+    @page { size: A4 portrait; margin: 5mm; }
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
       --page-margin: 5mm;
       --printable-width: 200mm;
       --printable-height: 287mm;
-      --form-width: 186mm;
-      --form-height: 273mm;
-      --form-scale: 1.0513;
-      --scaled-form-width: 195.54mm;
+      --form-width: 200mm;
+      --form-height: 287mm;
+      --form-scale: 1;
+      --scaled-form-width: 200mm;
       --scaled-form-height: 287mm;
       --line-width: 1px;
-      --half-width: 93mm;
-      --heading-height: 28mm;
-      --employee-height: 14mm;
+      --half-width: 100mm;
+      --heading-height: 31mm;
+      --employee-height: 16mm;
       --application-height: 112mm;
       --action-height: 86mm;
       --title-height: 5.2mm;
@@ -680,20 +680,18 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
     .inner { width: var(--form-width); height: var(--form-height); padding: 0; display: flex; flex-direction: column; outline: var(--line-width) solid #000; outline-offset: calc(var(--line-width) * -1); transform: scale(var(--form-scale)); transform-origin: top left; }
     .form-heading { position: relative; width: 100%; height: var(--heading-height); border-bottom: var(--line-width) solid #000; padding: 2mm; flex: 0 0 var(--heading-height); }
     .form-label { position: absolute; left: 2mm; top: 2mm; font-size: 9px; font-weight: 700; line-height: 1.15; }
-    .logo { position: absolute; left: 48mm; top: 3mm; width: 14mm; height: 14mm; object-fit: contain; border-radius: 999px; }
-    .title-block { position: absolute; left: 50%; top: 3mm; width: 90mm; transform: translateX(-50%); text-align: center; }
+    .logo { position: absolute; left: 51mm; top: 3mm; width: 15mm; height: 15mm; object-fit: contain; border-radius: 999px; }
+    .title-block { position: absolute; left: 50%; top: 3mm; width: 94mm; transform: translateX(-50%); text-align: center; }
     .republic, .city { font-size: 9.5px; font-weight: 700; }
     .government { margin-top: .9mm; font-size: 10px; font-weight: 700; }
     h1 { margin: 4mm 0 0; text-align: center; font-size: 15px; font-weight: 900; text-decoration: underline; text-underline-offset: 2px; }
-    .received-wrap { position: absolute; right: 2mm; top: 2mm; width: 46mm; }
-    .received-box { height: 20mm; border: var(--line-width) solid #000; padding: 1mm 1.5mm; background: white; }
+    .received-wrap { position: absolute; right: 2mm; top: 2mm; width: 48mm; }
+    .received-box { height: 22mm; border: var(--line-width) solid #000; padding: 1.2mm 2mm; background: white; }
     .received-org { text-align: center; font-size: 7.6px; font-weight: 900; line-height: 1.1; }
     .received-title { margin-top: 1mm; text-align: center; font-size: 12px; font-weight: 900; line-height: 1; letter-spacing: 2.5px; }
     .stamp-lines { margin-top: 1.1mm; }
-    .stamp-line { display: grid; grid-template-columns: 7mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; font-size: 7.4px; font-weight: 800; text-transform: uppercase; }
+    .stamp-line { display: grid; grid-template-columns: 10mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; font-size: 7.4px; font-weight: 800; text-transform: uppercase; }
     .stamp-value { min-height: 3mm; border-bottom: var(--line-width) solid #000; font-size: 7.6px; font-weight: 400; text-transform: none; }
-    .reference-row { display: grid; grid-template-columns: 20mm 1fr; align-items: end; gap: 1mm; margin-top: .8mm; white-space: nowrap; font-size: 7.8px; font-weight: 800; }
-    .ref-line { border-bottom: var(--line-width) solid #000; font-family: monospace; text-align: center; }
     .content { width: 100%; flex: 1 1 auto; display: flex; flex-direction: column; }
     .employee-info { width: 100%; height: var(--employee-height); border-collapse: collapse; table-layout: fixed; font-size: 8.6px; }
     .employee-info th, .employee-info td { border: var(--line-width) solid #000; height: 6mm; padding: .55mm 1mm; vertical-align: middle; }
@@ -757,10 +755,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             <div class="stamp-lines">
               <div class="stamp-line"><span>Date:</span><span class="stamp-value">${escapeHtml(request.receivedDate ? formatDate(request.receivedDate) : '')}</span></div>
               <div class="stamp-line"><span>Time:</span><span class="stamp-value">${escapeHtml(request.receivedTime ?? '')}</span></div>
-              <div class="stamp-line"><span>By:</span><span class="stamp-value">${escapeHtml(request.receivedBy ?? '')}</span></div>
+              <div class="stamp-line"><span>Ref. No:</span><span class="stamp-value">${escapeHtml(getLeaveReferenceNumber(request))}</span></div>
             </div>
           </div>
-          <div class="reference-row"><span>Reference No.:</span><span class="ref-line">${escapeHtml(getLeaveReferenceNumber(request))}</span></div>
         </div>
       </div>
       <div class="content">
@@ -836,9 +833,9 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
             </div>
             <div class="cell column grid-right grid-bottom">
               <div class="block">
-                <p class="subhead">6.D Communication</p>
-                <div class="item">${check(request.communication ?? 'Not Requested', 'Requested')}<span>Requested</span></div>
+                <p class="subhead">6.D Commutation</p>
                 <div class="item">${check(request.communication ?? 'Not Requested', 'Not Requested')}<span>Not Requested</span></div>
+                <div class="item">${check(request.communication ?? 'Not Requested', 'Requested')}<span>Requested</span></div>
               </div>
               <div class="signature"><span class="line">${escapeHtml(request.owner)}</span><p>Signature of Applicant</p></div>
             </div>
@@ -875,8 +872,7 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
           </div>
         </section>
         <div class="president-block">
-          <p style="margin:.5mm 0 0;font-weight:800;">Wenefredo E. Cagape, EdD, PhD</p>
-          <div class="president-signature-line">&nbsp;</div>
+          <div class="president-signature-line">Wenefredo E. Cagape, EdD, PhD</div>
           <p style="margin:.5mm 0 0;">College President</p>
           <p style="margin:.5mm 0 0;">(Authorized Official)</p>
         </div>
