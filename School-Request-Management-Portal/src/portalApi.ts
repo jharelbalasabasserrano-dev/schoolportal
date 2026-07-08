@@ -76,6 +76,8 @@ function toLeaveRecommendation(value: string | undefined): 'For approval' | 'For
 function fromApiRequest(request: ApiPortalRequest): PortalRequest {
   return normalizeRequestStatus({
     ...request,
+    purpose: request.purpose ?? request.remarks,
+    remarks: request.remarks ?? request.purpose ?? '',
     leaveRecommendation: request.leaveRecommendation ?? toLeaveRecommendation(request.hrRecommendation),
     approvedDaysWithPay: request.approvedDaysWithPay ?? request.approvedFor,
     approvedDaysWithoutPay: request.approvedDaysWithoutPay,
@@ -88,9 +90,12 @@ function fromApiRequest(request: ApiPortalRequest): PortalRequest {
 
 function toApiRequest(request: PortalRequest): ApiPortalRequest {
   const normalized = normalizeRequestStatus(request)
+  const purpose = normalized.purpose?.trim() || normalized.remarks.trim()
   return {
     ...normalized,
     date: toApiDate(normalized.date) ?? new Date().toISOString().slice(0, 10),
+    purpose,
+    remarks: normalized.remarks.trim() || purpose,
     filingDate: toApiDate(normalized.filedDate),
     hrRecommendation: normalized.leaveRecommendation,
     approvedFor: normalized.approvedDaysWithPay,

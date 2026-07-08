@@ -65,6 +65,7 @@ pub struct PortalRequest {
     pub status: String,
     pub date: String,
     pub time: String,
+    pub created_at: Option<String>,
     pub remarks: String,
     pub facility: Option<String>,
     pub attendees: Option<i32>,

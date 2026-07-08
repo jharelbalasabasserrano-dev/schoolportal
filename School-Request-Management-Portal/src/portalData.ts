@@ -62,6 +62,7 @@ type BasePortalRequest = {
   office: Office
   date: string
   time: string
+  createdAt?: string
   remarks: string
   facility?: string
   attendees?: number

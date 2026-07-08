@@ -344,6 +344,7 @@ function EmployeeSupplyRequestView({ onSubmit, user }: { onSubmit: (request: Por
       date: '2026-06-03',
       time: '09:00',
       remarks: purpose.trim(),
+      purpose: purpose.trim(),
     })
     setItemName('')
     setQuantity(1)

@@ -3,7 +3,7 @@ mod limiter;
 mod models;
 mod routes;
 
-const EMBEDDED_MIGRATIONS_VERSION: &str = "20260708020000";
+const EMBEDDED_MIGRATIONS_VERSION: &str = "20260708030000";
 
 use axum::{
     Router,

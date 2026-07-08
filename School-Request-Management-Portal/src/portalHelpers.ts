@@ -103,7 +103,7 @@ export function getNavItems(role: Role) {
 }
 
 export function getVisibleRequests(user: User, list: PortalRequest[]) {
-  return list.filter((request) =>
+  return sortRequestsNewestFirst(list.filter((request) =>
     user.role === 'admin' ||
     (user.role === 'student' && request.ownerId === user.id && studentRequestKinds.includes(request.kind)) ||
     (user.role === 'employee' && request.ownerId === user.id) ||
@@ -111,7 +111,24 @@ export function getVisibleRequests(user: User, list: PortalRequest[]) {
     (user.role === 'supply' && request.office === 'Supply Office') ||
     (user.role === 'adminOffice' && request.office === 'Admin Office') ||
     (user.role === 'hr' && request.office === 'HR Office')
-  )
+  ))
+}
+
+export function sortRequestsNewestFirst<T extends Pick<PortalRequest, 'date' | 'id' | 'time'> & { createdAt?: string }>(requests: T[]) {
+  return [...requests].sort((a, b) => getRequestSortTime(b) - getRequestSortTime(a) || b.id.localeCompare(a.id))
+}
+
+function getRequestSortTime(request: Pick<PortalRequest, 'date' | 'time'> & { createdAt?: string }) {
+  const candidates = [
+    request.createdAt,
+    /^\d{4}-\d{2}-\d{2}$/.test(request.date) ? `${request.date}T${request.time && !request.time.includes('-') ? request.time : '00:00'}` : request.date,
+  ]
+  for (const value of candidates) {
+    if (!value) continue
+    const timestamp = new Date(value).getTime()
+    if (!Number.isNaN(timestamp)) return timestamp
+  }
+  return 0
 }
 
 export function getRequestModule(request: PortalRequest): RequestModule {
@@ -1146,12 +1163,12 @@ export function getDateDuration(startDate: string, endDate: string) {
 }
 
 export function getSystemAdminRequests(requests: PortalRequest[]) {
-  return requests.filter((request) =>
+  return sortRequestsNewestFirst(requests.filter((request) =>
     documentKinds.includes(request.kind) ||
     request.kind === 'Facility Reservation' ||
     ['Supply Request', 'Inventory Request'].includes(request.kind) ||
     isLeaveApplication(request)
-  )
+  ))
 }
 
 export function getAdminStats(requests: PortalRequest[], accounts: User[]) {

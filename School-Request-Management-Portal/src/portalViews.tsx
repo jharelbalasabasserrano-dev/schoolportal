@@ -42,7 +42,7 @@ import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
 import { academicProgramOptions, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
-import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
+import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, sortRequestsNewestFirst, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
 import { ActionCard, AnnouncementsPanel, Avatar, InfoCard, MetricCard, NotificationsDropdown, PageIntro, ProfileDropdown, ProfileField, StatusPill } from './portalComponents'
@@ -177,7 +177,7 @@ export function Dashboard() {
     initialRequests.forEach((request) => {
       if (!merged.some((item) => item.id === request.id)) merged.push(request)
     })
-    return merged
+    return sortRequestsNewestFirst(merged)
   })
   const [messageList, setMessageList] = useState<Message[]>(() => readStored(storageKeys.messages, initialMessages))
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
@@ -332,14 +332,14 @@ export function Dashboard() {
         }
 
         const messages = await refreshMessageAttachmentUrls(data.messages)
-        setRequestList(data.requests.map(normalizeRequestStatus))
+        setRequestList(sortRequestsNewestFirst(data.requests.map(normalizeRequestStatus)))
         setMessageList((current) => mergeMessages(current, messages))
         setAnnouncements(data.announcements)
         setInventory(data.inventory)
         setCategories(data.categories)
         setSuppliers(data.suppliers)
         setStockMovements(data.stockMovements)
-        localStorage.setItem(storageKeys.requests, JSON.stringify(data.requests))
+        localStorage.setItem(storageKeys.requests, JSON.stringify(sortRequestsNewestFirst(data.requests.map(normalizeRequestStatus))))
         localStorage.setItem(storageKeys.messages, JSON.stringify(messages.map(stripAttachmentDataForStorage)))
         localStorage.setItem(storageKeys.announcements, JSON.stringify(data.announcements))
         localStorage.setItem(storageKeys.inventory, JSON.stringify(data.inventory))
@@ -364,7 +364,7 @@ export function Dashboard() {
       refreshBootstrapData()
         .then(async (data) => {
           const messages = await refreshMessageAttachmentUrls(data.messages)
-          setRequestList(data.requests.map(normalizeRequestStatus))
+          setRequestList(sortRequestsNewestFirst(data.requests.map(normalizeRequestStatus)))
           setMessageList((current) => mergeMessages(current, messages))
           setAnnouncements(data.announcements)
           setInventory(data.inventory)
@@ -387,7 +387,7 @@ export function Dashboard() {
       refreshBootstrapData()
         .then(async (data) => {
           const messages = await refreshMessageAttachmentUrls(data.messages)
-          setRequestList(data.requests.map(normalizeRequestStatus))
+          setRequestList(sortRequestsNewestFirst(data.requests.map(normalizeRequestStatus)))
           setMessageList((current) => mergeMessages(current, messages))
           setAnnouncements(data.announcements)
           setInventory(data.inventory)
@@ -405,6 +405,14 @@ export function Dashboard() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_records' }, refreshPortalState)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'request_records' }, refreshPortalState)
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'request_records' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrar_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supply_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'facility_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_balances' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_approvals' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reads' }, refreshPortalState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_attachments' }, refreshPortalState)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_messages' }, async (payload) => {
         const message = await messageFromRealtimePayload(payload)
         if (message) setMessageList((current) => mergeMessages(current, [message]))
@@ -560,7 +568,7 @@ export function Dashboard() {
     const requestToSave = isLeaveApplication(request) && !request.referenceNumber
       ? { ...request, referenceNumber: createLeaveReferenceNumber() }
       : request
-    setRequestList((current) => [requestToSave, ...current])
+    setRequestList((current) => sortRequestsNewestFirst([requestToSave, ...current]))
     setActiveView(request.kind === 'Facility Reservation' ? 'My Requests' : 'My Requests')
     pendingRequestSaveErrorsRef.current.delete(requestToSave.id)
     const save = createPortalRequest(requestToSave)
@@ -586,10 +594,10 @@ export function Dashboard() {
     const currentRequest = requestList.find((item) => item.id === request.id)
     if (!currentRequest || currentRequest.ownerId !== user.id || currentRequest.status !== 'Pending') return false
     const requestToSave = { ...currentRequest, ...request, status: currentRequest.status }
-    setRequestList((current) => current.map((item) => item.id === requestToSave.id ? requestToSave : item))
+    setRequestList((current) => sortRequestsNewestFirst(current.map((item) => item.id === requestToSave.id ? requestToSave : item)))
     createPortalRequest(requestToSave)
       .then((saved) => {
-        setRequestList((current) => current.map((item) => item.id === saved.id ? saved : item))
+        setRequestList((current) => sortRequestsNewestFirst(current.map((item) => item.id === saved.id ? saved : item)))
       })
       .catch((error) => {
         console.error('[portal request] Student request update failed', {
@@ -620,10 +628,10 @@ export function Dashboard() {
       }
       return undefined
     })()
-    setRequestList((current) => current.map((request) => {
+    setRequestList((current) => sortRequestsNewestFirst(current.map((request) => {
       if (request.id !== requestId) return request
       return requestToSave ?? request
-    }))
+    })))
     if (requestToSave) {
       createPortalRequest(requestToSave).catch((error) => {
         console.error('[portal request] Request database update failed', {
@@ -1534,7 +1542,7 @@ function RegistrarRequestForm({ existingRequest, kind, mode = 'create', onBack, 
   const [program, setProgram] = useState<string>(existingRequest?.program ?? profile.program)
   const [transferReason, setTransferReason] = useState(existingRequest?.transferReason ?? '')
   const [exitRequestedDocs, setExitRequestedDocs] = useState<string[]>(existingRequest?.requestedDocs?.length ? existingRequest.requestedDocs : ['Transcript of Records (TOR)'])
-  const [purpose, setPurpose] = useState(existingRequest?.remarks ?? '')
+  const [purpose, setPurpose] = useState(existingRequest?.purpose ?? existingRequest?.remarks ?? '')
   const [error, setError] = useState('')
   const exitDocumentOptions = ['Transcript of Records (TOR)', 'Special Order (S.O)', 'CAV', 'Honorable Dismissal', 'Diploma', 'Good Moral Character', 'Authentication']
   const needsExitDetails = kind === 'Exit Clearance'
@@ -1571,6 +1579,7 @@ function RegistrarRequestForm({ existingRequest, kind, mode = 'create', onBack, 
       date: existingRequest?.date ?? new Date().toISOString().slice(0, 10),
       time: existingRequest?.time ?? '09:00',
       remarks: purpose.trim(),
+      purpose: purpose.trim(),
       studentId,
       yearLevel,
       semester,

@@ -172,6 +172,7 @@ pub async fn get_bootstrap_data(
             status,
             date,
             time,
+            created_at::text AS created_at,
             remarks,
             facility,
             attendees,
@@ -225,7 +226,7 @@ pub async fn get_bootstrap_data(
             hr_remarks,
             updated_by
         FROM portal_request_details
-        ORDER BY date::date DESC, id DESC
+        ORDER BY created_at DESC, date::date DESC, id DESC
         "#;
     let requests = sqlx::query_as::<_, PortalRequest>(requests_sql)
         .fetch_all(&state.db)
@@ -539,7 +540,7 @@ pub async fn change_password(
         ));
     }
 
-    let sql = "SELECT COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
+    let sql = "SELECT email, COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
     log_db_query("app_users", sql, serde_json::json!({ "id": account_id }));
     let row = sqlx::query(sql)
         .bind(&account_id)
@@ -562,6 +563,7 @@ pub async fn change_password(
     };
 
     let current_hash: String = row.get("password_hash");
+    let account_email: String = row.get("email");
     if !verify_password(&current_hash, &payload.current_password) {
         return Err((
             StatusCode::UNAUTHORIZED,
@@ -605,6 +607,8 @@ pub async fn change_password(
             Json(serde_json::json!({ "error": "User not found" })),
         ));
     }
+
+    sync_supabase_auth_password(&state.db, &account_email, &payload.new_password).await?;
 
     let verify_sql = r#"
         SELECT
@@ -1192,6 +1196,7 @@ pub async fn create_portal_request(
             details.status,
             details.date,
             details.time,
+            details.created_at,
             details.remarks,
             details.facility,
             details.attendees,
@@ -1247,12 +1252,13 @@ pub async fn create_portal_request(
         FROM portal_request_details details
         JOIN saved ON saved.id = details.id
         "#;
-    let params = serde_json::to_value(&request).unwrap_or_else(|_| {
+    let mut params = serde_json::to_value(&request).unwrap_or_else(|_| {
         serde_json::json!({
             "id": request.id,
             "error": "failed to serialize request parameters"
         })
     });
+    normalize_request_purpose_payload(&mut params);
     log_db_query("request_records", sql, params.clone());
     let saved = sqlx::query_as::<_, PortalRequest>(sql)
         .bind(params.clone())
@@ -1677,6 +1683,87 @@ fn log_db_query(table: &str, sql: &str, params: serde_json::Value) {
             "params": params,
         })
     );
+}
+
+fn normalize_request_purpose_payload(payload: &mut serde_json::Value) {
+    let purpose = payload
+        .get("purpose")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let remarks = payload
+        .get("remarks")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+
+    if let Some(object) = payload.as_object_mut() {
+        if purpose.is_none() {
+            if let Some(remarks) = &remarks {
+                object.insert("purpose".to_string(), serde_json::Value::String(remarks.clone()));
+            }
+        }
+        if remarks.is_none() {
+            if let Some(purpose) = &purpose {
+                object.insert("remarks".to_string(), serde_json::Value::String(purpose.clone()));
+            }
+        }
+    }
+}
+
+async fn sync_supabase_auth_password(
+    db: &PgPool,
+    email: &str,
+    new_password: &str,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let auth_schema_sql = "SELECT to_regclass('auth.users')::text AS auth_users_table";
+    let auth_users_table: Option<String> = sqlx::query(auth_schema_sql)
+        .fetch_one(db)
+        .await
+        .map_err(|error| api_query_error("auth.users", auth_schema_sql, serde_json::json!({}), error))?
+        .get("auth_users_table");
+
+    if auth_users_table.is_none() {
+        log_auth_event(
+            "auth_password_sync_skipped",
+            serde_json::json!({
+                "reason": "auth_users_table_not_found",
+                "email": email,
+            }),
+        );
+        return Ok(());
+    }
+
+    let sql = r#"
+        UPDATE auth.users
+        SET
+            encrypted_password = crypt($2, gen_salt('bf')),
+            updated_at = NOW()
+        WHERE lower(email) = lower($1)
+        RETURNING id::text
+        "#;
+    let params = serde_json::json!({ "email": email, "password": "[redacted]" });
+    log_db_query("auth.users", sql, params.clone());
+    let updated = sqlx::query(sql)
+        .bind(email)
+        .bind(new_password)
+        .fetch_optional(db)
+        .await
+        .map_err(|error| api_query_error("auth.users", sql, params, error))?;
+
+    if updated.is_none() {
+        log_auth_event(
+            "auth_password_sync_skipped",
+            serde_json::json!({
+                "reason": "supabase_auth_user_not_found",
+                "email": email,
+            }),
+        );
+    }
+
+    Ok(())
 }
 
 fn api_query_error(
