@@ -157,9 +157,15 @@ CREATE TABLE IF NOT EXISTS system_admin_profiles (
 );
 
 INSERT INTO departments (id, name)
-SELECT lower(regexp_replace(department, '[^a-zA-Z0-9]+', '-', 'g')), department
-FROM app_users
-WHERE NULLIF(BTRIM(department), '') IS NOT NULL
+SELECT normalized.id, MIN(normalized.name) AS name
+FROM (
+    SELECT
+        lower(regexp_replace(department, '[^a-zA-Z0-9]+', '-', 'g')) AS id,
+        BTRIM(department) AS name
+    FROM app_users
+    WHERE NULLIF(BTRIM(department), '') IS NOT NULL
+) normalized
+GROUP BY normalized.id
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO student_profiles (user_id)
@@ -570,21 +576,39 @@ CREATE TABLE IF NOT EXISTS announcement_reads (
 CREATE INDEX IF NOT EXISTS announcement_reads_user_id_idx ON announcement_reads(user_id);
 
 INSERT INTO programs (id, name)
-SELECT lower(regexp_replace(program, '[^a-zA-Z0-9]+', '-', 'g')), program
-FROM portal_requests
-WHERE NULLIF(BTRIM(program), '') IS NOT NULL
+SELECT normalized.id, MIN(normalized.name) AS name
+FROM (
+    SELECT
+        lower(regexp_replace(program, '[^a-zA-Z0-9]+', '-', 'g')) AS id,
+        BTRIM(program) AS name
+    FROM portal_requests
+    WHERE NULLIF(BTRIM(program), '') IS NOT NULL
+) normalized
+GROUP BY normalized.id
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO school_years (id, name)
-SELECT lower(regexp_replace(school_year, '[^a-zA-Z0-9]+', '-', 'g')), school_year
-FROM portal_requests
-WHERE NULLIF(BTRIM(school_year), '') IS NOT NULL
+SELECT normalized.id, MIN(normalized.name) AS name
+FROM (
+    SELECT
+        lower(regexp_replace(school_year, '[^a-zA-Z0-9]+', '-', 'g')) AS id,
+        BTRIM(school_year) AS name
+    FROM portal_requests
+    WHERE NULLIF(BTRIM(school_year), '') IS NOT NULL
+) normalized
+GROUP BY normalized.id
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO semesters (id, name)
-SELECT lower(regexp_replace(semester, '[^a-zA-Z0-9]+', '-', 'g')), semester
-FROM portal_requests
-WHERE NULLIF(BTRIM(semester), '') IS NOT NULL
+SELECT normalized.id, MIN(normalized.name) AS name
+FROM (
+    SELECT
+        lower(regexp_replace(semester, '[^a-zA-Z0-9]+', '-', 'g')) AS id,
+        BTRIM(semester) AS name
+    FROM portal_requests
+    WHERE NULLIF(BTRIM(semester), '') IS NOT NULL
+) normalized
+GROUP BY normalized.id
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO request_records (
