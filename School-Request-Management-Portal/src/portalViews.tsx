@@ -402,9 +402,9 @@ export function Dashboard() {
 
     const channel = realtimeClient
       .channel('portal-data-changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'portal_requests' }, refreshPortalState)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'portal_requests' }, refreshPortalState)
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'portal_requests' }, refreshPortalState)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_records' }, refreshPortalState)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'request_records' }, refreshPortalState)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'request_records' }, refreshPortalState)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'request_messages' }, async (payload) => {
         const message = await messageFromRealtimePayload(payload)
         if (message) setMessageList((current) => mergeMessages(current, [message]))

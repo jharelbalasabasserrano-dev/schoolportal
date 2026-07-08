@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use chrono::{NaiveDate, Utc};
+use chrono::Utc;
 use sqlx::{PgPool, Row, postgres::PgRow};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -222,8 +222,8 @@ pub async fn get_bootstrap_data(
             disapproved_due_to,
             hr_remarks,
             updated_by
-        FROM portal_requests
-        ORDER BY request_date DESC, created_at DESC
+        FROM portal_request_details
+        ORDER BY date::date DESC, id DESC
         "#,
     )
     .fetch_all(&state.db)
@@ -232,22 +232,42 @@ pub async fn get_bootstrap_data(
 
     let message_rows = sqlx::query(
         r#"
+        WITH message_read_agg AS (
+            SELECT message_id, array_agg(user_id ORDER BY read_at) AS read_by
+            FROM message_reads
+            GROUP BY message_id
+        ),
+        message_attachment_ranked AS (
+            SELECT
+                message_id,
+                storage_path,
+                file_name,
+                file_size,
+                file_type,
+                row_number() OVER (PARTITION BY message_id ORDER BY created_at DESC, id DESC) AS rank
+            FROM message_attachments
+        )
         SELECT
-            id,
-            request_id,
-            COALESCE(sender_id, '') AS sender_id,
-            sender_name,
-            body,
-            sent_at::text AS sent_at,
-            status,
-            read_by,
-            attachment_data_url,
-            attachment_storage_path,
-            attachment_name,
-            attachment_size,
-            attachment_type
-        FROM request_messages
-        ORDER BY sent_at
+            rm.id,
+            rm.request_id,
+            COALESCE(rm.sender_id, '') AS sender_id,
+            rm.sender_name,
+            rm.body,
+            rm.sent_at::text AS sent_at,
+            CASE
+                WHEN cardinality(COALESCE(mra.read_by, rm.read_by, ARRAY[]::TEXT[])) > 0 THEN 'Read'
+                ELSE COALESCE(rm.status, 'Delivered')
+            END AS status,
+            COALESCE(mra.read_by, rm.read_by, ARRAY[]::TEXT[]) AS read_by,
+            rm.attachment_data_url,
+            COALESCE(mar.storage_path, rm.attachment_storage_path) AS attachment_storage_path,
+            COALESCE(mar.file_name, rm.attachment_name) AS attachment_name,
+            COALESCE(mar.file_size, rm.attachment_size) AS attachment_size,
+            COALESCE(mar.file_type, rm.attachment_type) AS attachment_type
+        FROM request_messages rm
+        LEFT JOIN message_read_agg mra ON mra.message_id = rm.id
+        LEFT JOIN message_attachment_ranked mar ON mar.message_id = rm.id AND mar.rank = 1
+        ORDER BY rm.sent_at
         "#,
     )
     .fetch_all(&state.db)
@@ -659,12 +679,12 @@ pub async fn sync_bootstrap_data(
         .execute(&mut *tx)
         .await
         .map_err(|error| api_query_error("announcements", sql, serde_json::json!({}), error))?;
-    let sql = "DELETE FROM portal_requests";
-    log_db_query("portal_requests", sql, serde_json::json!({}));
+    let sql = "DELETE FROM request_records";
+    log_db_query("request_records", sql, serde_json::json!({}));
     sqlx::query(sql)
         .execute(&mut *tx)
         .await
-        .map_err(|error| api_query_error("portal_requests", sql, serde_json::json!({}), error))?;
+        .map_err(|error| api_query_error("request_records", sql, serde_json::json!({}), error))?;
     let sql = "DELETE FROM supply_items";
     log_db_query("supply_items", sql, serde_json::json!({}));
     sqlx::query(sql)
@@ -809,103 +829,19 @@ pub async fn sync_bootstrap_data(
     }
 
     for request in &payload.requests {
-        let filing_date = parse_optional_date(request.filing_date.as_deref());
-        let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
-        let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
-        let received_date = parse_optional_date(request.received_date.as_deref());
-        let sql = r#"
-            INSERT INTO portal_requests (
-                id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
-                facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
-                program, major, transfer_reason, requested_docs, claim_release_date,
-                reference_number, received_date, received_time, received_by, released_by,
-                position, salary, working_days, inclusive_dates, communication, leave_detail,
-                leave_vacation_location, leave_vacation_specify, leave_sick_location, leave_sick_illness,
-                leave_women_illness, leave_study_purpose, leave_other_purpose,
-                custom_leave_type, leave_duration, leave_time,
-                filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
-                vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
-                hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
-            )
-            VALUES (
-                $1, $2, $3,
-                CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
-                $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-                $30, $31::numeric, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
-                $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55,
-                $56, $57, $58
-            )
-            "#;
+        let sql = "SELECT upsert_portal_request($1::jsonb)";
         let params = serde_json::to_value(request).unwrap_or_else(|_| {
             serde_json::json!({
                 "id": request.id,
                 "error": "failed to serialize request parameters"
             })
         });
-        log_db_query("portal_requests", sql, params.clone());
+        log_db_query("request_records", sql, params.clone());
         sqlx::query(sql)
-            .bind(&request.id)
-            .bind(&request.title)
-            .bind(&request.kind)
-            .bind(&request.owner_id)
-            .bind(&request.owner)
-            .bind(&request.office)
-            .bind(&request.status)
-            .bind(&request.date)
-            .bind(&request.time)
-            .bind(&request.remarks)
-            .bind(&request.facility)
-            .bind(request.attendees)
-            .bind(&request.purpose)
-            .bind(&request.facility_remarks)
-            .bind(&request.student_id)
-            .bind(&request.year_level)
-            .bind(&request.semester)
-            .bind(&request.school_year)
-            .bind(&request.program)
-            .bind(&request.major)
-            .bind(&request.transfer_reason)
-            .bind(&request.requested_docs)
-            .bind(&request.claim_release_date)
-            .bind(&request.reference_number)
-            .bind(received_date)
-            .bind(&request.received_time)
-            .bind(&request.received_by)
-            .bind(&request.released_by)
-            .bind(&request.position)
-            .bind(&request.salary)
-            .bind(request.working_days)
-            .bind(&request.inclusive_dates)
-            .bind(&request.communication)
-            .bind(&request.leave_detail)
-            .bind(&request.leave_vacation_location)
-            .bind(&request.leave_vacation_specify)
-            .bind(&request.leave_sick_location)
-            .bind(&request.leave_sick_illness)
-            .bind(&request.leave_women_illness)
-            .bind(&request.leave_study_purpose)
-            .bind(&request.leave_other_purpose)
-            .bind(&request.custom_leave_type)
-            .bind(&request.leave_duration)
-            .bind(&request.leave_time)
-            .bind(filing_date)
-            .bind(leave_start_date)
-            .bind(leave_end_date)
-            .bind(&request.vacation_leave_earned)
-            .bind(&request.vacation_leave_less)
-            .bind(&request.vacation_leave_balance)
-            .bind(&request.sick_leave_earned)
-            .bind(&request.sick_leave_less)
-            .bind(&request.sick_leave_balance)
-            .bind(&request.hr_recommendation)
-            .bind(&request.approved_for)
-            .bind(&request.disapproved_due_to)
-            .bind(&request.hr_remarks)
-            .bind(&request.updated_by)
+            .bind(params.clone())
             .execute(&mut *tx)
             .await
-            .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
+            .map_err(|error| api_query_error("request_records", sql, params, error))?;
     }
 
     for message in &payload.messages {
@@ -963,6 +899,58 @@ pub async fn sync_bootstrap_data(
             .execute(&mut *tx)
             .await
             .map_err(|error| api_query_error("request_messages", sql, params, error))?;
+
+        if let Some(file) = attachment.filter(|file| file.storage_path.as_deref().is_some()) {
+            let sql = r#"
+                INSERT INTO message_attachments (id, message_id, storage_path, file_name, file_size, file_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (id) DO UPDATE SET
+                    storage_path = EXCLUDED.storage_path,
+                    file_name = EXCLUDED.file_name,
+                    file_size = EXCLUDED.file_size,
+                    file_type = EXCLUDED.file_type
+                "#;
+            let attachment_id = format!("{}-attachment", message.id);
+            let params = serde_json::json!({
+                "id": attachment_id,
+                "message_id": message.id,
+                "storage_path": file.storage_path,
+                "file_name": file.name,
+                "file_size": file.size,
+                "file_type": file.file_type,
+            });
+            log_db_query("message_attachments", sql, params.clone());
+            sqlx::query(sql)
+                .bind(&attachment_id)
+                .bind(&message.id)
+                .bind(file.storage_path.as_deref().unwrap_or(""))
+                .bind(&file.name)
+                .bind(file.size)
+                .bind(&file.file_type)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| api_query_error("message_attachments", sql, params, error))?;
+        }
+
+        for reader_id in &message.read_by {
+            let sql = r#"
+                INSERT INTO message_reads (message_id, user_id)
+                SELECT $1, $2
+                WHERE EXISTS (SELECT 1 FROM app_users WHERE id = $2)
+                ON CONFLICT (message_id, user_id) DO NOTHING
+                "#;
+            let params = serde_json::json!({
+                "message_id": message.id,
+                "user_id": reader_id,
+            });
+            log_db_query("message_reads", sql, params.clone());
+            sqlx::query(sql)
+                .bind(&message.id)
+                .bind(reader_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| api_query_error("message_reads", sql, params, error))?;
+        }
     }
 
     for announcement in &payload.announcements {
@@ -1181,151 +1169,71 @@ pub async fn create_portal_request(
     State(state): State<AppState>,
     Json(request): Json<PortalRequest>,
 ) -> Result<Json<PortalRequest>, (StatusCode, Json<serde_json::Value>)> {
-    let filing_date = parse_optional_date(request.filing_date.as_deref());
-    let leave_start_date = parse_optional_date(request.leave_start_date.as_deref());
-    let leave_end_date = parse_optional_date(request.leave_end_date.as_deref());
-    let received_date = parse_optional_date(request.received_date.as_deref());
     let sql = r#"
-        INSERT INTO portal_requests (
-            id, title, kind, owner_id, owner, office, status, request_date, request_time, remarks,
-            facility, attendees, purpose, facility_remarks, student_id, year_level, semester, school_year,
-            program, major, transfer_reason, requested_docs, claim_release_date,
-            reference_number, received_date, received_time, received_by, released_by,
-            position, salary, working_days, inclusive_dates, communication, leave_detail,
-            leave_vacation_location, leave_vacation_specify, leave_sick_location, leave_sick_illness,
-            leave_women_illness, leave_study_purpose, leave_other_purpose,
-            custom_leave_type, leave_duration, leave_time,
-            filing_date, leave_start_date, leave_end_date, vacation_leave_earned, vacation_leave_less,
-            vacation_leave_balance, sick_leave_earned, sick_leave_less, sick_leave_balance,
-            hr_recommendation, approved_for, disapproved_due_to, hr_remarks, updated_by
+        WITH saved AS (
+            SELECT upsert_portal_request($1::jsonb) AS id
         )
-        VALUES (
-            $1, $2, $3,
-            CASE WHEN EXISTS (SELECT 1 FROM app_users WHERE id = $4) THEN $4 ELSE NULL END,
-            $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-            $19, $20, $21, $22::text[], $23, $24, $25::date, $26, $27, $28, $29,
-            $30, $31::numeric, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41,
-            $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55,
-            $56, $57, $58
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            kind = EXCLUDED.kind,
-            owner_id = EXCLUDED.owner_id,
-            owner = EXCLUDED.owner,
-            office = EXCLUDED.office,
-            status = EXCLUDED.status,
-            request_date = EXCLUDED.request_date,
-            request_time = EXCLUDED.request_time,
-            remarks = EXCLUDED.remarks,
-            facility = EXCLUDED.facility,
-            attendees = EXCLUDED.attendees,
-            purpose = EXCLUDED.purpose,
-            facility_remarks = EXCLUDED.facility_remarks,
-            student_id = EXCLUDED.student_id,
-            year_level = EXCLUDED.year_level,
-            semester = EXCLUDED.semester,
-            school_year = EXCLUDED.school_year,
-            program = EXCLUDED.program,
-            major = EXCLUDED.major,
-            transfer_reason = EXCLUDED.transfer_reason,
-            requested_docs = EXCLUDED.requested_docs,
-            claim_release_date = EXCLUDED.claim_release_date,
-            reference_number = EXCLUDED.reference_number,
-            received_date = EXCLUDED.received_date,
-            received_time = EXCLUDED.received_time,
-            received_by = EXCLUDED.received_by,
-            released_by = EXCLUDED.released_by,
-            position = EXCLUDED.position,
-            salary = EXCLUDED.salary,
-            working_days = EXCLUDED.working_days,
-            inclusive_dates = EXCLUDED.inclusive_dates,
-            communication = EXCLUDED.communication,
-            leave_detail = EXCLUDED.leave_detail,
-            leave_vacation_location = EXCLUDED.leave_vacation_location,
-            leave_vacation_specify = EXCLUDED.leave_vacation_specify,
-            leave_sick_location = EXCLUDED.leave_sick_location,
-            leave_sick_illness = EXCLUDED.leave_sick_illness,
-            leave_women_illness = EXCLUDED.leave_women_illness,
-            leave_study_purpose = EXCLUDED.leave_study_purpose,
-            leave_other_purpose = EXCLUDED.leave_other_purpose,
-            custom_leave_type = EXCLUDED.custom_leave_type,
-            leave_duration = EXCLUDED.leave_duration,
-            leave_time = EXCLUDED.leave_time,
-            filing_date = EXCLUDED.filing_date,
-            leave_start_date = EXCLUDED.leave_start_date,
-            leave_end_date = EXCLUDED.leave_end_date,
-            vacation_leave_earned = EXCLUDED.vacation_leave_earned,
-            vacation_leave_less = EXCLUDED.vacation_leave_less,
-            vacation_leave_balance = EXCLUDED.vacation_leave_balance,
-            sick_leave_earned = EXCLUDED.sick_leave_earned,
-            sick_leave_less = EXCLUDED.sick_leave_less,
-            sick_leave_balance = EXCLUDED.sick_leave_balance,
-            hr_recommendation = EXCLUDED.hr_recommendation,
-            approved_for = EXCLUDED.approved_for,
-            disapproved_due_to = EXCLUDED.disapproved_due_to,
-            hr_remarks = EXCLUDED.hr_remarks,
-            updated_by = EXCLUDED.updated_by,
-            updated_at = NOW()
-        RETURNING
-            id,
-            title,
-            kind,
-            COALESCE(owner_id, '') AS owner_id,
-            owner,
-            office,
-            status,
-            request_date::text AS date,
-            request_time AS time,
-            remarks,
-            facility,
-            attendees,
-            purpose,
-            facility_remarks,
-            student_id,
-            year_level,
-            semester,
-            school_year,
-            program,
-            major,
-            transfer_reason,
-            requested_docs,
-            claim_release_date,
-            reference_number,
-            received_date::text AS received_date,
-            received_time,
-            received_by,
-            released_by,
-            position,
-            salary,
-            working_days::float8 AS working_days,
-            inclusive_dates,
-            communication,
-            leave_detail,
-            leave_vacation_location,
-            leave_vacation_specify,
-            leave_sick_location,
-            leave_sick_illness,
-            leave_women_illness,
-            leave_study_purpose,
-            leave_other_purpose,
-            custom_leave_type,
-            leave_duration,
-            leave_time,
-            filing_date::text AS filing_date,
-            leave_start_date::text AS leave_start_date,
-            leave_end_date::text AS leave_end_date,
-            vacation_leave_earned,
-            vacation_leave_less,
-            vacation_leave_balance,
-            sick_leave_earned,
-            sick_leave_less,
-            sick_leave_balance,
-            hr_recommendation,
-            approved_for,
-            disapproved_due_to,
-            hr_remarks,
-            updated_by
+        SELECT
+            details.id,
+            details.title,
+            details.kind,
+            details.owner_id,
+            details.owner,
+            details.office,
+            details.status,
+            details.date,
+            details.time,
+            details.remarks,
+            details.facility,
+            details.attendees,
+            details.purpose,
+            details.facility_remarks,
+            details.student_id,
+            details.year_level,
+            details.semester,
+            details.school_year,
+            details.program,
+            details.major,
+            details.transfer_reason,
+            details.requested_docs,
+            details.claim_release_date,
+            details.reference_number,
+            details.received_date,
+            details.received_time,
+            details.received_by,
+            details.released_by,
+            details.position,
+            details.salary,
+            details.working_days,
+            details.inclusive_dates,
+            details.communication,
+            details.leave_detail,
+            details.leave_vacation_location,
+            details.leave_vacation_specify,
+            details.leave_sick_location,
+            details.leave_sick_illness,
+            details.leave_women_illness,
+            details.leave_study_purpose,
+            details.leave_other_purpose,
+            details.custom_leave_type,
+            details.leave_duration,
+            details.leave_time,
+            details.filing_date,
+            details.leave_start_date,
+            details.leave_end_date,
+            details.vacation_leave_earned,
+            details.vacation_leave_less,
+            details.vacation_leave_balance,
+            details.sick_leave_earned,
+            details.sick_leave_less,
+            details.sick_leave_balance,
+            details.hr_recommendation,
+            details.approved_for,
+            details.disapproved_due_to,
+            details.hr_remarks,
+            details.updated_by
+        FROM portal_request_details details
+        JOIN saved ON saved.id = details.id
         "#;
     let params = serde_json::to_value(&request).unwrap_or_else(|_| {
         serde_json::json!({
@@ -1333,69 +1241,12 @@ pub async fn create_portal_request(
             "error": "failed to serialize request parameters"
         })
     });
-    log_db_query("portal_requests", sql, params.clone());
+    log_db_query("request_records", sql, params.clone());
     let saved = sqlx::query_as::<_, PortalRequest>(sql)
-        .bind(&request.id)
-        .bind(&request.title)
-        .bind(&request.kind)
-        .bind(&request.owner_id)
-        .bind(&request.owner)
-        .bind(&request.office)
-        .bind(&request.status)
-        .bind(&request.date)
-        .bind(&request.time)
-        .bind(&request.remarks)
-        .bind(&request.facility)
-        .bind(request.attendees)
-        .bind(&request.purpose)
-        .bind(&request.facility_remarks)
-        .bind(&request.student_id)
-        .bind(&request.year_level)
-        .bind(&request.semester)
-        .bind(&request.school_year)
-        .bind(&request.program)
-        .bind(&request.major)
-        .bind(&request.transfer_reason)
-        .bind(&request.requested_docs)
-        .bind(&request.claim_release_date)
-        .bind(&request.reference_number)
-        .bind(received_date)
-        .bind(&request.received_time)
-        .bind(&request.received_by)
-        .bind(&request.released_by)
-        .bind(&request.position)
-        .bind(&request.salary)
-        .bind(request.working_days)
-        .bind(&request.inclusive_dates)
-        .bind(&request.communication)
-        .bind(&request.leave_detail)
-        .bind(&request.leave_vacation_location)
-        .bind(&request.leave_vacation_specify)
-        .bind(&request.leave_sick_location)
-        .bind(&request.leave_sick_illness)
-        .bind(&request.leave_women_illness)
-        .bind(&request.leave_study_purpose)
-        .bind(&request.leave_other_purpose)
-        .bind(&request.custom_leave_type)
-        .bind(&request.leave_duration)
-        .bind(&request.leave_time)
-        .bind(filing_date)
-        .bind(leave_start_date)
-        .bind(leave_end_date)
-        .bind(&request.vacation_leave_earned)
-        .bind(&request.vacation_leave_less)
-        .bind(&request.vacation_leave_balance)
-        .bind(&request.sick_leave_earned)
-        .bind(&request.sick_leave_less)
-        .bind(&request.sick_leave_balance)
-        .bind(&request.hr_recommendation)
-        .bind(&request.approved_for)
-        .bind(&request.disapproved_due_to)
-        .bind(&request.hr_remarks)
-        .bind(&request.updated_by)
+        .bind(params.clone())
         .fetch_one(&state.db)
         .await
-        .map_err(|error| api_query_error("portal_requests", sql, params, error))?;
+        .map_err(|error| api_query_error("request_records", sql, params, error))?;
 
     Ok(Json(saved))
 }
@@ -1478,6 +1329,60 @@ pub async fn create_message(
         .await
         .map_err(|error| api_query_error("request_messages", sql, params, error))?;
 
+    if inserted.is_some() {
+        if let Some(file) = attachment.filter(|file| file.storage_path.as_deref().is_some()) {
+            let sql = r#"
+                INSERT INTO message_attachments (id, message_id, storage_path, file_name, file_size, file_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (id) DO UPDATE SET
+                    storage_path = EXCLUDED.storage_path,
+                    file_name = EXCLUDED.file_name,
+                    file_size = EXCLUDED.file_size,
+                    file_type = EXCLUDED.file_type
+                "#;
+            let attachment_id = format!("{}-attachment", message.id);
+            let params = serde_json::json!({
+                "id": attachment_id,
+                "message_id": message.id,
+                "storage_path": file.storage_path,
+                "file_name": file.name,
+                "file_size": file.size,
+                "file_type": file.file_type,
+            });
+            log_db_query("message_attachments", sql, params.clone());
+            sqlx::query(sql)
+                .bind(&attachment_id)
+                .bind(&message.id)
+                .bind(file.storage_path.as_deref().unwrap_or(""))
+                .bind(&file.name)
+                .bind(file.size)
+                .bind(&file.file_type)
+                .execute(&state.db)
+                .await
+                .map_err(|error| api_query_error("message_attachments", sql, params, error))?;
+        }
+
+        for reader_id in &read_by {
+            let sql = r#"
+                INSERT INTO message_reads (message_id, user_id)
+                SELECT $1, $2
+                WHERE EXISTS (SELECT 1 FROM app_users WHERE id = $2)
+                ON CONFLICT (message_id, user_id) DO NOTHING
+                "#;
+            let params = serde_json::json!({
+                "message_id": message.id,
+                "user_id": reader_id,
+            });
+            log_db_query("message_reads", sql, params.clone());
+            sqlx::query(sql)
+                .bind(&message.id)
+                .bind(reader_id)
+                .execute(&state.db)
+                .await
+                .map_err(|error| api_query_error("message_reads", sql, params, error))?;
+        }
+    }
+
     match inserted {
         Some(row) => Ok(Json(request_message_from_row(row))),
         None => Err((
@@ -1492,6 +1397,32 @@ pub async fn mark_message_read(
     Path(message_id): Path<String>,
     Json(payload): Json<ReadMessagePayload>,
 ) -> Result<Json<RequestMessage>, (StatusCode, Json<serde_json::Value>)> {
+    let read_sql = r#"
+        INSERT INTO message_reads (message_id, user_id)
+        SELECT $1, $2
+        WHERE EXISTS (SELECT 1 FROM request_messages WHERE id = $1)
+          AND EXISTS (SELECT 1 FROM app_users WHERE id = $2)
+        ON CONFLICT (message_id, user_id) DO NOTHING
+        "#;
+    log_db_query(
+        "message_reads",
+        read_sql,
+        serde_json::json!({ "message_id": message_id, "user_id": payload.user_id }),
+    );
+    sqlx::query(read_sql)
+        .bind(&message_id)
+        .bind(&payload.user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "message_reads",
+                read_sql,
+                serde_json::json!({ "message_id": message_id, "user_id": payload.user_id }),
+                error,
+            )
+        })?;
+
     let sql = r#"
         UPDATE request_messages
         SET
@@ -1535,19 +1466,6 @@ pub async fn mark_message_read(
             Json(serde_json::json!({ "error": "Message not found" })),
         )),
     }
-}
-
-fn parse_optional_date(value: Option<&str>) -> Option<NaiveDate> {
-    value
-        .and_then(|date| {
-            let trimmed = date.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        })
-        .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 
 pub async fn submit_exit_clearance(
