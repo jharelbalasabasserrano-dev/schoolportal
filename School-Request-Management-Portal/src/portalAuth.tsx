@@ -125,10 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     changePassword: async (currentPassword, nextPassword) => {
       if (!user) return { ok: false, message: 'You must be signed in to change your password.' }
       try {
-        const savedUser = await changeAccountPassword(user.id, currentPassword, nextPassword)
+        const currentUser = await authenticateAccount(user.email, currentPassword)
+        const savedUser = await changeAccountPassword(currentUser.id, currentPassword, nextPassword)
         const verifiedUser = await authenticateAccount(savedUser.email, nextPassword)
         const updated = { ...verifiedUser, password: '' }
-        setAccounts((current) => current.map((account) => account.id === user.id ? updated : account))
+        setAccounts((current) => current.map((account) => account.id === user.id || account.id === currentUser.id ? updated : account))
         setUser(updated)
         return { ok: true }
       } catch (error) {

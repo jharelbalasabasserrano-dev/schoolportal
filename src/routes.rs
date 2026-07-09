@@ -9,7 +9,10 @@ use axum::{
 };
 use chrono::Utc;
 use sqlx::{PgPool, Row, postgres::PgRow};
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
+};
 use uuid::Uuid;
 
 use crate::models::{
@@ -92,6 +95,16 @@ fn password_storage_kind(stored: &str) -> &'static str {
     } else {
         "legacy_plaintext"
     }
+}
+
+fn password_hash_fingerprint(stored: &str) -> String {
+    if stored.trim().is_empty() {
+        return "empty".to_string();
+    }
+
+    let mut hasher = DefaultHasher::new();
+    stored.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 fn matching_password_account_index(accounts: &[UserAccount], candidate: &str) -> Option<usize> {
@@ -502,6 +515,7 @@ pub async fn login(
                     "user_id": account.id,
                     "role": account.role,
                     "password_storage": password_storage_kind(&account.password),
+                    "password_hash_fingerprint": password_hash_fingerprint(&account.password),
                 })).collect::<Vec<_>>(),
             }),
         );
@@ -548,6 +562,7 @@ pub async fn login(
             "user_id": account.id,
             "role": account.role,
             "password_storage": password_storage_kind(&account.password),
+            "password_hash_fingerprint": password_hash_fingerprint(&account.password),
             "matched_count": matched_count,
         }),
     );
@@ -627,6 +642,7 @@ pub async fn change_password(
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&current_hash),
+            "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
         }),
     );
 
@@ -640,6 +656,7 @@ pub async fn change_password(
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
                 "password_storage": password_storage_kind(&current_hash),
+                "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
             }),
         );
         return Err((
@@ -676,6 +693,7 @@ pub async fn change_password(
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&next_hash),
+            "password_hash_fingerprint": password_hash_fingerprint(&next_hash),
         }),
     );
     let update_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
@@ -794,6 +812,7 @@ pub async fn change_password(
                 "new_password_verifies": verify_password(&saved_account.password, &payload.new_password),
                 "old_password_still_verifies": verify_password(&saved_account.password, &payload.current_password),
                 "password_storage": password_storage_kind(&saved_account.password),
+                "password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
             }),
         );
         return Err((
@@ -810,6 +829,7 @@ pub async fn change_password(
             "role": saved_account.role,
             "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&saved_account.password),
+            "password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
             "new_password_verifies": true,
             "old_password_still_verifies": false,
         }),
