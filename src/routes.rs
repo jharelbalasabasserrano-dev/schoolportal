@@ -2300,7 +2300,7 @@ mod tests {
 
     #[test]
     fn password_change_hash_accepts_new_password_and_rejects_old_password() {
-        let old_password = "password123";
+        let old_password = "previous-user-password-123";
         let new_password = "better-password-123";
         let next_hash = hash_password(new_password).expect("password should hash");
 
@@ -2343,8 +2343,8 @@ mod tests {
                 "new password should verify for role {role}"
             );
             assert!(
-                !verify_password(&next_hash, "password123"),
-                "old default password should not verify for role {role}"
+                !verify_password(&next_hash, "unrelated-password-123"),
+                "unrelated password should not verify for role {role}"
             );
         }
     }
