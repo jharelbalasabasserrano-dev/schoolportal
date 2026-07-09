@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use sqlx::{PgConnection, PgPool, Row, postgres::PgRow};
+use sqlx::{PgPool, Row, postgres::PgRow};
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
@@ -972,25 +972,43 @@ pub async fn change_password(
         ));
     }
 
-    if let Err((status, body)) =
-        sync_supabase_auth_password(&mut tx, &account_email, &payload.new_password).await
-    {
+    if let Err(error) = tx.commit().await {
         log_auth_event(
-            "auth_password_sync_failed",
+            "auth_password_change_commit_failed",
             serde_json::json!({
-                "user_id": account_id,
-                "email": account_email,
+                "user_id": saved_account.id,
+                "email": saved_account.email,
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
-                "status": status.as_u16(),
-                "error": body.0,
+                "rows_affected": updated.rows_affected(),
+                "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
+                "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
+                "saved_password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
+                "new_password_verifies": new_password_verifies,
+                "old_password_still_verifies": old_password_still_verifies,
+                "commit_completed": false,
+                "message": error.to_string(),
             }),
         );
-        let _ = tx.rollback().await;
-        return Err((status, body));
+        return Err(api_error(error));
     }
 
-    tx.commit().await.map_err(api_error)?;
+    log_auth_event(
+        "auth_password_change_commit_completed",
+        serde_json::json!({
+            "user_id": saved_account.id,
+            "email": saved_account.email,
+            "role": saved_account.role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "rows_affected": updated.rows_affected(),
+            "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
+            "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
+            "saved_password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
+            "new_password_verifies": new_password_verifies,
+            "old_password_still_verifies": old_password_still_verifies,
+            "commit_completed": true,
+        }),
+    );
 
     let login_probe_sql = r#"
         SELECT
@@ -2174,82 +2192,6 @@ fn normalize_request_purpose_payload(payload: &mut serde_json::Value) {
             }
         }
     }
-}
-
-async fn sync_supabase_auth_password(
-    db: &mut PgConnection,
-    email: &str,
-    new_password: &str,
-) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
-    let auth_schema_sql = "SELECT to_regclass('auth.users')::text AS auth_users_table";
-    let auth_users_table: Option<String> = sqlx::query(auth_schema_sql)
-        .fetch_one(&mut *db)
-        .await
-        .map_err(|error| {
-            api_query_error("auth.users", auth_schema_sql, serde_json::json!({}), error)
-        })?
-        .get("auth_users_table");
-
-    if auth_users_table.is_none() {
-        log_auth_event(
-            "auth_password_sync_skipped",
-            serde_json::json!({
-                "reason": "auth_users_table_not_found",
-                "auth_source": AUTHENTICATION_SOURCE,
-                "supabase_auth_source": "auth.users",
-                "email": email,
-            }),
-        );
-        return Ok(());
-    }
-
-    let sql = r#"
-        UPDATE auth.users
-        SET
-            encrypted_password = crypt($2, gen_salt('bf')),
-            updated_at = NOW()
-        WHERE lower(email) = lower($1)
-        RETURNING id::text
-        "#;
-    let params = serde_json::json!({ "email": email, "password": "[redacted]" });
-    log_db_query("auth.users", sql, params.clone());
-    let updated = sqlx::query(sql)
-        .bind(email)
-        .bind(new_password)
-        .fetch_optional(&mut *db)
-        .await
-        .map_err(|error| api_query_error("auth.users", sql, params, error))?;
-
-    if updated.is_none() {
-        log_auth_event(
-            "auth_password_sync_skipped",
-            serde_json::json!({
-                "reason": "supabase_auth_user_not_found",
-                "auth_source": AUTHENTICATION_SOURCE,
-                "supabase_auth_source": "auth.users",
-                "email": email,
-            }),
-        );
-        return Err((
-            StatusCode::BAD_GATEWAY,
-            Json(serde_json::json!({
-                "error": "Supabase auth password sync failed",
-                "message": "Supabase auth user was not found for this email.",
-                "email": email,
-            })),
-        ));
-    } else {
-        log_auth_event(
-            "auth_password_sync_succeeded",
-            serde_json::json!({
-                "auth_source": AUTHENTICATION_SOURCE,
-                "supabase_auth_source": "auth.users",
-                "email": email,
-            }),
-        );
-    }
-
-    Ok(())
 }
 
 fn api_query_error(
