@@ -575,6 +575,8 @@ pub async fn change_password(
     Path(account_id): Path<String>,
     Json(payload): Json<ChangePasswordPayload>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    let account_id = account_id.trim().to_string();
+
     log_auth_event(
         "auth_password_change_started",
         serde_json::json!({
@@ -584,6 +586,20 @@ pub async fn change_password(
             "new_password_length": payload.new_password.len(),
         }),
     );
+
+    if account_id.is_empty() {
+        log_auth_event(
+            "auth_password_change_rejected",
+            serde_json::json!({
+                "reason": "missing_account_id",
+                "auth_source": AUTHENTICATION_SOURCE,
+            }),
+        );
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "User ID is required." })),
+        ));
+    }
 
     if payload.new_password.len() < 8 {
         log_auth_event(
@@ -641,6 +657,7 @@ pub async fn change_password(
             "email": account_email,
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
+            "account_id_matches_loaded_user": true,
             "password_storage": password_storage_kind(&current_hash),
             "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
         }),
@@ -785,6 +802,7 @@ pub async fn change_password(
                 "rows_affected": updated.rows_affected(),
             }),
         );
+        let _ = tx.rollback().await;
         return Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "User not found" })),
