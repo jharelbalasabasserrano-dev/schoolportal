@@ -92,6 +92,12 @@ fn password_storage_kind(stored: &str) -> &'static str {
     }
 }
 
+fn matching_password_account_index(accounts: &[UserAccount], candidate: &str) -> Option<usize> {
+    accounts
+        .iter()
+        .position(|account| verify_password(&account.password, candidate))
+}
+
 fn log_auth_event(event: &str, fields: serde_json::Value) {
     eprintln!(
         "{}",
@@ -423,17 +429,16 @@ pub async fn login(
             CASE WHEN email = $1 THEN 0 ELSE 1 END,
             updated_at DESC,
             created_at DESC
-        LIMIT 1
         "#;
     let params = serde_json::json!({ "email": email });
     log_db_query("app_users", sql, params.clone());
-    let row = sqlx::query(sql)
+    let rows = sqlx::query(sql)
         .bind(&email)
-        .fetch_optional(&state.db)
+        .fetch_all(&state.db)
         .await
         .map_err(|error| api_query_error("app_users", sql, params, error))?;
 
-    let Some(row) = row else {
+    if rows.is_empty() {
         log_auth_event(
             "auth_login_rejected",
             serde_json::json!({
@@ -448,18 +453,24 @@ pub async fn login(
                 "code": "invalid_credentials"
             })),
         ));
-    };
+    }
 
-    let matched_count: i64 = row.get("matched_count");
-    let account = UserAccount {
-        id: row.get("id"),
-        name: row.get("name"),
-        email: row.get("email"),
-        password: row.get("password"),
-        role: row.get("role"),
-        department: row.get("department"),
-        avatar_url: row.get("avatar_url"),
-    };
+    let matched_count: i64 = rows
+        .first()
+        .map(|row| row.get("matched_count"))
+        .unwrap_or(rows.len() as i64);
+    let mut accounts = Vec::with_capacity(rows.len());
+    for row in rows {
+        accounts.push(UserAccount {
+            id: row.get("id"),
+            name: row.get("name"),
+            email: row.get("email"),
+            password: row.get("password"),
+            role: row.get("role"),
+            department: row.get("department"),
+            avatar_url: row.get("avatar_url"),
+        });
+    }
 
     if matched_count > 1 {
         log_auth_event(
@@ -467,19 +478,25 @@ pub async fn login(
             serde_json::json!({
                 "email": email,
                 "matched_count": matched_count,
-                "selected_user_id": account.id,
+                "candidate_user_ids": accounts.iter().map(|account| account.id.as_str()).collect::<Vec<_>>(),
             }),
         );
     }
 
-    if !verify_password(&account.password, &payload.password) {
+    let matching_index = matching_password_account_index(&accounts, &payload.password);
+
+    let Some(matching_index) = matching_index else {
         log_auth_event(
             "auth_login_rejected",
             serde_json::json!({
                 "reason": "password_mismatch",
                 "email": email,
-                "user_id": account.id,
-                "password_storage": password_storage_kind(&account.password),
+                "matched_count": matched_count,
+                "candidate_password_storage": accounts.iter().map(|account| serde_json::json!({
+                    "user_id": account.id,
+                    "role": account.role,
+                    "password_storage": password_storage_kind(&account.password),
+                })).collect::<Vec<_>>(),
             }),
         );
         return Err((
@@ -489,7 +506,9 @@ pub async fn login(
                 "code": "invalid_credentials"
             })),
         ));
-    }
+    };
+
+    let account = accounts.swap_remove(matching_index);
 
     if !is_argon2_hash(&account.password) {
         let upgraded_hash = hash_password(&payload.password)?;
@@ -522,6 +541,7 @@ pub async fn login(
             "user_id": account.id,
             "role": account.role,
             "password_storage": password_storage_kind(&account.password),
+            "matched_count": matched_count,
         }),
     );
 
@@ -533,14 +553,31 @@ pub async fn change_password(
     Path(account_id): Path<String>,
     Json(payload): Json<ChangePasswordPayload>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    log_auth_event(
+        "auth_password_change_started",
+        serde_json::json!({
+            "user_id": account_id,
+            "current_password_present": !payload.current_password.is_empty(),
+            "new_password_length": payload.new_password.len(),
+        }),
+    );
+
     if payload.new_password.len() < 8 {
+        log_auth_event(
+            "auth_password_change_rejected",
+            serde_json::json!({
+                "reason": "new_password_too_short",
+                "user_id": account_id,
+                "new_password_length": payload.new_password.len(),
+            }),
+        );
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": "New password must be at least 8 characters." })),
         ));
     }
 
-    let sql = "SELECT email, COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
+    let sql = "SELECT email, role, COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
     log_db_query("app_users", sql, serde_json::json!({ "id": account_id }));
     let row = sqlx::query(sql)
         .bind(&account_id)
@@ -556,6 +593,13 @@ pub async fn change_password(
         })?;
 
     let Some(row) = row else {
+        log_auth_event(
+            "auth_password_change_rejected",
+            serde_json::json!({
+                "reason": "user_not_found",
+                "user_id": account_id,
+            }),
+        );
         return Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "User not found" })),
@@ -564,7 +608,28 @@ pub async fn change_password(
 
     let current_hash: String = row.get("password_hash");
     let account_email: String = row.get("email");
+    let account_role: String = row.get("role");
+    log_auth_event(
+        "auth_password_change_user_loaded",
+        serde_json::json!({
+            "user_id": account_id,
+            "email": account_email,
+            "role": account_role,
+            "password_storage": password_storage_kind(&current_hash),
+        }),
+    );
+
     if !verify_password(&current_hash, &payload.current_password) {
+        log_auth_event(
+            "auth_password_change_rejected",
+            serde_json::json!({
+                "reason": "current_password_mismatch",
+                "user_id": account_id,
+                "email": account_email,
+                "role": account_role,
+                "password_storage": password_storage_kind(&current_hash),
+            }),
+        );
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({ "error": "Current password is incorrect." })),
@@ -572,6 +637,15 @@ pub async fn change_password(
     }
 
     if payload.current_password == payload.new_password {
+        log_auth_event(
+            "auth_password_change_rejected",
+            serde_json::json!({
+                "reason": "new_password_same_as_current",
+                "user_id": account_id,
+                "email": account_email,
+                "role": account_role,
+            }),
+        );
         return Err((
             StatusCode::BAD_REQUEST,
             Json(
@@ -581,6 +655,15 @@ pub async fn change_password(
     }
 
     let next_hash = hash_password(&payload.new_password)?;
+    log_auth_event(
+        "auth_password_change_hash_created",
+        serde_json::json!({
+            "user_id": account_id,
+            "email": account_email,
+            "role": account_role,
+            "password_storage": password_storage_kind(&next_hash),
+        }),
+    );
     let update_sql = "UPDATE app_users SET password_hash = $2, updated_at = NOW() WHERE id = $1";
     log_db_query(
         "app_users",
@@ -602,13 +685,46 @@ pub async fn change_password(
         })?;
 
     if updated.rows_affected() != 1 {
+        log_auth_event(
+            "auth_password_change_failed",
+            serde_json::json!({
+                "reason": "unexpected_rows_affected",
+                "user_id": account_id,
+                "email": account_email,
+                "role": account_role,
+                "rows_affected": updated.rows_affected(),
+            }),
+        );
         return Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "User not found" })),
         ));
     }
 
-    sync_supabase_auth_password(&state.db, &account_email, &payload.new_password).await?;
+    log_auth_event(
+        "auth_password_change_app_users_updated",
+        serde_json::json!({
+            "user_id": account_id,
+            "email": account_email,
+            "role": account_role,
+            "rows_affected": updated.rows_affected(),
+        }),
+    );
+
+    if let Err((status, body)) =
+        sync_supabase_auth_password(&state.db, &account_email, &payload.new_password).await
+    {
+        log_auth_event(
+            "auth_password_sync_failed_non_fatal",
+            serde_json::json!({
+                "user_id": account_id,
+                "email": account_email,
+                "role": account_role,
+                "status": status.as_u16(),
+                "error": body.0,
+            }),
+        );
+    }
 
     let verify_sql = r#"
         SELECT
@@ -650,11 +766,35 @@ pub async fn change_password(
     if !verify_password(&saved_account.password, &payload.new_password)
         || verify_password(&saved_account.password, &payload.current_password)
     {
+        log_auth_event(
+            "auth_password_change_failed",
+            serde_json::json!({
+                "reason": "post_update_verification_failed",
+                "user_id": account_id,
+                "email": saved_account.email,
+                "role": saved_account.role,
+                "new_password_verifies": verify_password(&saved_account.password, &payload.new_password),
+                "old_password_still_verifies": verify_password(&saved_account.password, &payload.current_password),
+                "password_storage": password_storage_kind(&saved_account.password),
+            }),
+        );
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": "Password update could not be verified." })),
         ));
     }
+
+    log_auth_event(
+        "auth_password_change_succeeded",
+        serde_json::json!({
+            "user_id": saved_account.id,
+            "email": saved_account.email,
+            "role": saved_account.role,
+            "password_storage": password_storage_kind(&saved_account.password),
+            "new_password_verifies": true,
+            "old_password_still_verifies": false,
+        }),
+    );
 
     Ok(Json(public_user(saved_account)))
 }
@@ -1635,10 +1775,7 @@ fn api_error(error: sqlx::Error) -> (StatusCode, Json<serde_json::Value>) {
 fn database_error_title(error: &sqlx::Error) -> &'static str {
     match error {
         sqlx::Error::Database(database_error)
-            if matches!(
-                database_error.code().as_deref(),
-                Some("42703" | "42P01")
-            ) =>
+            if matches!(database_error.code().as_deref(), Some("42703" | "42P01")) =>
         {
             "Database schema mismatch"
         }
@@ -1702,12 +1839,18 @@ fn normalize_request_purpose_payload(payload: &mut serde_json::Value) {
     if let Some(object) = payload.as_object_mut() {
         if purpose.is_none() {
             if let Some(remarks) = &remarks {
-                object.insert("purpose".to_string(), serde_json::Value::String(remarks.clone()));
+                object.insert(
+                    "purpose".to_string(),
+                    serde_json::Value::String(remarks.clone()),
+                );
             }
         }
         if remarks.is_none() {
             if let Some(purpose) = &purpose {
-                object.insert("remarks".to_string(), serde_json::Value::String(purpose.clone()));
+                object.insert(
+                    "remarks".to_string(),
+                    serde_json::Value::String(purpose.clone()),
+                );
             }
         }
     }
@@ -1722,7 +1865,9 @@ async fn sync_supabase_auth_password(
     let auth_users_table: Option<String> = sqlx::query(auth_schema_sql)
         .fetch_one(db)
         .await
-        .map_err(|error| api_query_error("auth.users", auth_schema_sql, serde_json::json!({}), error))?
+        .map_err(|error| {
+            api_query_error("auth.users", auth_schema_sql, serde_json::json!({}), error)
+        })?
         .get("auth_users_table");
 
     if auth_users_table.is_none() {
@@ -1794,4 +1939,45 @@ fn api_query_error(
             "details": db_error_details(&error),
         })),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_account(id: &str, email: &str, password: &str, role: &str) -> UserAccount {
+        UserAccount {
+            id: id.to_string(),
+            name: id.to_string(),
+            email: email.to_string(),
+            password: password.to_string(),
+            role: role.to_string(),
+            department: String::new(),
+            avatar_url: None,
+        }
+    }
+
+    #[test]
+    fn password_change_hash_accepts_new_password_and_rejects_old_password() {
+        let old_password = "password123";
+        let new_password = "better-password-123";
+        let next_hash = hash_password(new_password).expect("password should hash");
+
+        assert!(is_argon2_hash(&next_hash));
+        assert!(verify_password(&next_hash, new_password));
+        assert!(!verify_password(&next_hash, old_password));
+    }
+
+    #[test]
+    fn login_candidate_selection_checks_all_case_insensitive_email_matches() {
+        let new_hash = hash_password("new-password-123").expect("password should hash");
+        let accounts = vec![
+            test_account("older", "USER@example.edu", "old-password-123", "student"),
+            test_account("changed", "user@example.edu", &new_hash, "hr"),
+        ];
+
+        let matching_index = matching_password_account_index(&accounts, "new-password-123");
+
+        assert_eq!(matching_index, Some(1));
+    }
 }
