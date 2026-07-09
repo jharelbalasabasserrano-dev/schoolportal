@@ -592,7 +592,7 @@ pub async fn login(
             upgrade_sql,
             serde_json::json!({ "id": account.id, "password_hash": "[redacted]" }),
         );
-        sqlx::query(upgrade_sql)
+        let upgraded = sqlx::query(upgrade_sql)
             .bind(&account.id)
             .bind(upgraded_hash)
             .execute(&state.db)
@@ -605,6 +605,27 @@ pub async fn login(
                     error,
                 )
             })?;
+
+        if upgraded.rows_affected() != 1 {
+            log_auth_event(
+                "auth_password_upgrade_failed",
+                serde_json::json!({
+                    "reason": "unexpected_rows_affected",
+                    "auth_source": AUTHENTICATION_SOURCE,
+                    "user_id": account.id,
+                    "email": account.email,
+                    "role": account.role,
+                    "rows_affected": upgraded.rows_affected(),
+                }),
+            );
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Password hash upgrade failed",
+                    "code": "password_upgrade_failed"
+                })),
+            ));
+        }
     }
 
     log_auth_event(
@@ -1200,11 +1221,15 @@ pub async fn sync_bootstrap_data(
                     "incoming_password_present": !account.password.trim().is_empty(),
                 }),
             );
-            existing.clone()
+            if existing.trim().is_empty() {
+                hash_password(&Uuid::new_v4().to_string())?
+            } else {
+                hash_password_if_needed(existing)?
+            }
         } else if account.password.trim().is_empty() {
             hash_password(&Uuid::new_v4().to_string())?
         } else {
-            hash_password_if_needed(&account.password)?
+            hash_password(&account.password)?
         };
         let sql = r#"
             INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
@@ -1529,7 +1554,7 @@ pub async fn create_account(
 
     ensure_email_available(&state.db, &account.email, Some(&account.id)).await?;
 
-    let password_hash = hash_password_if_needed(&account.password)?;
+    let password_hash = hash_password(&account.password)?;
     let sql = r#"
         INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1545,7 +1570,7 @@ pub async fn create_account(
             id,
             name,
             email,
-            '' AS password,
+            COALESCE(password_hash, '') AS password,
             role,
             department,
             avatar_url
@@ -1571,6 +1596,27 @@ pub async fn create_account(
         .fetch_one(&state.db)
         .await
         .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    if !is_argon2_hash(&saved.password) || !verify_password(&saved.password, &account.password) {
+        log_auth_event(
+            "auth_account_create_password_verification_failed",
+            serde_json::json!({
+                "user_id": saved.id,
+                "email": saved.email,
+                "role": saved.role,
+                "auth_source": AUTHENTICATION_SOURCE,
+                "password_storage": password_storage_kind(&saved.password),
+                "password_hash_fingerprint": password_hash_fingerprint(&saved.password),
+            }),
+        );
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Created user password could not be verified.",
+                "code": "created_password_verification_failed",
+            })),
+        ));
+    }
 
     Ok(Json(public_user(saved)))
 }
@@ -2289,5 +2335,15 @@ mod tests {
                 "unrelated password should not verify for role {role}"
             );
         }
+    }
+
+    #[test]
+    fn default_temporary_password_hashes_to_argon2() {
+        let default_password = "password123";
+        let password_hash = hash_password(default_password).expect("password should hash");
+
+        assert!(is_argon2_hash(&password_hash));
+        assert_ne!(password_hash, default_password);
+        assert!(verify_password(&password_hash, default_password));
     }
 }

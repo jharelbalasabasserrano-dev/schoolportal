@@ -71,9 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
     addAccount: (account) => {
-      const next = { ...account, id: `${account.role}-${Date.now()}` }
+      const next = { ...account, id: `${account.role}-${Date.now()}`, password: '' }
+      const createPayload = { ...next, password: account.password }
       setAccounts((current) => [...current, next])
-      createAccountInDatabase(next)
+      createAccountInDatabase(createPayload)
         .then((saved) => {
           setAccounts((current) => current.map((item) => item.id === next.id ? saved : item))
         })

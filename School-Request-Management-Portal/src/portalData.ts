@@ -241,6 +241,7 @@ export const storageKeys = {
   suppliers: 'eduportal-suppliers-v1',
   announcements: 'eduportal-announcements-v1',
 }
+export const defaultTemporaryPassword = 'password123'
 export const facilities = [
   ['Room 301 - Main Building', 'Classroom'],
   ['Room 405 - Main Building', 'Classroom'],
@@ -253,13 +254,13 @@ export const facilities = [
 ]
 
 export const initialUsers: User[] = [
-  { id: 'stu-01', name: 'Maria Clara Santos', email: 'maria.santos@student.edu', password: 'password123', role: 'student', department: 'BTVTED – Major in Computer Programming - 3rd Year' },
-  { id: 'reg-01', name: 'Atty. Ramon Villanueva', email: 'registrar@edu.portal', password: 'password123', role: 'registrar', department: 'Registrar Office' },
-  { id: 'sup-01', name: 'Liza Mendoza', email: 'supply@edu.portal', password: 'password123', role: 'supply', department: 'Supply Office' },
-  { id: 'fac-01', name: 'Facilities Office', email: 'facilities@edu.portal', password: 'password123', role: 'adminOffice', department: 'Admin Office' },
-  { id: 'hr-01', name: 'HR Office', email: 'hr@edu.portal', password: 'password123', role: 'hr', department: 'HR Office' },
-  { id: 'emp-01', name: 'Prof. Joseph Reyes', email: 'j.reyes@edu.portal', password: 'password123', role: 'employee', department: 'Senior High School' },
-  { id: 'sys-01', name: 'Dr. Helena Cabrera', email: 'admin@edu.portal', password: 'password123', role: 'admin', department: 'ICT Office' },
+  { id: 'stu-01', name: 'Maria Clara Santos', email: 'maria.santos@student.edu', password: '', role: 'student', department: 'BTVTED – Major in Computer Programming - 3rd Year' },
+  { id: 'reg-01', name: 'Atty. Ramon Villanueva', email: 'registrar@edu.portal', password: '', role: 'registrar', department: 'Registrar Office' },
+  { id: 'sup-01', name: 'Liza Mendoza', email: 'supply@edu.portal', password: '', role: 'supply', department: 'Supply Office' },
+  { id: 'fac-01', name: 'Facilities Office', email: 'facilities@edu.portal', password: '', role: 'adminOffice', department: 'Admin Office' },
+  { id: 'hr-01', name: 'HR Office', email: 'hr@edu.portal', password: '', role: 'hr', department: 'HR Office' },
+  { id: 'emp-01', name: 'Prof. Joseph Reyes', email: 'j.reyes@edu.portal', password: '', role: 'employee', department: 'Senior High School' },
+  { id: 'sys-01', name: 'Dr. Helena Cabrera', email: 'admin@edu.portal', password: '', role: 'admin', department: 'ICT Office' },
 ]
 
 export const initialRequests: PortalRequest[] = [

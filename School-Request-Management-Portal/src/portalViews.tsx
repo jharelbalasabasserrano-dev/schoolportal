@@ -41,7 +41,7 @@ import HrDashboard from './HrDashboard'
 import RegistrarDashboard from './RegistrarDashboard'
 import SupplyDashboard from './SupplyDashboard'
 import SystemAdminDashboard from './SystemAdminDashboard'
-import { academicProgramOptions, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
+import { academicProgramOptions, defaultTemporaryPassword, documentKinds, facilities, facilityStatuses, hrLeaveStatuses, initialAnnouncements, initialCategories, initialInventory, initialMessages, initialRequests, initialStockMovements, initialSuppliers, leaveKinds, messageAttachmentCache, registrarStatuses, roleMeta, storageKeys, supplyStatuses, type Announcement, type FacilityPortalRequest, type FacilityStatus, type HRLeavePortalRequest, type HRLeaveStatus, type LeaveRequestKind, type Message, type MessageAttachment, type PortalRequest, type RegistrarPortalRequest, type RegistrarRequestKind, type RegistrarStatus, type RequestKind, type Role, type StockMovement, type SupplierInfo, type SupplyCategory, type SupplyItem, type SupplyPortalRequest, type SupplyStatus, type User } from './portalData'
 import { canPrintAttachment, createLeaveReferenceNumber, formatDate, formatFileSize, formatProgramWithMajor, formatShortDate, getAttendeeCount, getCivilServiceLeaveLabel, getCivilServiceLeaveTypes, getCopiesForRequest, getCounts, getDateDuration, getDocumentTitle, getExitClearanceDocumentOptions, getExitClearanceOffices, getExitClearanceReferenceNumber, getFacilityPrintVenue, getFacilityReferenceNumber, getFacilityType, getLeaveDateRange, getLeaveDurationText, getLeaveReferenceNumber, getLeaveTypeLabel, getLeaveTypeRows, getMessageAttachmentData, getNavItems, getRegistrarReferenceNumber, getRegistrarRequestLabel, getStatusCounts, getSupplyItems, getTopFacilities, getVisibleRequests, hasFacilityConflict, isFacilityRequest, isHRLeaveRequest, isLeaveApplication, isRegistrarRequest, isSupplyRequest, normalizeRequestStatus, notificationItems, printDocumentRequestForm, printFacilityBookingForm, printLeaveApplicationForm, printMessageAttachment, sortRequestsNewestFirst, stripAttachmentDataForStorage, type NotificationItem } from './portalHelpers'
 import { readStored, useAuth } from './portalAuth'
 import { createInitialBootstrapData, createMessage, createPortalRequest, hasBootstrapRows, loadBootstrapData, markMessageRead, refreshBootstrapData, syncBootstrapData } from './portalApi'
@@ -4016,21 +4016,30 @@ function UsersModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('employee')
   const [department, setDepartment] = useState('')
+  const [password, setPassword] = useState(defaultTemporaryPassword)
+  const [error, setError] = useState('')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!name.trim() || !email.trim()) return
-    addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password: 'password123', role, department: department.trim() || roleMeta[role].label })
+    if (password.length < 8) {
+      setError('Enter a temporary password with at least 8 characters.')
+      return
+    }
+    addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password, role, department: department.trim() || roleMeta[role].label })
     setName('')
     setEmail('')
     setDepartment('')
+    setPassword(defaultTemporaryPassword)
+    setError('')
   }
 
   return (
     <Modal title="Manage Users" onClose={onClose} wide>
-      <form onSubmit={submit} className="mb-5 grid gap-3 rounded-lg border border-[#e7e1db] p-4 lg:grid-cols-5">
+      <form onSubmit={submit} className="mb-5 grid gap-3 rounded-lg border border-[#e7e1db] p-4 lg:grid-cols-6">
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
         <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
+        <input value={password} onChange={(event) => { setPassword(event.target.value); if (error) setError('') }} type="password" autoComplete="new-password" placeholder="Temporary password" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
         <select value={role} onChange={(event) => setRole(event.target.value as Role)} className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]">
           {Object.entries(roleMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
         </select>
@@ -4039,6 +4048,7 @@ function UsersModal({ onClose }: { onClose: () => void }) {
           <Plus size={16} />
           Add User
         </button>
+        {error && <p className="lg:col-span-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 font-medium text-red-700">{error}</p>}
       </form>
       <div className="max-h-[420px] overflow-auto rounded-lg border border-[#e7e1db]">
         <table className="w-full min-w-[760px] text-left">

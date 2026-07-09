@@ -1,6 +1,6 @@
 import { CheckCircle2, FileText, Plus, Save, Search, ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { facilityStatuses, hrLeaveStatuses, registrarStatuses, roleMeta, supplyStatuses, type PortalRequest, type Role, type User } from './portalData'
+import { defaultTemporaryPassword, facilityStatuses, hrLeaveStatuses, registrarStatuses, roleMeta, supplyStatuses, type PortalRequest, type Role, type User } from './portalData'
 import { formatShortDate, getAdminActivityLogs, getAdminRequestType, getAdminStats, getAdminTypeRows, getAdminTypeTone, getCounts, getSystemAdminRequests } from './portalHelpers'
 import { useAuth } from './portalAuth'
 import { Avatar, StatusPill } from './portalComponents'
@@ -91,6 +91,8 @@ function AdminOverview({ accounts, requests, stats }: { accounts: User[]; reques
   )
 }
 
+type AdminUserFormPayload = Omit<User, 'id' | 'password'> & { password?: string }
+
 function AdminUsersView() {
   const { accounts, addAccount, deleteAccount, updateAccount } = useAuth()
   const [formOpen, setFormOpen] = useState(false)
@@ -159,7 +161,7 @@ function AdminUsersView() {
           onClose={() => setFormOpen(false)}
           onSubmit={(payload) => {
             if (editing) updateAccount(editing.id, payload)
-            else addAccount({ ...payload, password: 'password123' })
+            else addAccount({ ...payload, password: payload.password ?? '' })
             setFormOpen(false)
           }}
         />
@@ -168,16 +170,22 @@ function AdminUsersView() {
   )
 }
 
-function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: Omit<User, 'id' | 'password'>) => void }) {
+function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: AdminUserFormPayload) => void }) {
   const [name, setName] = useState(account?.name ?? '')
   const [email, setEmail] = useState(account?.email ?? '')
   const [role, setRole] = useState<Role>(account?.role ?? 'student')
   const [department, setDepartment] = useState(account?.department ?? '')
+  const [password, setPassword] = useState(account ? '' : defaultTemporaryPassword)
+  const [error, setError] = useState('')
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!name.trim() || !email.trim()) return
-    onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), role, department: department.trim() || roleMeta[role].label })
+    if (!account && password.length < 8) {
+      setError('Enter a temporary password with at least 8 characters.')
+      return
+    }
+    onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), password: account ? undefined : password, role, department: department.trim() || roleMeta[role].label })
   }
 
   return (
@@ -191,6 +199,12 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
           <span className="mb-2 block font-medium">Email</span>
           <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="e.g. juan@student.edu" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
         </label>
+        {!account && (
+          <label className="block">
+            <span className="mb-2 block font-medium">Temporary password</span>
+            <input value={password} onChange={(event) => { setPassword(event.target.value); if (error) setError('') }} type="password" autoComplete="new-password" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
+          </label>
+        )}
         <div className="grid gap-5 md:grid-cols-2">
           <label>
             <span className="mb-2 block font-medium">Role</span>
@@ -203,7 +217,7 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
             <input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. College of Science" className="h-14 w-full rounded-md border border-[#d9d3cc] px-4 text-lg outline-none focus:border-[#228b22]" />
           </label>
         </div>
-        <p className="rounded-md border border-[#e7e1db] bg-stone-50 p-4 text-slate-600">Default password will be <span className="font-bold">password123</span>.</p>
+        {error && <p className="rounded-md border border-red-200 bg-red-50 p-4 font-medium text-red-700">{error}</p>}
         <div className="flex justify-end gap-3 border-t border-[#e7e1db] pt-5">
           <button type="button" onClick={onClose} className="h-12 rounded-md border border-[#d9d3cc] px-6 font-semibold">Cancel</button>
           <button className="h-12 rounded-md bg-[#228b22] px-6 font-semibold text-white">{account ? 'Save user' : 'Create user'}</button>
