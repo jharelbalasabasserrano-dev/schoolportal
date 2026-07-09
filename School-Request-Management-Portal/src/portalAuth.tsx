@@ -108,15 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.warn(error)
         const message = error instanceof Error ? error.message : ''
-        if (!message.startsWith('Cannot reach backend')) return { ok: false, message }
+        return { ok: false, message: message || 'Invalid email or password' }
       }
-
-      const match = accounts.find((account) => account.email === normalizedEmail && account.password === password)
-      if (!match) return { ok: false, message: 'Invalid email or password' }
-      if (remember) localStorage.setItem(storageKeys.user, match.email)
-      else localStorage.removeItem(storageKeys.user)
-      setUser(match)
-      return { ok: true }
     },
     logout: () => {
       localStorage.removeItem(storageKeys.user)

@@ -123,6 +123,59 @@ fn log_auth_event(event: &str, fields: serde_json::Value) {
     );
 }
 
+async fn ensure_email_available(
+    db: &PgPool,
+    email: &str,
+    allowed_user_id: Option<&str>,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let normalized_email = email.trim().to_lowercase();
+    let sql = r#"
+        SELECT id
+        FROM app_users
+        WHERE lower(email) = lower($1)
+          AND ($2::text IS NULL OR id <> $2)
+        LIMIT 1
+        "#;
+    log_db_query(
+        "app_users",
+        sql,
+        serde_json::json!({ "email": normalized_email, "allowed_user_id": allowed_user_id }),
+    );
+    let existing = sqlx::query(sql)
+        .bind(&normalized_email)
+        .bind(allowed_user_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                sql,
+                serde_json::json!({ "email": normalized_email, "allowed_user_id": allowed_user_id }),
+                error,
+            )
+        })?;
+
+    if existing.is_some() {
+        log_auth_event(
+            "auth_email_duplicate_rejected",
+            serde_json::json!({
+                "email": normalized_email,
+                "auth_source": AUTHENTICATION_SOURCE,
+                "allowed_user_id": allowed_user_id,
+            }),
+        );
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "Another user already uses this email.",
+                "code": "duplicate_email",
+            })),
+        ));
+    }
+
+    Ok(())
+}
+
 fn request_message_from_row(row: PgRow) -> RequestMessage {
     let attachment_storage_path: Option<String> = row.get("attachment_storage_path");
     let attachment_name: Option<String> = row.get("attachment_name");
@@ -761,6 +814,13 @@ pub async fn change_password(
                 }).collect::<Vec<_>>(),
             }),
         );
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "Duplicate users found for this email. Password change was not applied.",
+                "code": "duplicate_email",
+            })),
+        ));
     }
 
     let mut tx = state.db.begin().await.map_err(api_error)?;
@@ -931,6 +991,85 @@ pub async fn change_password(
     }
 
     tx.commit().await.map_err(api_error)?;
+
+    let login_probe_sql = r#"
+        SELECT
+            id,
+            email,
+            COALESCE(password_hash, '') AS password_hash,
+            COUNT(*) OVER() AS matched_count
+        FROM app_users
+        WHERE lower(email) = lower($1)
+        ORDER BY
+            CASE WHEN email = $1 THEN 0 ELSE 1 END,
+            updated_at DESC,
+            created_at DESC
+        "#;
+    log_db_query(
+        "app_users",
+        login_probe_sql,
+        serde_json::json!({ "email": saved_account.email }),
+    );
+    let login_probe_rows = sqlx::query(login_probe_sql)
+        .bind(&saved_account.email)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                login_probe_sql,
+                serde_json::json!({ "email": saved_account.email }),
+                error,
+            )
+        })?;
+    let login_probe_matched_count = login_probe_rows
+        .first()
+        .map(|row| row.get::<i64, _>("matched_count"))
+        .unwrap_or(0);
+    let login_probe_account = login_probe_rows.iter().find(|row| {
+        let id: String = row.get("id");
+        id == saved_account.id
+    });
+    let login_probe_hash = login_probe_account.map(|row| row.get::<String, _>("password_hash"));
+    let login_probe_new_password_verifies = login_probe_hash
+        .as_deref()
+        .map(|hash| verify_password(hash, &payload.new_password))
+        .unwrap_or(false);
+    let login_probe_old_password_still_verifies = login_probe_hash
+        .as_deref()
+        .map(|hash| verify_password(hash, &payload.current_password))
+        .unwrap_or(false);
+
+    log_auth_event(
+        "auth_password_change_login_probe",
+        serde_json::json!({
+            "user_id": saved_account.id,
+            "email": saved_account.email,
+            "role": saved_account.role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "matched_count": login_probe_matched_count,
+            "login_probe_found_user": login_probe_hash.is_some(),
+            "password_hash_fingerprint": login_probe_hash
+                .as_deref()
+                .map(password_hash_fingerprint)
+                .unwrap_or_else(|| "missing".to_string()),
+            "new_password_verifies": login_probe_new_password_verifies,
+            "old_password_still_verifies": login_probe_old_password_still_verifies,
+        }),
+    );
+
+    if login_probe_matched_count != 1
+        || !login_probe_new_password_verifies
+        || login_probe_old_password_still_verifies
+    {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Password update was saved but login verification failed.",
+                "code": "post_commit_login_verification_failed",
+            })),
+        ));
+    }
 
     log_auth_event(
         "auth_password_change_succeeded",
@@ -1370,6 +1509,8 @@ pub async fn create_account(
         ));
     }
 
+    ensure_email_available(&state.db, &account.email, Some(&account.id)).await?;
+
     let password_hash = hash_password_if_needed(&account.password)?;
     let sql = r#"
         INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
@@ -1421,6 +1562,8 @@ pub async fn update_account(
     Path(account_id): Path<String>,
     Json(account): Json<UpdateUserAccount>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
+    ensure_email_available(&state.db, &account.email, Some(&account_id)).await?;
+
     let sql = r#"
         UPDATE app_users
         SET
