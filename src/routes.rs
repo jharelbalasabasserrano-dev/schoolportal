@@ -18,6 +18,8 @@ use crate::models::{
     SupplierInfo, SupplyCategory, SupplyItem, UpdateUserAccount, UserAccount,
 };
 
+const AUTHENTICATION_SOURCE: &str = "app_users.password_hash";
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
@@ -400,6 +402,7 @@ pub async fn login(
             "auth_login_rejected",
             serde_json::json!({
                 "reason": "missing_credentials",
+                "auth_source": AUTHENTICATION_SOURCE,
                 "email_present": !email.is_empty(),
                 "password_present": !payload.password.is_empty(),
             }),
@@ -443,6 +446,7 @@ pub async fn login(
             "auth_login_rejected",
             serde_json::json!({
                 "reason": "user_not_found",
+                "auth_source": AUTHENTICATION_SOURCE,
                 "email": email,
             }),
         );
@@ -477,6 +481,7 @@ pub async fn login(
             "auth_login_email_duplicate",
             serde_json::json!({
                 "email": email,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "matched_count": matched_count,
                 "candidate_user_ids": accounts.iter().map(|account| account.id.as_str()).collect::<Vec<_>>(),
             }),
@@ -490,6 +495,7 @@ pub async fn login(
             "auth_login_rejected",
             serde_json::json!({
                 "reason": "password_mismatch",
+                "auth_source": AUTHENTICATION_SOURCE,
                 "email": email,
                 "matched_count": matched_count,
                 "candidate_password_storage": accounts.iter().map(|account| serde_json::json!({
@@ -538,6 +544,7 @@ pub async fn login(
         "auth_login_succeeded",
         serde_json::json!({
             "email": email,
+            "auth_source": AUTHENTICATION_SOURCE,
             "user_id": account.id,
             "role": account.role,
             "password_storage": password_storage_kind(&account.password),
@@ -557,6 +564,7 @@ pub async fn change_password(
         "auth_password_change_started",
         serde_json::json!({
             "user_id": account_id,
+            "auth_source": AUTHENTICATION_SOURCE,
             "current_password_present": !payload.current_password.is_empty(),
             "new_password_length": payload.new_password.len(),
         }),
@@ -568,6 +576,7 @@ pub async fn change_password(
             serde_json::json!({
                 "reason": "new_password_too_short",
                 "user_id": account_id,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "new_password_length": payload.new_password.len(),
             }),
         );
@@ -598,6 +607,7 @@ pub async fn change_password(
             serde_json::json!({
                 "reason": "user_not_found",
                 "user_id": account_id,
+                "auth_source": AUTHENTICATION_SOURCE,
             }),
         );
         return Err((
@@ -615,6 +625,7 @@ pub async fn change_password(
             "user_id": account_id,
             "email": account_email,
             "role": account_role,
+            "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&current_hash),
         }),
     );
@@ -627,6 +638,7 @@ pub async fn change_password(
                 "user_id": account_id,
                 "email": account_email,
                 "role": account_role,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "password_storage": password_storage_kind(&current_hash),
             }),
         );
@@ -644,6 +656,7 @@ pub async fn change_password(
                 "user_id": account_id,
                 "email": account_email,
                 "role": account_role,
+                "auth_source": AUTHENTICATION_SOURCE,
             }),
         );
         return Err((
@@ -661,6 +674,7 @@ pub async fn change_password(
             "user_id": account_id,
             "email": account_email,
             "role": account_role,
+            "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&next_hash),
         }),
     );
@@ -692,6 +706,7 @@ pub async fn change_password(
                 "user_id": account_id,
                 "email": account_email,
                 "role": account_role,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "rows_affected": updated.rows_affected(),
             }),
         );
@@ -707,6 +722,7 @@ pub async fn change_password(
             "user_id": account_id,
             "email": account_email,
             "role": account_role,
+            "auth_source": AUTHENTICATION_SOURCE,
             "rows_affected": updated.rows_affected(),
         }),
     );
@@ -720,6 +736,7 @@ pub async fn change_password(
                 "user_id": account_id,
                 "email": account_email,
                 "role": account_role,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "status": status.as_u16(),
                 "error": body.0,
             }),
@@ -773,6 +790,7 @@ pub async fn change_password(
                 "user_id": account_id,
                 "email": saved_account.email,
                 "role": saved_account.role,
+                "auth_source": AUTHENTICATION_SOURCE,
                 "new_password_verifies": verify_password(&saved_account.password, &payload.new_password),
                 "old_password_still_verifies": verify_password(&saved_account.password, &payload.current_password),
                 "password_storage": password_storage_kind(&saved_account.password),
@@ -790,6 +808,7 @@ pub async fn change_password(
             "user_id": saved_account.id,
             "email": saved_account.email,
             "role": saved_account.role,
+            "auth_source": AUTHENTICATION_SOURCE,
             "password_storage": password_storage_kind(&saved_account.password),
             "new_password_verifies": true,
             "old_password_still_verifies": false,
@@ -1875,6 +1894,8 @@ async fn sync_supabase_auth_password(
             "auth_password_sync_skipped",
             serde_json::json!({
                 "reason": "auth_users_table_not_found",
+                "auth_source": AUTHENTICATION_SOURCE,
+                "supabase_auth_source": "auth.users",
                 "email": email,
             }),
         );
@@ -1903,6 +1924,17 @@ async fn sync_supabase_auth_password(
             "auth_password_sync_skipped",
             serde_json::json!({
                 "reason": "supabase_auth_user_not_found",
+                "auth_source": AUTHENTICATION_SOURCE,
+                "supabase_auth_source": "auth.users",
+                "email": email,
+            }),
+        );
+    } else {
+        log_auth_event(
+            "auth_password_sync_succeeded",
+            serde_json::json!({
+                "auth_source": AUTHENTICATION_SOURCE,
+                "supabase_auth_source": "auth.users",
                 "email": email,
             }),
         );
@@ -1979,5 +2011,32 @@ mod tests {
         let matching_index = matching_password_account_index(&accounts, "new-password-123");
 
         assert_eq!(matching_index, Some(1));
+    }
+
+    #[test]
+    fn password_hashing_and_verification_are_role_independent() {
+        let roles = [
+            "student",
+            "registrar",
+            "hr",
+            "supply",
+            "adminOffice",
+            "employee",
+            "admin",
+        ];
+
+        for role in roles {
+            let new_password = format!("{role}-new-password-123");
+            let next_hash = hash_password(&new_password).expect("password should hash");
+
+            assert!(
+                verify_password(&next_hash, &new_password),
+                "new password should verify for role {role}"
+            );
+            assert!(
+                !verify_password(&next_hash, "password123"),
+                "old default password should not verify for role {role}"
+            );
+        }
     }
 }
