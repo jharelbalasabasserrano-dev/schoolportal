@@ -4018,20 +4018,28 @@ function UsersModal({ onClose }: { onClose: () => void }) {
   const [department, setDepartment] = useState('')
   const [password, setPassword] = useState(defaultTemporaryPassword)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!name.trim() || !email.trim()) return
     if (password.length < 8) {
       setError('Enter a temporary password with at least 8 characters.')
       return
     }
-    addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password, role, department: department.trim() || roleMeta[role].label })
-    setName('')
-    setEmail('')
-    setDepartment('')
-    setPassword(defaultTemporaryPassword)
+    setSaving(true)
     setError('')
+    try {
+      await addAccount({ name: name.trim(), email: email.trim().toLowerCase(), password, role, department: department.trim() || roleMeta[role].label })
+      setName('')
+      setEmail('')
+      setDepartment('')
+      setPassword(defaultTemporaryPassword)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to add user.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -4044,9 +4052,9 @@ function UsersModal({ onClose }: { onClose: () => void }) {
           {Object.entries(roleMeta).map(([key, meta]) => <option key={key} value={key}>{meta.label}</option>)}
         </select>
         <input value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="Department" className="h-11 rounded-md border border-[#d9d3cc] px-3 outline-none focus:border-[#228b22]" />
-        <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white">
+        <button disabled={saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#228b22] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
           <Plus size={16} />
-          Add User
+          {saving ? 'Saving...' : 'Add User'}
         </button>
         {error && <p className="lg:col-span-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 font-medium text-red-700">{error}</p>}
       </form>

@@ -1,14 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { authenticateAccount, changeAccountPassword, createAccount as createAccountInDatabase, deleteAccount as deleteAccountInDatabase, loadBootstrapData, updateAccount as updateAccountInDatabase } from './portalApi'
-import { initialUsers, storageKeys, type User } from './portalData'
+import { authenticateAccount, changeAccountPassword, createAccount as createAccountInDatabase, deleteAccount as deleteAccountInDatabase, loadBootstrapData, refreshBootstrapData, updateAccount as updateAccountInDatabase } from './portalApi'
+import { storageKeys, type User } from './portalData'
 
 type AuthContextValue = {
   accounts: User[]
   user: User | null
-  addAccount: (account: Omit<User, 'id'>) => void
-  deleteAccount: (id: string) => void
-  updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => void
+  addAccount: (account: Omit<User, 'id'>) => Promise<User>
+  deleteAccount: (id: string) => Promise<void>
+  updateAccount: (id: string, updates: Omit<User, 'id' | 'password'>) => Promise<User>
   login: (email: string, password: string, remember: boolean) => Promise<{ ok: boolean; message?: string }>
   logout: () => void
   changePassword: (currentPassword: string, nextPassword: string) => Promise<{ ok: boolean; message?: string }>
@@ -27,32 +27,16 @@ export function readStored<T>(key: string, fallback: T) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccounts] = useState<User[]>(() => {
-    const stored = readStored<User[]>(storageKeys.accounts, [])
-    const merged = [...initialUsers]
-    stored.forEach((account) => {
-      if (!merged.some((item) => item.email === account.email)) merged.push(account)
-    })
-    return merged
-  })
-  const [user, setUser] = useState<User | null>(() => {
-    const savedEmail = localStorage.getItem(storageKeys.user)
-    const storedAccounts = readStored<User[]>(storageKeys.accounts, initialUsers)
-    return [...initialUsers, ...storedAccounts].find((account) => account.email === savedEmail) ?? null
-  })
-
-  useEffect(() => {
-    localStorage.setItem(storageKeys.accounts, JSON.stringify(accounts))
-  }, [accounts])
+  const [accounts, setAccounts] = useState<User[]>([])
+  const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     loadBootstrapData()
       .then((data) => {
-        if (cancelled || data.accounts.length === 0) return
+        if (cancelled) return
         setAccounts(data.accounts)
-        localStorage.setItem(storageKeys.accounts, JSON.stringify(data.accounts))
 
         setUser((current) => {
           const savedEmail = current?.email ?? localStorage.getItem(storageKeys.user)
@@ -70,30 +54,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     accounts,
-    addAccount: (account) => {
+    addAccount: async (account) => {
       const next = { ...account, id: `${account.role}-${Date.now()}`, password: '' }
       const createPayload = { ...next, password: account.password }
-      setAccounts((current) => [...current, next])
-      createAccountInDatabase(createPayload)
-        .then((saved) => {
-          setAccounts((current) => current.map((item) => item.id === next.id ? saved : item))
-        })
-        .catch((error) => {
-          console.error('[admin users] User database create failed', { userId: next.id, email: next.email, error })
-        })
+      const saved = await createAccountInDatabase(createPayload)
+      const data = await refreshBootstrapData()
+      setAccounts(data.accounts)
+      return data.accounts.find((item) => item.id === saved.id) ?? saved
     },
-    deleteAccount: (id) => {
-      setAccounts((current) => current.filter((account) => account.id !== id || account.role === 'admin'))
-      deleteAccountInDatabase(id).catch((error) => {
-        console.error('[admin users] User database delete failed', { userId: id, error })
-      })
+    deleteAccount: async (id) => {
+      await deleteAccountInDatabase(id)
+      const data = await refreshBootstrapData()
+      setAccounts(data.accounts)
+      setUser((current) => current?.id === id ? null : current)
     },
-    updateAccount: (id, updates) => {
-      setAccounts((current) => current.map((account) => account.id === id ? { ...account, ...updates } : account))
-      setUser((current) => current?.id === id ? { ...current, ...updates } : current)
-      updateAccountInDatabase(id, updates).catch((error) => {
-        console.error('[admin users] User database update failed', { userId: id, email: updates.email, error })
-      })
+    updateAccount: async (id, updates) => {
+      const saved = await updateAccountInDatabase(id, updates)
+      const data = await refreshBootstrapData()
+      setAccounts(data.accounts)
+      const refreshed = data.accounts.find((account) => account.id === id) ?? saved
+      setUser((current) => current?.id === id ? refreshed : current)
+      return refreshed
     },
     user,
     login: async (email, password, remember) => {

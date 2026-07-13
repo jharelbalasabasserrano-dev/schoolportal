@@ -159,9 +159,9 @@ function AdminUsersView() {
         <AdminUserForm
           account={editing}
           onClose={() => setFormOpen(false)}
-          onSubmit={(payload) => {
-            if (editing) updateAccount(editing.id, payload)
-            else addAccount({ ...payload, password: payload.password ?? '' })
+          onSubmit={async (payload) => {
+            if (editing) await updateAccount(editing.id, payload)
+            else await addAccount({ ...payload, password: payload.password ?? '' })
             setFormOpen(false)
           }}
         />
@@ -170,22 +170,31 @@ function AdminUsersView() {
   )
 }
 
-function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: AdminUserFormPayload) => void }) {
+function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; onClose: () => void; onSubmit: (payload: AdminUserFormPayload) => Promise<void> }) {
   const [name, setName] = useState(account?.name ?? '')
   const [email, setEmail] = useState(account?.email ?? '')
   const [role, setRole] = useState<Role>(account?.role ?? 'student')
   const [department, setDepartment] = useState(account?.department ?? '')
   const [password, setPassword] = useState(account ? '' : defaultTemporaryPassword)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!name.trim() || !email.trim()) return
     if (!account && password.length < 8) {
       setError('Enter a temporary password with at least 8 characters.')
       return
     }
-    onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), password: account ? undefined : password, role, department: department.trim() || roleMeta[role].label })
+    setSaving(true)
+    setError('')
+    try {
+      await onSubmit({ name: name.trim(), email: email.trim().toLowerCase(), password: account ? undefined : password, role, department: department.trim() || roleMeta[role].label })
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to save user.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -219,8 +228,8 @@ function AdminUserForm({ account, onClose, onSubmit }: { account: User | null; o
         </div>
         {error && <p className="rounded-md border border-red-200 bg-red-50 p-4 font-medium text-red-700">{error}</p>}
         <div className="flex justify-end gap-3 border-t border-[#e7e1db] pt-5">
-          <button type="button" onClick={onClose} className="h-12 rounded-md border border-[#d9d3cc] px-6 font-semibold">Cancel</button>
-          <button className="h-12 rounded-md bg-[#228b22] px-6 font-semibold text-white">{account ? 'Save user' : 'Create user'}</button>
+          <button type="button" disabled={saving} onClick={onClose} className="h-12 rounded-md border border-[#d9d3cc] px-6 font-semibold disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+          <button disabled={saving} className="h-12 rounded-md bg-[#228b22] px-6 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Saving...' : account ? 'Save user' : 'Create user'}</button>
         </div>
       </form>
     </Modal>
