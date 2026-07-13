@@ -39,7 +39,7 @@ function validate(emailValue: string, passwordValue: string): FieldErrors {
 }
 
 export function LoginPage() {
-  const { login, user } = useAuth();
+  const { isLoadingAuth, login, user } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -59,6 +59,7 @@ export function LoginPage() {
     emailInputRef.current?.focus();
   }, []);
 
+  if (isLoadingAuth) return <AuthLoadingScreen />;
   if (user) return <Navigate to="/dashboard" replace />;
 
   const performLogin = async (loginEmail: string, loginPassword: string) => {
@@ -362,7 +363,16 @@ export function LoginPage() {
   );
 }
 
+function AuthLoadingScreen() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#fbf8f2] text-[#1b5e3a]">
+      <Loader2 size={28} className="animate-spin" aria-label="Loading authentication state" />
+    </main>
+  );
+}
+
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { isLoadingAuth, user } = useAuth();
+  if (isLoadingAuth) return <AuthLoadingScreen />;
   return user ? <>{children}</> : <Navigate to="/" replace />;
 }

@@ -232,6 +232,7 @@ export const allLeaveKinds: RequestKind[] = [...leaveKinds, ...legacyLeaveKinds]
 export const storageKeys = {
   accounts: 'eduportal-accounts-v2',
   user: 'eduportal-user-v2',
+  session: 'eduportal-session-v1',
   requests: 'eduportal-requests-v3',
   messages: 'eduportal-messages-v2',
   notifications: 'eduportal-notifications-v2',
