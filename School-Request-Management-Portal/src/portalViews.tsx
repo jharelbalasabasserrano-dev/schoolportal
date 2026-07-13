@@ -2961,7 +2961,7 @@ function ExitClearancePrintForm({ request }: { request: PortalRequest }) {
 
 function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
   const leaveType = getCivilServiceLeaveLabel(request.kind)
-  const leaveTypes = getCivilServiceLeaveTypes()
+  const leaveTypes = getCivilServiceLeaveTypes().filter((type) => type !== 'Others')
   const recommendation = request.leaveRecommendation ?? (request.status === 'Disapproved' ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
   const inclusiveDates = request.inclusiveDates ?? getLeaveDateRange(request)
@@ -2982,12 +2982,18 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
     ['Less this application', request.vacationLeaveLess ?? '', request.sickLeaveLess ?? ''],
     ['Balance', request.vacationLeaveBalance ?? '', request.sickLeaveBalance ?? ''],
   ]
+  const splitName = request.owner.includes(',')
+    ? request.owner.split(',').map((part) => part.trim())
+    : request.owner.trim().split(/\s+/)
+  const lastName = request.owner.includes(',') ? splitName[0] ?? '' : splitName.length > 1 ? splitName[splitName.length - 1] : request.owner
+  const firstName = request.owner.includes(',') ? splitName.slice(1).join(', ') : splitName.slice(0, -1).join(' ')
+  const middleName = ''
 
   return (
-    <div className="mx-auto h-[297mm] w-[210mm] max-w-full overflow-auto bg-stone-100 p-[5mm] shadow-sm print:h-[297mm] print:w-[210mm] print:overflow-hidden print:bg-white print:p-[5mm] print:shadow-none">
-      <div className="h-[287mm] w-[200mm] overflow-hidden bg-white font-serif text-[8.2px] leading-[1.04] text-black outline outline-1 outline-black print:h-[287mm] print:w-[200mm]">
+    <div className="mx-auto h-[297mm] w-[210mm] max-w-full overflow-auto bg-stone-100 p-[5mm] shadow-sm print:h-[297mm] print:w-[210mm] print:overflow-hidden print:bg-white print:p-0 print:shadow-none">
+      <div className="h-[287mm] w-[200mm] overflow-hidden bg-white font-serif text-[7.9px] leading-[1.04] text-black outline outline-1 outline-black print:m-[5mm] print:h-[287mm] print:w-[200mm]">
       <div className="relative h-[31mm] border-b border-black px-[2mm] pt-[2mm]">
-        <div className="absolute left-[2mm] top-[3mm] text-left text-[10px] font-bold leading-tight">
+        <div className="absolute left-[2mm] top-[3mm] text-left text-[9px] font-bold leading-tight">
           <p>Civil Service Form No. 6</p>
           <p>Revised 2020</p>
         </div>
@@ -3009,14 +3015,14 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
             <p className="h-[6mm] border-b border-black px-[1mm] py-[.7mm] font-extrabold uppercase">1. Office/Department</p>
             <p className="px-[1mm] py-[1.1mm] text-center font-bold">{request.officeDepartment ?? 'CITY COLLEGE OF DAVAO'}</p>
           </div>
-          <div className="border-r border-black">
-            <p className="h-[6mm] border-b border-black px-[1mm] py-[.7mm] font-extrabold uppercase">2. Name (Last, First, Middle)</p>
-            <p className="px-[1mm] pt-[.9mm] text-center font-bold">{request.owner}</p>
-            <div className="mt-[.5mm] grid grid-cols-3 text-center text-[7px]">
-              <span>(Last)</span>
-              <span>(First)</span>
-              <span>(Middle)</span>
+            <div className="border-r border-black">
+              <p className="h-[6mm] border-b border-black px-[1mm] py-[.7mm] font-extrabold uppercase">2. Name (Last, First, Middle)</p>
+            <div className="grid grid-cols-3 px-[1mm] pt-[.9mm] text-center font-bold">
+              <FitText value={lastName} />
+              <FitText value={firstName} />
+              <FitText value={middleName} />
             </div>
+            <div className="mt-[.5mm] grid grid-cols-3 text-center text-[7px]"><span>(Last)</span><span>(First)</span><span>(Middle)</span></div>
           </div>
           <OfficialInfoCell label="3. Date of Filing" value={formatDate(request.filedDate ?? request.date)} />
           <OfficialInfoCell label="4. Position" value={request.position ?? ''} />
@@ -3030,6 +3036,7 @@ function LeaveApplicationPrintForm({ request }: { request: PortalRequest }) {
               <p className="mb-[1mm] font-extrabold uppercase">6.A Type of Leave to be Availed Of</p>
               <div>
                 {leaveTypes.map((type) => <OfficialCheck key={type} checked={leaveType === type} label={type} />)}
+                <OfficialCheck checked={false} label="Compensatory Time Off" />
                 <OfficialLine label="Others:" value={request.kind === 'Other Leave' ? request.customLeaveType?.trim() ?? '' : ''} tight />
               </div>
             </div>
@@ -3129,20 +3136,21 @@ function OfficialInfoCell({ label, last, value }: { label: string; last?: boolea
   return (
     <div className={`${last ? '' : 'border-r border-black'}`}>
       <p className="h-[6mm] border-b border-black px-[1mm] py-[.7mm] font-extrabold uppercase">{label}</p>
-      <p className="px-[1mm] py-[1.4mm] text-center font-bold">{value}</p>
+      <p className="px-[1mm] py-[1.4mm] text-center font-bold"><FitText value={value} /></p>
     </div>
   )
 }
 
 function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
   return (
-    <div className="w-[48mm] justify-self-end">
-      <div className="h-[22mm] border border-black bg-white px-[2mm] py-[1.2mm]">
-        <p className="text-center text-[8px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
-        <p className="mt-[.9mm] text-center text-[13px] font-extrabold leading-none tracking-[.25em]">RECEIVED</p>
-        <div className="mt-[1.3mm] space-y-[.7mm]">
-          <ReceivedStampLine label="Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
-          <ReceivedStampLine label="Time" value={request.receivedTime ?? ''} />
+    <div className="w-[52mm] justify-self-end">
+      <div className="min-h-[25mm] border border-black bg-white px-[1.5mm] py-[1mm]">
+        <p className="text-center text-[7.4px] font-extrabold leading-tight">CITY COLLEGE OF DAVAO</p>
+        <p className="mt-[.6mm] text-center text-[11px] font-extrabold leading-none tracking-[.22em]">RECEIVED</p>
+        <div className="mt-[1mm] space-y-[.45mm]">
+          <ReceivedStampLine label="Received Date" value={request.receivedDate ? formatDate(request.receivedDate) : ''} />
+          <ReceivedStampLine label="Received Time" value={request.receivedTime ?? ''} />
+          <ReceivedStampLine label="Received By" value={request.receivedBy ?? ''} />
           <ReceivedStampLine label="Ref. No" value={getLeaveReferenceNumber(request)} />
         </div>
       </div>
@@ -3152,9 +3160,11 @@ function LeaveReceivedReferenceBlock({ request }: { request: PortalRequest }) {
 
 function ReceivedStampLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[10mm_1fr] items-end gap-[1mm] text-[8px] font-bold uppercase">
-      <span>{label}:</span>
-      <span className="min-h-[3mm] border-b border-black px-[1mm] text-[8px] font-normal normal-case">{value}</span>
+    <div className="grid grid-cols-[17mm_1fr] items-end gap-[.8mm] text-[6.7px] font-bold uppercase leading-[1.05]">
+      <span className="whitespace-nowrap">{label}:</span>
+      <span className="min-h-[2.7mm] overflow-hidden border-b border-black px-[.7mm] text-[6.7px] font-normal normal-case leading-[1.05] break-words [overflow-wrap:anywhere]">
+        <FitText value={value} />
+      </span>
     </div>
   )
 }
@@ -3172,9 +3182,14 @@ function OfficialLine({ label, tight, value }: { label?: string; tight?: boolean
   return (
     <div className={`grid ${label ? 'grid-cols-[25mm_1fr]' : 'grid-cols-1'} items-end gap-[1.4mm] ${tight ? 'mt-[.45mm]' : 'mt-[.85mm]'}`}>
       {label && <span>{label}</span>}
-      <span className="min-h-[3.25mm] border-b border-black px-[1mm] text-center">{value}</span>
+      <span className="min-h-[3.25mm] border-b border-black px-[1mm] text-center break-words [overflow-wrap:anywhere]"><FitText value={value} /></span>
     </div>
   )
+}
+
+function FitText({ value }: { value: string }) {
+  const sizeClass = value.length > 46 ? 'text-[6.4px] leading-[1.02]' : value.length > 28 ? 'text-[7px] leading-[1.03]' : ''
+  return <span className={`break-words [overflow-wrap:anywhere] ${sizeClass}`}>{value}</span>
 }
 
 function PrintPreviewHeader({ children, logo = ccdLogo, logoAlt = 'City College of Davao seal', referenceNumber }: { children: ReactNode; logo?: string; logoAlt?: string; referenceNumber?: string }) {

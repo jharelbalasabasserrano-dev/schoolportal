@@ -624,8 +624,10 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   const leaveTypes = getCivilServiceLeaveTypes().filter((type) => type !== 'Others')
   const checkClass = (value: boolean) => value ? 'box checked' : 'box'
   const checked = (value: boolean) => `<span class="${checkClass(value)}"></span>`
-  const field = (value = '', className = 'value-line') => `<span class="${className}">${escapeHtml(value)}</span>`
-  const blank = (value = '') => `<span class="others-blank">${escapeHtml(value)}</span>`
+  const fitClass = (value = '') => value.length > 46 ? ' fit-xs' : value.length > 28 ? ' fit-sm' : ''
+  const field = (value = '', className = 'value-line') => `<span class="${className}${fitClass(value)}">${escapeHtml(value)}</span>`
+  const blank = (value = '') => `<span class="others-blank${fitClass(value)}">${escapeHtml(value)}</span>`
+  const refNumber = getLeaveReferenceNumber(request)
   const leaveType = getCivilServiceLeaveLabel(request.kind)
   const recommendation = request.leaveRecommendation ?? (isLeaveDisapproved(request) ? 'For disapproval' : request.status === 'Pending' ? '' : 'For approval')
   const workingDays = String(request.workingDays ?? getDateDuration(request.date, request.time))
@@ -662,71 +664,75 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
   <meta charset="utf-8">
   <title>${escapeHtml(getLeaveReferenceNumber(request))}</title>
   <style>
-    @page { size: A4 portrait; margin: 8mm 10mm; }
+    @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; }
+    p { margin: 0; }
     html, body { margin: 0; padding: 0; background: #e9e9e9; font-family: Arial, Helvetica, sans-serif; color: #111; }
     body { display: flex; justify-content: center; padding: 14px 0 40px; }
-    .sheet { width: 210mm; min-height: 297mm; background: #fff; padding: 9mm 11mm 10mm; box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 6px 24px rgba(0,0,0,.15); font-size: 9.6pt; line-height: 1.28; }
-    .header { display: grid; grid-template-columns: 92px 1fr 190px; align-items: start; margin-bottom: 8px; }
-    .csc-no { font-size: 8pt; line-height: 1.25; padding-top: 2px; }
-    .header-center { display: flex; align-items: center; justify-content: center; gap: 14px; padding-top: 2px; }
-    .seal { width: 66px; height: 66px; border-radius: 50%; flex-shrink: 0; object-fit: contain; }
+    .sheet { width: 210mm; height: 297mm; overflow: hidden; background: #fff; padding: 7mm 9mm 7mm; box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 6px 24px rgba(0,0,0,.15); font-size: 8.8pt; line-height: 1.16; }
+    .header { display: grid; grid-template-columns: 82px minmax(0, 1fr) 182px; align-items: start; margin-bottom: 5px; }
+    .csc-no { font-size: 7.4pt; line-height: 1.18; padding-top: 2px; }
+    .header-center { display: flex; align-items: center; justify-content: center; gap: 10px; padding-top: 1px; min-width: 0; }
+    .seal { width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0; object-fit: contain; }
     .header-text { text-align: center; }
-    .republic { font-size: 9.6pt; margin: 0; font-weight: 400; }
-    .city-gov { font-size: 10.8pt; font-weight: 700; margin: 1px 0; letter-spacing: .01em; }
-    .davao-city { font-size: 9.8pt; font-weight: 700; margin: 0 0 3px; }
-    .form-title { font-size: 19pt; font-weight: 700; letter-spacing: .02em; margin-top: 3px; white-space: nowrap; }
+    .republic { font-size: 9pt; font-weight: 400; }
+    .city-gov { font-size: 10pt; font-weight: 700; margin: 1px 0; }
+    .davao-city { font-size: 9.2pt; font-weight: 700; }
+    .form-title { font-size: 17.2pt; font-weight: 700; margin-top: 3px; white-space: nowrap; }
     .received-wrap { display: flex; flex-direction: column; }
-    .received-box { border: 1.4px solid #000; padding: 5px 8px 6px; font-size: 7.6pt; line-height: 1.55; margin-top: 2px; }
+    .received-box { border: 1.2px solid #000; padding: 4px 6px 5px; font-size: 7pt; line-height: 1.25; margin-top: 1px; }
     .received-box .rb-title { font-size: 6.6pt; font-weight: 700; text-align: center; margin-bottom: 2px; }
-    .received-box .rb-strong { font-weight: 700; text-align: center; letter-spacing: .14em; font-size: 7.4pt; margin-bottom: 5px; }
-    .rb-row { display: flex; gap: 4px; margin-bottom: 3px; }
-    .rb-row span.lbl { flex-shrink: 0; }
-    .rb-line, .value-line { flex: 1; border-bottom: 1px solid #000; min-height: 11px; padding: 0 3px; }
+    .received-box .rb-strong { font-weight: 700; text-align: center; letter-spacing: .16em; font-size: 7.2pt; margin-bottom: 4px; }
+    .rb-row { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 4px; align-items: end; margin-bottom: 2px; }
+    .rb-row span.lbl { white-space: nowrap; }
+    .rb-line, .value-line { border-bottom: 1px solid #000; min-height: 10px; padding: 0 2px; overflow-wrap: anywhere; word-break: break-word; }
+    .ref-line { font-size: 6.8pt; line-height: 1.05; min-height: 13px; }
+    .fit-sm { font-size: 7.4pt; line-height: 1.08; }
+    .fit-xs { font-size: 6.6pt; line-height: 1.05; }
     table.main { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    table.main td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
-    .cell-label { font-size: 8.6pt; font-weight: 600; }
-    .field-row { margin-top: 14px; }
+    table.main td { border: 1px solid #000; padding: 3px 5px; vertical-align: top; }
+    .cell-label { font-size: 8pt; font-weight: 600; }
+    .field-row { margin-top: 10px; }
     table.subrow { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    table.subrow td { border: none; padding: 9px 8px; vertical-align: baseline; white-space: nowrap; }
-    .fl-inline { display: inline-block; border-bottom: 1px solid #000; width: 60%; margin-left: 6px; min-height: 11px; vertical-align: bottom; padding: 0 3px; }
-    table.namerow { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; }
-    table.namerow td { border: none; padding: 0 6px; text-align: center; vertical-align: bottom; }
+    table.subrow td { border: none; padding: 6px 6px; vertical-align: baseline; white-space: nowrap; }
+    .fl-inline { display: inline-block; border-bottom: 1px solid #000; width: 58%; margin-left: 4px; min-height: 10px; vertical-align: bottom; padding: 0 2px; white-space: normal; overflow-wrap: anywhere; }
+    table.namerow { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 4px; }
+    table.namerow td { border: none; padding: 0 4px; text-align: center; vertical-align: bottom; }
     table.namerow .value-line { display: block; text-align: center; }
-    table.namerow span.sub { font-size: 7.6pt; color: #333; }
-    .section-header { text-align: center; font-weight: 700; font-size: 9.6pt; background: #fff; }
+    table.namerow span.sub { font-size: 7pt; color: #333; }
+    .section-header { text-align: center; font-weight: 700; font-size: 8.8pt; background: #fff; padding: 2px 5px !important; }
     ul.chk { list-style: none; margin: 2px 0 0; padding: 0; }
-    ul.chk li { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 2.5px; font-size: 8.3pt; line-height: 1.2; }
-    ul.chk li .box { flex-shrink: 0; width: 9.5px; height: 9.5px; border: 1.1px solid #000; margin-top: 1.5px; }
-    ul.chk li .box.checked::after, .box.checked::after { content: "x"; display: block; font-size: 8px; line-height: 8px; text-align: center; font-weight: 700; }
-    ul.chk li .law { font-size: 7.2pt; color: #333; }
-    .subhead { font-size: 8.5pt; font-style: italic; margin: 6px 0 2px; }
-    .others-line { margin-top: 5px; font-size: 8.3pt; }
-    .others-blank { border-bottom: 1px solid #000; display: block; height: 14px; margin-top: 5px; padding: 0 3px; }
-    .inline-field { display: flex; align-items: baseline; gap: 4px; font-size: 8.3pt; margin-top: 4px; }
-    .inline-field .fl { flex: 1; border-bottom: 1px solid #000; min-height: 11px; padding: 0 3px; }
-    .fill-line { display: inline-block; border-bottom: 1px solid #000; min-width: 60px; margin-left: 4px; padding: 0 3px; }
-    .signature-space { margin-top: 26px; text-align: center; font-size: 8.3pt; }
-    .signature-line { border-bottom: 1px solid #000; height: 16px; margin-bottom: 2px; padding: 0 3px; }
-    table.credits { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 8pt; }
-    table.credits td, table.credits th { border: 1px solid #000; padding: 3px 5px; text-align: center; }
-    table.credits th { font-weight: 600; font-size: 7.8pt; }
+    ul.chk li { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 1.6px; font-size: 7.7pt; line-height: 1.12; overflow-wrap: anywhere; }
+    ul.chk li .box { flex-shrink: 0; width: 8.8px; height: 8.8px; border: 1px solid #000; margin-top: 1px; }
+    ul.chk li .box.checked::after, .box.checked::after { content: "x"; display: block; font-size: 7.2px; line-height: 7.2px; text-align: center; font-weight: 700; }
+    .subhead { font-size: 7.8pt; font-style: italic; margin: 4px 0 1px; }
+    .others-line { margin-top: 4px; font-size: 7.8pt; }
+    .others-blank { border-bottom: 1px solid #000; display: block; min-height: 12px; margin-top: 4px; padding: 0 2px; overflow-wrap: anywhere; word-break: break-word; }
+    .inline-field { display: flex; align-items: baseline; gap: 4px; font-size: 7.8pt; margin-top: 3px; }
+    .inline-field .fl { flex: 1; border-bottom: 1px solid #000; min-height: 10px; padding: 0 2px; overflow-wrap: anywhere; }
+    .fill-line { display: inline-block; border-bottom: 1px solid #000; min-width: 50px; margin-left: 3px; padding: 0 2px; overflow-wrap: anywhere; }
+    .signature-space { margin-top: 18px; text-align: center; font-size: 7.8pt; }
+    .signature-line { border-bottom: 1px solid #000; min-height: 14px; margin-bottom: 2px; padding: 0 2px; overflow-wrap: anywhere; }
+    table.credits { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 7.5pt; }
+    table.credits td, table.credits th { border: 1px solid #000; padding: 2px 4px; text-align: center; }
+    table.credits th { font-weight: 600; font-size: 7.2pt; }
     table.credits td.rowlabel { text-align: left; font-style: italic; }
-    .as-of { display: flex; align-items: baseline; gap: 4px; font-size: 8.3pt; margin-bottom: 4px; }
-    .as-of .fl { flex: 1; border-bottom: 1px solid #000; min-height: 11px; }
-    .recommend-line { display: flex; align-items: baseline; gap: 4px; font-size: 8.3pt; margin: 6px 0 2px; }
-    .recommend-line .fl { flex: 1; border-bottom: 1px solid #000; min-height: 11px; padding: 0 3px; }
-    .authofficer { margin-top: 30px; text-align: center; font-size: 8.3pt; }
-    .approved-row { font-size: 8.3pt; margin-bottom: 6px; display: flex; align-items: baseline; gap: 6px; }
-    .approved-row .fl { width: 60px; border-bottom: 1px solid #000; min-height: 11px; text-align: center; padding: 0 3px; }
+    .as-of { display: flex; align-items: baseline; gap: 4px; font-size: 7.8pt; margin: 6px 0 3px; }
+    .as-of .fl { flex: 1; border-bottom: 1px solid #000; min-height: 10px; }
+    .recommend-line { display: flex; align-items: baseline; gap: 4px; font-size: 7.8pt; margin: 4px 0 1px; }
+    .recommend-line .fl { flex: 1; border-bottom: 1px solid #000; min-height: 10px; padding: 0 2px; overflow-wrap: anywhere; }
+    .authofficer { margin-top: 22px; text-align: center; font-size: 7.8pt; }
+    .approved-row { font-size: 7.8pt; margin-bottom: 4px; display: flex; align-items: baseline; gap: 5px; }
+    .approved-row .fl { width: 54px; border-bottom: 1px solid #000; min-height: 10px; text-align: center; padding: 0 2px; }
     .disapproved-lines { margin-top: 4px; }
-    .disapproved-lines .fl { border-bottom: 1px solid #000; height: 16px; margin-bottom: 6px; padding: 0 3px; }
-    .president-block { text-align: center; margin-top: 26px; }
-    .president-name { font-weight: 700; font-size: 9.4pt; }
-    .president-title { font-size: 8.6pt; margin-top: 1px; }
-    .president-sig { border-bottom: 1px solid #000; width: 260px; height: 22px; margin: 8px auto 2px; }
-    .president-caption { font-size: 7.6pt; text-align: center; }
-    @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; } }
+    .disapproved-lines .fl { border-bottom: 1px solid #000; min-height: 13px; margin-bottom: 4px; padding: 0 2px; overflow-wrap: anywhere; }
+    .president-block { text-align: center; margin-top: 16px; }
+    .president-name { font-weight: 700; font-size: 8.8pt; }
+    .president-title { font-size: 8pt; margin-top: 1px; }
+    .president-sig { border-bottom: 1px solid #000; width: 230px; height: 16px; margin: 5px auto 2px; }
+    .president-caption { font-size: 7.2pt; text-align: center; }
+    @media screen and (max-width: 900px) { body { padding: 8px 0 24px; } .sheet { transform: scale(.72); transform-origin: top center; margin-bottom: -82mm; } }
+    @media print { html, body { width: 210mm; height: 297mm; background: #fff; padding: 0; overflow: hidden; } .sheet { box-shadow: none; page-break-after: avoid; page-break-inside: avoid; } }
   </style>
 </head>
 <body>
@@ -746,11 +752,11 @@ export function getLeaveApplicationPrintHtml(request: PortalRequest) {
         <div class="received-box">
           <div class="rb-title">CITY COLLEGE OF DAVAO</div>
           <div class="rb-strong">R E C E I V E D</div>
-          <div class="rb-row"><span class="lbl">Date:</span><span class="rb-line">${escapeHtml(request.receivedDate ? formatDate(request.receivedDate) : '')}</span></div>
-          <div class="rb-row"><span class="lbl">Time:</span><span class="rb-line">${escapeHtml(request.receivedTime ?? '')}</span></div>
-          <div class="rb-row"><span class="lbl">By:</span><span class="rb-line">${escapeHtml(request.receivedBy ?? '')}</span></div>
+          <div class="rb-row"><span class="lbl">Received Date:</span><span class="rb-line">${escapeHtml(request.receivedDate ? formatDate(request.receivedDate) : '')}</span></div>
+          <div class="rb-row"><span class="lbl">Received Time:</span><span class="rb-line">${escapeHtml(request.receivedTime ?? '')}</span></div>
+          <div class="rb-row"><span class="lbl">Received By:</span><span class="rb-line">${escapeHtml(request.receivedBy ?? '')}</span></div>
         </div>
-        <div class="rb-row" style="margin-top:4px;"><span class="lbl">Ref. No:</span><span class="rb-line">${escapeHtml(getLeaveReferenceNumber(request))}</span></div>
+        <div class="rb-row" style="margin-top:3px;"><span class="lbl">Ref. No:</span><span class="rb-line ref-line ${fitClass(refNumber).trim()}">${escapeHtml(refNumber)}</span></div>
       </div>
     </div>
     <table class="main">
