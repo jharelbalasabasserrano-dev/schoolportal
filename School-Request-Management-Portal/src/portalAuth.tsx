@@ -132,7 +132,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return { ok: false, message: 'You must be signed in to change your password.' }
       try {
         const currentUser = await authenticateAccount(user.email, currentPassword)
-        const savedUser = await changeAccountPassword(currentUser.id, currentPassword, nextPassword)
+        if (currentUser.id !== user.id) {
+          console.warn('Password change aborted because authenticated user id did not match session user id.', {
+            authenticatedUserId: currentUser.id,
+            sessionUserId: user.id,
+          })
+          return { ok: false, message: 'Unable to verify the signed-in account. Please sign in again.' }
+        }
+        console.debug('Password change request verified for authenticated user.', {
+          email: user.email,
+          userId: user.id,
+        })
+        const savedUser = await changeAccountPassword(user.id, currentPassword, nextPassword)
+        if (savedUser.id !== user.id) {
+          console.warn('Password change response user id did not match session user id.', {
+            savedUserId: savedUser.id,
+            sessionUserId: user.id,
+          })
+          return { ok: false, message: 'Password change returned a different account. Please sign in again.' }
+        }
         const verifiedUser = await authenticateAccount(savedUser.email, nextPassword)
         const updated = { ...verifiedUser, password: '' }
         setAccounts((current) => current.map((account) => account.id === user.id || account.id === currentUser.id ? updated : account))

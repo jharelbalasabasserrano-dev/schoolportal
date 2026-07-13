@@ -10,7 +10,7 @@ use axum::{
 use chrono::Utc;
 use sqlx::{PgPool, Row, postgres::PgRow};
 use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 use uuid::Uuid;
@@ -64,16 +64,6 @@ fn is_argon2_hash(value: &str) -> bool {
     value.starts_with("$argon2")
 }
 
-fn hash_password_if_needed(
-    password: &str,
-) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
-    if is_argon2_hash(password) {
-        Ok(password.to_string())
-    } else {
-        hash_password(password)
-    }
-}
-
 fn verify_password(stored: &str, candidate: &str) -> bool {
     if is_argon2_hash(stored) {
         PasswordHash::new(stored)
@@ -123,6 +113,20 @@ fn log_auth_event(event: &str, fields: serde_json::Value) {
             "fields": fields,
         })
     );
+}
+
+fn auth_error(
+    status: StatusCode,
+    error: &str,
+    code: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        status,
+        Json(serde_json::json!({
+            "error": error,
+            "code": code,
+        })),
+    )
 }
 
 async fn ensure_email_available(
@@ -576,6 +580,17 @@ pub async fn login(
             "candidate_password_checks": candidate_password_checks(),
         }),
     );
+    log_auth_event(
+        "auth_login_query_result",
+        serde_json::json!({
+            "email": email,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "matched_count": matched_count,
+            "password_source": AUTHENTICATION_SOURCE,
+        }),
+    );
 
     if matched_count > 1 {
         log_auth_event(
@@ -794,7 +809,7 @@ pub async fn change_password(
             "updated_at": current_updated_at,
             "password_storage": password_storage_kind(&current_hash),
             "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
-            "current_password_verifies": true,
+            "current_password_verifies": verify_password(&current_hash, &payload.current_password),
         }),
     );
 
@@ -956,9 +971,10 @@ pub async fn change_password(
             }),
         );
         let _ = tx.rollback().await;
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": "User not found" })),
+        return Err(auth_error(
+            StatusCode::CONFLICT,
+            "Password was not changed because the target user row could not be updated.",
+            "password_update_rows_affected_not_one",
         ));
     }
 
@@ -1082,7 +1098,10 @@ pub async fn change_password(
         let _ = tx.rollback().await;
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": "Password update could not be verified." })),
+            Json(serde_json::json!({
+                "error": "Password update could not be verified.",
+                "code": "password_update_verification_failed",
+            })),
         ));
     }
 
@@ -1338,24 +1357,6 @@ pub async fn sync_bootstrap_data(
     State(state): State<AppState>,
     Json(payload): Json<BootstrapData>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let existing_passwords: HashMap<String, String> = sqlx::query_as::<_, (String, String)>(
-        "SELECT id, COALESCE(password_hash, '') FROM app_users",
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(api_error)?
-    .into_iter()
-    .collect();
-    let existing_passwords_by_email: HashMap<String, String> =
-        sqlx::query_as::<_, (String, String)>(
-            "SELECT lower(email), COALESCE(password_hash, '') FROM app_users",
-        )
-        .fetch_all(&state.db)
-        .await
-        .map_err(api_error)?
-        .into_iter()
-        .collect();
-
     let mut tx = state.db.begin().await.map_err(api_error)?;
 
     let sql = "DELETE FROM request_messages";
@@ -1400,36 +1401,9 @@ pub async fn sync_bootstrap_data(
         .execute(&mut *tx)
         .await
         .map_err(|error| api_query_error("supply_categories", sql, serde_json::json!({}), error))?;
-    let sql = "DELETE FROM app_users";
-    log_db_query("app_users", sql, serde_json::json!({}));
-    sqlx::query(sql)
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| api_query_error("app_users", sql, serde_json::json!({}), error))?;
-
     for account in &payload.accounts {
         let normalized_email = account.email.trim().to_lowercase();
-        let preserved_password = existing_passwords
-            .get(&account.id)
-            .or_else(|| existing_passwords_by_email.get(&normalized_email));
-        let password_to_store = if let Some(existing) = preserved_password {
-            log_auth_event(
-                "auth_password_preserved_during_bootstrap_sync",
-                serde_json::json!({
-                    "user_id": account.id,
-                    "email": normalized_email,
-                    "auth_source": AUTHENTICATION_SOURCE,
-                    "password_storage": password_storage_kind(existing),
-                    "password_hash_fingerprint": password_hash_fingerprint(existing),
-                    "incoming_password_present": !account.password.trim().is_empty(),
-                }),
-            );
-            if existing.trim().is_empty() {
-                hash_password(&Uuid::new_v4().to_string())?
-            } else {
-                hash_password_if_needed(existing)?
-            }
-        } else if account.password.trim().is_empty() {
+        let password_to_store = if account.password.trim().is_empty() {
             hash_password(&Uuid::new_v4().to_string())?
         } else {
             hash_password(&account.password)?
@@ -1437,18 +1411,26 @@ pub async fn sync_bootstrap_data(
         let sql = r#"
             INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                email = EXCLUDED.email,
+                role = EXCLUDED.role,
+                department = EXCLUDED.department,
+                avatar_url = EXCLUDED.avatar_url,
+                updated_at = NOW()
             "#;
         let params = serde_json::json!({
             "id": account.id,
             "name": account.name,
             "email": account.email,
-            "password_hash": "[redacted]",
+            "password_hash": "[redacted-on-insert-only]",
             "role": account.role,
             "department": account.department,
             "avatar_url": account.avatar_url,
+            "password_hash_update_policy": "preserve_existing_on_conflict",
         });
         log_db_query("app_users", sql, params.clone());
-        sqlx::query(sql)
+        let upserted = sqlx::query(sql)
             .bind(&account.id)
             .bind(&account.name)
             .bind(&account.email)
@@ -1459,6 +1441,18 @@ pub async fn sync_bootstrap_data(
             .execute(&mut *tx)
             .await
             .map_err(|error| api_query_error("app_users", sql, params, error))?;
+        log_auth_event(
+            "auth_bootstrap_user_synced_without_password_overwrite",
+            serde_json::json!({
+                "user_id": account.id,
+                "email": normalized_email,
+                "role": account.role,
+                "auth_source": AUTHENTICATION_SOURCE,
+                "rows_affected": upserted.rows_affected(),
+                "incoming_password_present": !account.password.trim().is_empty(),
+                "password_hash_update_policy": "insert_new_hash_only_preserve_existing_password_hash",
+            }),
+        );
     }
 
     for category in &payload.categories {
@@ -1746,30 +1740,125 @@ pub async fn sync_bootstrap_data(
 
 pub async fn create_account(
     State(state): State<AppState>,
+    uri: Uri,
     Json(account): Json<UserAccount>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
-    if account.password.len() < 8 {
+    let account_id = account.id.trim().to_string();
+    let account_name = account.name.trim().to_string();
+    let account_email = account.email.trim().to_lowercase();
+    let account_role = account.role.trim().to_string();
+    let account_department = account.department.trim().to_string();
+
+    if account_id.is_empty() || account_name.is_empty() || account_email.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "Password must be at least 8 characters." })),
+            Json(serde_json::json!({
+                "error": "User ID, name, and email are required.",
+                "code": "missing_user_fields",
+            })),
         ));
     }
 
-    ensure_email_available(&state.db, &account.email, Some(&account.id)).await?;
+    if account.password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Password must be at least 8 characters.",
+                "code": "password_too_short",
+            })),
+        ));
+    }
+
+    ensure_email_available(&state.db, &account_email, Some(&account_id)).await?;
 
     let password_hash = hash_password(&account.password)?;
+    let mut tx = state.db.begin().await.map_err(api_error)?;
+
     let sql = r#"
         INSERT INTO app_users (id, name, email, password_hash, role, department, avatar_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            email = EXCLUDED.email,
-            password_hash = EXCLUDED.password_hash,
-            role = EXCLUDED.role,
-            department = EXCLUDED.department,
-            avatar_url = EXCLUDED.avatar_url,
-            updated_at = NOW()
-        RETURNING
+        "#;
+    let params = serde_json::json!({
+        "id": account_id,
+        "name": account_name,
+        "email": account_email,
+        "password_hash": "[redacted]",
+        "role": account_role,
+        "department": account_department,
+        "avatar_url": account.avatar_url,
+    });
+    log_db_query("app_users", sql, params.clone());
+    let inserted = sqlx::query(sql)
+        .bind(&account_id)
+        .bind(&account_name)
+        .bind(&account_email)
+        .bind(&password_hash)
+        .bind(&account_role)
+        .bind(&account_department)
+        .bind(&account.avatar_url)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+
+    log_auth_event(
+        "auth_account_create_insert_executed",
+        serde_json::json!({
+            "user_id": account_id,
+            "email": account_email,
+            "role": account_role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "rows_affected": inserted.rows_affected(),
+            "password_storage": password_storage_kind(&password_hash),
+            "password_hash_fingerprint": password_hash_fingerprint(&password_hash),
+        }),
+    );
+
+    if inserted.rows_affected() != 1 {
+        let _ = tx.rollback().await;
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "User account insert affected an unexpected number of rows.",
+                "code": "unexpected_rows_affected",
+                "rowsAffected": inserted.rows_affected(),
+            })),
+        ));
+    }
+
+    if let Err(error) = tx.commit().await {
+        log_auth_event(
+            "auth_account_create_commit_failed",
+            serde_json::json!({
+                "user_id": account_id,
+                "email": account_email,
+                "role": account_role,
+                "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
+                "rows_affected": inserted.rows_affected(),
+                "message": error.to_string(),
+            }),
+        );
+        return Err(api_error(error));
+    }
+
+    log_auth_event(
+        "auth_account_create_commit_completed",
+        serde_json::json!({
+            "user_id": account_id,
+            "email": account_email,
+            "role": account_role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "rows_affected": inserted.rows_affected(),
+        }),
+    );
+
+    let reload_sql = r#"
+        SELECT
             id,
             name,
             email,
@@ -1777,28 +1866,36 @@ pub async fn create_account(
             role,
             department,
             avatar_url
+        FROM app_users
+        WHERE id = $1
         "#;
-    let params = serde_json::json!({
-        "id": account.id,
-        "name": account.name,
-        "email": account.email,
-        "password_hash": "[redacted]",
-        "role": account.role,
-        "department": account.department,
-        "avatar_url": account.avatar_url,
-    });
-    log_db_query("app_users", sql, params.clone());
-    let saved = sqlx::query_as::<_, UserAccount>(sql)
-        .bind(&account.id)
-        .bind(&account.name)
-        .bind(&account.email)
-        .bind(password_hash)
-        .bind(&account.role)
-        .bind(&account.department)
-        .bind(&account.avatar_url)
-        .fetch_one(&state.db)
+    log_db_query(
+        "app_users",
+        reload_sql,
+        serde_json::json!({ "id": account_id }),
+    );
+    let saved = sqlx::query_as::<_, UserAccount>(reload_sql)
+        .bind(&account_id)
+        .fetch_optional(&state.db)
         .await
-        .map_err(|error| api_query_error("app_users", sql, params, error))?;
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                reload_sql,
+                serde_json::json!({ "id": account_id }),
+                error,
+            )
+        })?;
+
+    let Some(saved) = saved else {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Created user could not be reloaded from the database.",
+                "code": "created_user_missing",
+            })),
+        ));
+    };
 
     if !is_argon2_hash(&saved.password) || !verify_password(&saved.password, &account.password) {
         log_auth_event(
@@ -1808,8 +1905,11 @@ pub async fn create_account(
                 "email": saved.email,
                 "role": saved.role,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "password_storage": password_storage_kind(&saved.password),
                 "password_hash_fingerprint": password_hash_fingerprint(&saved.password),
+                "verify_password_result": verify_password(&saved.password, &account.password),
             }),
         );
         return Err((
@@ -1820,6 +1920,22 @@ pub async fn create_account(
             })),
         ));
     }
+
+    log_auth_event(
+        "auth_account_create_succeeded",
+        serde_json::json!({
+            "user_id": saved.id,
+            "email": saved.email,
+            "role": saved.role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "rows_affected": inserted.rows_affected(),
+            "password_storage": password_storage_kind(&saved.password),
+            "password_hash_fingerprint": password_hash_fingerprint(&saved.password),
+            "verify_password_result": true,
+        }),
+    );
 
     Ok(Json(public_user(saved)))
 }
