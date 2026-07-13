@@ -5,7 +5,7 @@ use argon2::{
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, Uri},
 };
 use chrono::Utc;
 use sqlx::{PgPool, Row, postgres::PgRow};
@@ -27,6 +27,7 @@ const AUTHENTICATION_SOURCE: &str = "app_users.password_hash";
 pub struct AppState {
     pub db: PgPool,
     pub db_status: String,
+    pub db_identity: String,
 }
 
 pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -34,6 +35,7 @@ pub async fn health_check(State(state): State<AppState>) -> Json<serde_json::Val
         "service": "CCD Exit Clearance API",
         "status": "running",
         "database": state.db_status,
+        "database_identity": state.db_identity,
     }))
 }
 
@@ -460,6 +462,7 @@ pub async fn get_bootstrap_data(
 
 pub async fn login(
     State(state): State<AppState>,
+    uri: Uri,
     Json(payload): Json<LoginPayload>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
     let email = payload.email.trim().to_lowercase();
@@ -469,6 +472,8 @@ pub async fn login(
             serde_json::json!({
                 "reason": "missing_credentials",
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "email_present": !email.is_empty(),
                 "password_present": !payload.password.is_empty(),
             }),
@@ -513,6 +518,8 @@ pub async fn login(
             serde_json::json!({
                 "reason": "user_not_found",
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "email": email,
             }),
         );
@@ -542,16 +549,54 @@ pub async fn login(
         });
     }
 
+    let candidate_password_checks = || {
+        accounts
+            .iter()
+            .map(|account| {
+                serde_json::json!({
+                    "user_id": account.id,
+                    "email": account.email,
+                    "role": account.role,
+                    "password_storage": password_storage_kind(&account.password),
+                    "password_hash_fingerprint": password_hash_fingerprint(&account.password),
+                    "verify_password_result": verify_password(&account.password, &payload.password),
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+
+    log_auth_event(
+        "auth_login_candidates_loaded",
+        serde_json::json!({
+            "email": email,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "matched_count": matched_count,
+            "candidate_password_checks": candidate_password_checks(),
+        }),
+    );
+
     if matched_count > 1 {
         log_auth_event(
-            "auth_login_email_duplicate",
+            "auth_login_rejected",
             serde_json::json!({
+                "reason": "duplicate_email",
                 "email": email,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "matched_count": matched_count,
-                "candidate_user_ids": accounts.iter().map(|account| account.id.as_str()).collect::<Vec<_>>(),
+                "candidate_accounts": candidate_password_checks(),
             }),
         );
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "Duplicate users found for this email.",
+                "code": "duplicate_email",
+            })),
+        ));
     }
 
     let matching_index = matching_password_account_index(&accounts, &payload.password);
@@ -562,14 +607,11 @@ pub async fn login(
             serde_json::json!({
                 "reason": "password_mismatch",
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "email": email,
                 "matched_count": matched_count,
-                "candidate_password_storage": accounts.iter().map(|account| serde_json::json!({
-                    "user_id": account.id,
-                    "role": account.role,
-                    "password_storage": password_storage_kind(&account.password),
-                    "password_hash_fingerprint": password_hash_fingerprint(&account.password),
-                })).collect::<Vec<_>>(),
+                "candidate_password_checks": candidate_password_checks(),
             }),
         );
         return Err((
@@ -612,6 +654,8 @@ pub async fn login(
                 serde_json::json!({
                     "reason": "unexpected_rows_affected",
                     "auth_source": AUTHENTICATION_SOURCE,
+                    "request_url": uri.to_string(),
+                    "database": state.db_identity,
                     "user_id": account.id,
                     "email": account.email,
                     "role": account.role,
@@ -633,10 +677,13 @@ pub async fn login(
         serde_json::json!({
             "email": email,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "user_id": account.id,
             "role": account.role,
             "password_storage": password_storage_kind(&account.password),
             "password_hash_fingerprint": password_hash_fingerprint(&account.password),
+            "verify_password_result": true,
             "matched_count": matched_count,
         }),
     );
@@ -647,6 +694,7 @@ pub async fn login(
 pub async fn change_password(
     State(state): State<AppState>,
     Path(account_id): Path<String>,
+    uri: Uri,
     Json(payload): Json<ChangePasswordPayload>,
 ) -> Result<Json<UserAccount>, (StatusCode, Json<serde_json::Value>)> {
     let account_id = account_id.trim().to_string();
@@ -656,6 +704,8 @@ pub async fn change_password(
         serde_json::json!({
             "user_id": account_id,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "current_password_present": !payload.current_password.is_empty(),
             "new_password_length": payload.new_password.len(),
         }),
@@ -667,6 +717,8 @@ pub async fn change_password(
             serde_json::json!({
                 "reason": "missing_account_id",
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
             }),
         );
         return Err((
@@ -682,6 +734,8 @@ pub async fn change_password(
                 "reason": "new_password_too_short",
                 "user_id": account_id,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "new_password_length": payload.new_password.len(),
             }),
         );
@@ -691,7 +745,7 @@ pub async fn change_password(
         ));
     }
 
-    let sql = "SELECT email, role, COALESCE(password_hash, '') AS password_hash FROM app_users WHERE id = $1";
+    let sql = "SELECT email, role, COALESCE(password_hash, '') AS password_hash, updated_at::text AS updated_at FROM app_users WHERE id = $1";
     log_db_query("app_users", sql, serde_json::json!({ "id": account_id }));
     let row = sqlx::query(sql)
         .bind(&account_id)
@@ -713,6 +767,8 @@ pub async fn change_password(
                 "reason": "user_not_found",
                 "user_id": account_id,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
             }),
         );
         return Err((
@@ -722,6 +778,7 @@ pub async fn change_password(
     };
 
     let current_hash: String = row.get("password_hash");
+    let current_updated_at: String = row.get("updated_at");
     let account_email: String = row.get("email");
     let account_role: String = row.get("role");
     log_auth_event(
@@ -731,9 +788,13 @@ pub async fn change_password(
             "email": account_email,
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "account_id_matches_loaded_user": true,
+            "updated_at": current_updated_at,
             "password_storage": password_storage_kind(&current_hash),
             "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
+            "current_password_verifies": true,
         }),
     );
 
@@ -746,8 +807,11 @@ pub async fn change_password(
                 "email": account_email,
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "password_storage": password_storage_kind(&current_hash),
                 "password_hash_fingerprint": password_hash_fingerprint(&current_hash),
+                "verify_password_result": false,
             }),
         );
         return Err((
@@ -765,6 +829,8 @@ pub async fn change_password(
                 "email": account_email,
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
             }),
         );
         return Err((
@@ -783,6 +849,8 @@ pub async fn change_password(
             "email": account_email,
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "password_storage": password_storage_kind(&next_hash),
             "password_hash_fingerprint": password_hash_fingerprint(&next_hash),
         }),
@@ -823,6 +891,8 @@ pub async fn change_password(
                 "email": account_email,
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "matched_count": duplicate_rows.len(),
                 "candidate_accounts": duplicate_rows.iter().map(|row| {
                     let password_hash: String = row.get("password_hash");
@@ -880,6 +950,8 @@ pub async fn change_password(
                 "email": account_email,
                 "role": account_role,
                 "auth_source": AUTHENTICATION_SOURCE,
+                "request_url": uri.to_string(),
+                "database": state.db_identity,
                 "rows_affected": updated.rows_affected(),
             }),
         );
@@ -897,6 +969,8 @@ pub async fn change_password(
             "email": account_email,
             "role": account_role,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "rows_affected": updated.rows_affected(),
             "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
             "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
@@ -911,7 +985,8 @@ pub async fn change_password(
             COALESCE(password_hash, '') AS password,
             role,
             department,
-            avatar_url
+            avatar_url,
+            updated_at::text AS updated_at
         FROM app_users
         WHERE id = $1
         "#;
@@ -920,7 +995,7 @@ pub async fn change_password(
         verify_sql,
         serde_json::json!({ "id": account_id }),
     );
-    let saved_account = sqlx::query_as::<_, UserAccount>(verify_sql)
+    let saved_row = sqlx::query(verify_sql)
         .bind(&account_id)
         .fetch_optional(&mut *tx)
         .await
@@ -933,16 +1008,27 @@ pub async fn change_password(
             )
         })?;
 
-    let Some(saved_account) = saved_account else {
+    let Some(saved_row) = saved_row else {
         let _ = tx.rollback().await;
         return Err((
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "User not found" })),
         ));
     };
+    let saved_updated_at: String = saved_row.get("updated_at");
+    let saved_account = UserAccount {
+        id: saved_row.get("id"),
+        name: saved_row.get("name"),
+        email: saved_row.get("email"),
+        password: saved_row.get("password"),
+        role: saved_row.get("role"),
+        department: saved_row.get("department"),
+        avatar_url: saved_row.get("avatar_url"),
+    };
 
     let hash_changed_after_update = saved_account.password != current_hash;
     let saved_hash_matches_new_hash = saved_account.password == next_hash;
+    let updated_at_changed_after_update = saved_updated_at != current_updated_at;
     let new_password_verifies = verify_password(&saved_account.password, &payload.new_password);
     let old_password_still_verifies =
         verify_password(&saved_account.password, &payload.current_password);
@@ -960,6 +1046,9 @@ pub async fn change_password(
             "saved_password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
             "hash_changed_after_update": hash_changed_after_update,
             "saved_hash_matches_new_hash": saved_hash_matches_new_hash,
+            "updated_at_before": current_updated_at,
+            "updated_at_after_update": saved_updated_at,
+            "updated_at_changed_after_update": updated_at_changed_after_update,
             "new_password_verifies": new_password_verifies,
             "old_password_still_verifies": old_password_still_verifies,
         }),
@@ -967,6 +1056,7 @@ pub async fn change_password(
 
     if !hash_changed_after_update
         || !saved_hash_matches_new_hash
+        || !updated_at_changed_after_update
         || !new_password_verifies
         || old_password_still_verifies
     {
@@ -980,6 +1070,9 @@ pub async fn change_password(
                 "auth_source": AUTHENTICATION_SOURCE,
                 "hash_changed_after_update": hash_changed_after_update,
                 "saved_hash_matches_new_hash": saved_hash_matches_new_hash,
+                "updated_at_before": current_updated_at,
+                "updated_at_after_update": saved_updated_at,
+                "updated_at_changed_after_update": updated_at_changed_after_update,
                 "new_password_verifies": new_password_verifies,
                 "old_password_still_verifies": old_password_still_verifies,
                 "password_storage": password_storage_kind(&saved_account.password),
@@ -1005,6 +1098,9 @@ pub async fn change_password(
                 "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
                 "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
                 "saved_password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
+                "updated_at_before": current_updated_at,
+                "updated_at_after_update": saved_updated_at,
+                "updated_at_changed_after_update": updated_at_changed_after_update,
                 "new_password_verifies": new_password_verifies,
                 "old_password_still_verifies": old_password_still_verifies,
                 "commit_completed": false,
@@ -1025,11 +1121,111 @@ pub async fn change_password(
             "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
             "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
             "saved_password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
+            "updated_at_before": current_updated_at,
+            "updated_at_after_update": saved_updated_at,
+            "updated_at_changed_after_update": updated_at_changed_after_update,
             "new_password_verifies": new_password_verifies,
             "old_password_still_verifies": old_password_still_verifies,
             "commit_completed": true,
         }),
     );
+
+    let post_commit_sql = r#"
+        SELECT
+            id,
+            name,
+            email,
+            COALESCE(password_hash, '') AS password,
+            role,
+            department,
+            avatar_url,
+            updated_at::text AS updated_at
+        FROM app_users
+        WHERE id = $1 AND lower(email) = lower($2)
+        "#;
+    log_db_query(
+        "app_users",
+        post_commit_sql,
+        serde_json::json!({ "id": saved_account.id, "email": saved_account.email }),
+    );
+    let post_commit_row = sqlx::query(post_commit_sql)
+        .bind(&saved_account.id)
+        .bind(&saved_account.email)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|error| {
+            api_query_error(
+                "app_users",
+                post_commit_sql,
+                serde_json::json!({ "id": saved_account.id, "email": saved_account.email }),
+                error,
+            )
+        })?;
+
+    let Some(post_commit_row) = post_commit_row else {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Password update was committed but the updated user could not be reloaded.",
+                "code": "post_commit_user_missing",
+            })),
+        ));
+    };
+    let post_commit_updated_at: String = post_commit_row.get("updated_at");
+    let post_commit_account = UserAccount {
+        id: post_commit_row.get("id"),
+        name: post_commit_row.get("name"),
+        email: post_commit_row.get("email"),
+        password: post_commit_row.get("password"),
+        role: post_commit_row.get("role"),
+        department: post_commit_row.get("department"),
+        avatar_url: post_commit_row.get("avatar_url"),
+    };
+    let post_commit_hash_changed = post_commit_account.password != current_hash;
+    let post_commit_hash_matches_new_hash = post_commit_account.password == next_hash;
+    let post_commit_updated_at_changed = post_commit_updated_at != current_updated_at;
+    let post_commit_new_password_verifies =
+        verify_password(&post_commit_account.password, &payload.new_password);
+    let post_commit_old_password_still_verifies =
+        verify_password(&post_commit_account.password, &payload.current_password);
+
+    log_auth_event(
+        "auth_password_change_post_commit_verified",
+        serde_json::json!({
+            "user_id": post_commit_account.id,
+            "email": post_commit_account.email,
+            "role": post_commit_account.role,
+            "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "rows_affected": updated.rows_affected(),
+            "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
+            "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
+            "stored_password_hash_fingerprint": password_hash_fingerprint(&post_commit_account.password),
+            "updated_at_before": current_updated_at,
+            "updated_at_after_commit": post_commit_updated_at,
+            "password_hash_changed": post_commit_hash_changed,
+            "stored_hash_matches_new_hash": post_commit_hash_matches_new_hash,
+            "updated_at_changed": post_commit_updated_at_changed,
+            "new_password_verifies": post_commit_new_password_verifies,
+            "old_password_still_verifies": post_commit_old_password_still_verifies,
+        }),
+    );
+
+    if !post_commit_hash_changed
+        || !post_commit_hash_matches_new_hash
+        || !post_commit_updated_at_changed
+        || !post_commit_new_password_verifies
+        || post_commit_old_password_still_verifies
+    {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Password update was committed but post-commit verification failed.",
+                "code": "post_commit_password_verification_failed",
+            })),
+        ));
+    }
 
     let login_probe_sql = r#"
         SELECT
@@ -1082,10 +1278,12 @@ pub async fn change_password(
     log_auth_event(
         "auth_password_change_login_probe",
         serde_json::json!({
-            "user_id": saved_account.id,
-            "email": saved_account.email,
-            "role": saved_account.role,
+            "user_id": post_commit_account.id,
+            "email": post_commit_account.email,
+            "role": post_commit_account.role,
             "auth_source": AUTHENTICATION_SOURCE,
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
             "matched_count": login_probe_matched_count,
             "login_probe_found_user": login_probe_hash.is_some(),
             "password_hash_fingerprint": login_probe_hash
@@ -1113,22 +1311,27 @@ pub async fn change_password(
     log_auth_event(
         "auth_password_change_succeeded",
         serde_json::json!({
-            "user_id": saved_account.id,
-            "email": saved_account.email,
-            "role": saved_account.role,
+            "user_id": post_commit_account.id,
+            "email": post_commit_account.email,
+            "role": post_commit_account.role,
             "auth_source": AUTHENTICATION_SOURCE,
-            "password_storage": password_storage_kind(&saved_account.password),
-            "password_hash_fingerprint": password_hash_fingerprint(&saved_account.password),
+            "request_url": uri.to_string(),
+            "database": state.db_identity,
+            "password_storage": password_storage_kind(&post_commit_account.password),
+            "password_hash_fingerprint": password_hash_fingerprint(&post_commit_account.password),
             "old_password_hash_fingerprint": password_hash_fingerprint(&current_hash),
             "new_password_hash_fingerprint": password_hash_fingerprint(&next_hash),
-            "hash_changed_after_update": hash_changed_after_update,
+            "hash_changed_after_update": post_commit_hash_changed,
+            "updated_at_before": current_updated_at,
+            "updated_at_after_commit": post_commit_updated_at,
+            "updated_at_changed": post_commit_updated_at_changed,
             "rows_affected": updated.rows_affected(),
             "new_password_verifies": true,
             "old_password_still_verifies": false,
         }),
     );
 
-    Ok(Json(public_user(saved_account)))
+    Ok(Json(public_user(post_commit_account)))
 }
 
 pub async fn sync_bootstrap_data(

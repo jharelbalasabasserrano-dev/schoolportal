@@ -3,7 +3,7 @@ mod limiter;
 mod models;
 mod routes;
 
-const EMBEDDED_MIGRATIONS_VERSION: &str = "20260708030000";
+const EMBEDDED_MIGRATIONS_VERSION: &str = "20260713000000";
 
 use axum::{
     Router,
@@ -101,11 +101,36 @@ async fn bind_server(address: &str) -> Option<tokio::net::TcpListener> {
 
 async fn build_app_state() -> Result<AppState, String> {
     let db = connect_configured_database().await?;
+    let db_identity = load_database_identity(&db).await;
 
     Ok(AppState {
         db,
         db_status: "connected".to_string(),
+        db_identity,
     })
+}
+
+async fn load_database_identity(db: &sqlx::PgPool) -> String {
+    match sqlx::query_as::<_, (String, String, Option<String>, Option<i32>)>(
+        "SELECT current_database(), current_schema(), inet_server_addr()::text, inet_server_port()",
+    )
+    .fetch_one(db)
+    .await
+    {
+        Ok((database, schema, host, port)) => serde_json::json!({
+            "database": database,
+            "schema": schema,
+            "server_addr": host.unwrap_or_else(|| "unknown".to_string()),
+            "server_port": port,
+        })
+        .to_string(),
+        Err(error) => serde_json::json!({
+            "database": "unknown",
+            "schema": "unknown",
+            "error": error.to_string(),
+        })
+        .to_string(),
+    }
 }
 
 async fn connect_configured_database() -> Result<sqlx::PgPool, String> {
